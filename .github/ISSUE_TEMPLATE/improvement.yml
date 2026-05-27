@@ -1,0 +1,103 @@
+name: Improvement
+description: Improve or enhance something that already exists.
+title: "[Improvement]: "
+type: Improvement
+projects: ["MCF-Technologie-GmbH/36"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        # 🔧 Improvement
+
+        > [!IMPORTANT]
+        > This form automatically sets the issue type to `Improvement` and adds the issue to the `Softwareentwicklung` project.
+        >
+        > Use this form to enhance existing functionality — not to report a bug or propose entirely new features.
+        >
+        > Before submitting this issue, please complete all required GitHub fields at the bottom of the form or in the issue sidebar.
+        >
+        > Required/important fields may include:
+        > - Priority
+        > - Target milestone / release
+
+  - type: input
+    id: improvement-summary
+    attributes:
+      label: Improvement Summary
+      description: Short and clear description of what should be improved.
+      placeholder: "Example: Speed up device list loading by adding pagination"
+    validations:
+      required: true
+
+  - type: textarea
+    id: current-state
+    attributes:
+      label: 1. Current State
+      description: Describe how things work today and what is unsatisfactory about it.
+      placeholder: |
+        What is the current behavior or implementation?
+
+        Example:
+        The device list loads all records at once, causing the page to become unresponsive when more than 500 devices are registered.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-improvement
+    attributes:
+      label: 2. Proposed Improvement
+      description: Describe the change you are proposing.
+      placeholder: |
+        What should be changed or improved?
+
+        Example:
+        Implement server-side pagination so the list loads 50 devices at a time with next/previous navigation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-outcome
+    attributes:
+      label: 3. Expected Outcome
+      description: What measurable or observable improvement do you expect?
+      placeholder: |
+        Example:
+        - Page loads in under 1 second regardless of device count
+        - Memory usage reduced on the client
+        - No change in visible functionality for end users
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: 4. Acceptance Criteria
+      description: Define what "done" looks like for this improvement.
+      placeholder: |
+        - [ ] Criteria 1
+        - [ ] Criteria 2
+        - [ ] Covered by tests
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: 5. Additional Context
+      description: Add any related issues, PRs, benchmarks, metrics, or supporting information.
+      placeholder: |
+        Related issues, performance benchmarks, user feedback, etc.
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+
+        > [!NOTE]
+        > An improvement changes something that already works but could work better. If something is broken, open a Bug report instead.
+
+        > [!TIP]
+        > Include measurable outcomes when possible (e.g. load time, error rate, code complexity) to make the improvement verifiable.

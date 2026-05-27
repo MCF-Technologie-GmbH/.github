@@ -1,0 +1,115 @@
+name: Documentation
+description: Create, update, or improve documentation.
+title: "[Docs]: "
+type: Documentation
+projects: ["MCF-Technologie-GmbH/36"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        # 📄 Documentation
+
+        > [!IMPORTANT]
+        > This form automatically sets the issue type to `Documentation` and adds the issue to the `Softwareentwicklung` project.
+        >
+        > Use this form for any documentation work — new docs, updates to existing docs, or removal of outdated content.
+        >
+        > Before submitting this issue, please complete all required GitHub fields at the bottom of the form or in the issue sidebar.
+        >
+        > Required/important fields may include:
+        > - Assignee
+        > - Target milestone / release
+
+  - type: input
+    id: docs-summary
+    attributes:
+      label: Documentation Summary
+      description: Short and clear description of the documentation work needed.
+      placeholder: "Example: Write API reference for the device management endpoints"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: docs-type
+    attributes:
+      label: 1. Type of Documentation Work
+      description: What kind of documentation work is this?
+      options:
+        - Create new documentation
+        - Update existing documentation
+        - Remove outdated documentation
+        - Restructure / reorganize documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-to-document
+    attributes:
+      label: 2. What Needs to Be Documented
+      description: Describe the subject matter — what feature, process, or API should be documented or updated?
+      placeholder: |
+        What is the topic, feature, or system that needs documentation?
+
+        Example:
+        The device management REST API currently has no public reference. Endpoints, request/response schemas, and authentication must be documented.
+    validations:
+      required: true
+
+  - type: textarea
+    id: target-audience
+    attributes:
+      label: 3. Target Audience
+      description: Who will read this documentation?
+      placeholder: |
+        Example:
+        - External developers integrating via the API
+        - Internal team members onboarding to the service
+        - Operations team managing deployments
+    validations:
+      required: false
+
+  - type: textarea
+    id: existing-docs
+    attributes:
+      label: 4. Existing Documentation
+      description: Link to any existing documentation that is related, outdated, or should be replaced.
+      placeholder: |
+        - Link to current docs (if any)
+        - Related wiki pages, README sections, Confluence pages, etc.
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: 5. Acceptance Criteria
+      description: Define what "done" looks like for this documentation task.
+      placeholder: |
+        - [ ] All endpoints are documented with request/response examples
+        - [ ] Documentation is reviewed and approved
+        - [ ] Published to the correct location
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: 6. Additional Context
+      description: Add any other relevant information, related issues, or links.
+      placeholder: |
+        Related issues, PRs, source material, etc.
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+
+        > [!NOTE]
+        > Documentation issues should be linked to the feature or change they describe whenever possible.
+
+        > [!TIP]
+        > Good documentation includes examples, not just descriptions.

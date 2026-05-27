@@ -1,0 +1,89 @@
+name: Task
+description: A concrete unit of work that needs to be done.
+title: "[Task]: "
+type: Task
+projects: ["MCF-Technologie-GmbH/36"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        # ✅ Task
+
+        > [!IMPORTANT]
+        > This form automatically sets the issue type to `Task` and adds the issue to the `Softwareentwicklung` project.
+        >
+        > Use this form for a concrete, well-defined piece of work — not a bug, new feature, or investigation.
+        >
+        > Before submitting this issue, please complete all required GitHub fields at the bottom of the form or in the issue sidebar.
+        >
+        > Required/important fields may include:
+        > - Assignee
+        > - Priority
+        > - Target milestone / release
+
+  - type: input
+    id: task-summary
+    attributes:
+      label: Task Summary
+      description: Short and clear description of what needs to be done.
+      placeholder: "Example: Migrate database connection pool to new configuration format"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 1. Description
+      description: Describe the task in detail.
+      placeholder: |
+        What exactly needs to be done and why?
+
+        Include any relevant background, context, or constraints.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: 2. Acceptance Criteria
+      description: Define what "done" looks like for this task.
+      placeholder: |
+        - [ ] Criteria 1
+        - [ ] Criteria 2
+        - [ ] Criteria 3
+    validations:
+      required: false
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: 3. Dependencies
+      description: List any tasks, issues, PRs, or external requirements this task depends on.
+      placeholder: |
+        - Blocked by #123
+        - Requires access to ...
+        - Depends on team X completing ...
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: 4. Additional Context
+      description: Add any other relevant information, links, or notes.
+      placeholder: |
+        Related issues, PRs, documentation, design decisions, etc.
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+
+        > [!NOTE]
+        > A task should be concrete and actionable. If the scope is unclear, break it down or open a Research/Spike first.
+
+        > [!TIP]
+        > Define acceptance criteria upfront to avoid ambiguity at review time.
