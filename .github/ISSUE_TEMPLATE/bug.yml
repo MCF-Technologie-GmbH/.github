@@ -1,5 +1,5 @@
 name: "🐛 Bug Report"
-about: "Report an unexpected error, crash, or misbehavior in the code."
+description: "Report an unexpected error, crash, or misbehavior in the code."
 title: "[BUG]: "
 labels: ["bug"]
 type: "Bug"
