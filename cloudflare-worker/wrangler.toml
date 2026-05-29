@@ -2,13 +2,7 @@ name = "gh-issue-type-enforcer"
 main = "worker.js"
 compatibility_date = "2025-01-01"
 
-# ── Secrets (set via CLI, never hardcode here) ───────────────────────────────
-# wrangler secret put GITHUB_TOKEN
-# wrangler secret put WEBHOOK_SECRET
-
-# ── Plain vars (safe to commit) ──────────────────────────────────────────────
-[vars]
-# Comma-separated list of repos that must use REQUIRED_ISSUE_TYPE.
-# Format: "owner/repo,owner/repo2"
-PROJECT_TYPE_REPOS = "myorg/projects"
-REQUIRED_ISSUE_TYPE = "Project"
+# ── Secrets (set via CLI, never hardcode here) ────────────────────────────────
+# npx wrangler secret put GITHUB_WEBHOOK_SECRET   # webhook secret from GitHub App settings
+# npx wrangler secret put GITHUB_APP_ID           # numeric App ID from GitHub App settings
+# npx wrangler secret put GITHUB_PRIVATE_KEY      # RSA private key PEM from GitHub App settings
