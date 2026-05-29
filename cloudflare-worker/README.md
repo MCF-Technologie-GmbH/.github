@@ -5,17 +5,19 @@ A Cloudflare Worker that receives GitHub App webhooks and enforces issue type po
 ## What it Does
 
 ### `MCF-Technologie-GmbH/projects` repository
+
 - Only the `Project` issue type is allowed.
 - Any issue created or changed to a different type is automatically corrected to `Project`.
 
 ### All other repositories
+
 - `Project` is a reserved type and not allowed outside the `projects` repo. Issues with this type are closed automatically.
 - **On creation:** the Worker detects which template was used (via the embedded `Issue Type` dropdown field) and corrects the type if it does not match.
 - **After creation:** any type change is detected and reverted. The original type is read from the `IssueTypeChangedEvent` timeline, which means no metadata comments or external storage are needed.
 
 ## Architecture
 
-```
+```text
 GitHub Issues event
         │
         ▼
@@ -37,7 +39,7 @@ GitHub Issues event
 The entire implementation lives in a single file (`worker.js`, ~900 lines). It is split into clear logical sections:
 
 | Section | Lines (approx.) | Description |
-|---------|-----------------|-------------|
+| ------- | --------------- | ----------- |
 | Constants | ~60 | Org, repo names, type IDs |
 | Entry point | ~100 | `fetch` handler, signature verification, routing |
 | Policy functions | ~300 | Business logic for each enforcement rule |
@@ -50,6 +52,7 @@ The entire implementation lives in a single file (`worker.js`, ~900 lines). It i
 ## Prerequisites
 
 ### GitHub App
+
 - App ID: `3893672` (slug: `mcf-automation-bot`)
 - Required **repository permissions:** Issues (write), Metadata (read)
 - Required **webhook events:** Issues
@@ -58,6 +61,7 @@ The entire implementation lives in a single file (`worker.js`, ~900 lines). It i
 - Installed on: all repositories in the organization
 
 ### Cloudflare Worker
+
 - Account with Workers enabled
 - `wrangler` CLI (`npm install -g wrangler` or `npx wrangler`)
 
@@ -66,7 +70,7 @@ The entire implementation lives in a single file (`worker.js`, ~900 lines). It i
 All secrets are stored in Cloudflare and never committed to the repository.
 
 | Secret | Description |
-|--------|-------------|
+| ------ | ----------- |
 | `GITHUB_WEBHOOK_SECRET` | The webhook secret configured in the GitHub App settings |
 | `GITHUB_APP_ID` | The numeric App ID (found on the GitHub App settings page) |
 | `GITHUB_PRIVATE_KEY` | The RSA private key PEM generated in the GitHub App settings |
@@ -98,7 +102,7 @@ Issue type node IDs are **stable GraphQL node IDs** specific to this organizatio
 ### Current IDs
 
 | Type | GraphQL Node ID |
-|------|----------------|
+| ---- | --------------- |
 | `Task` | `IT_kwDOCAEFQs4BKtmG` |
 | `Bug` | `IT_kwDOCAEFQs4BKtmJ` |
 | `Feature` | `IT_kwDOCAEFQs4BKtmM` |
@@ -145,7 +149,7 @@ In the GitHub App settings → **Advanced** → **Recent Deliveries**, you can s
 ### Common issues
 
 | Symptom | Likely cause |
-|---------|--------------|
+| ------- | ------------ |
 | Worker does nothing | Code changes were not redeployed (`npx wrangler deploy`) |
 | `401 Invalid signature` in logs | `GITHUB_WEBHOOK_SECRET` does not match the value in the GitHub App settings |
 | `500 Missing Cloudflare variable` | A required secret was not set (`wrangler secret put ...`) |
@@ -156,7 +160,7 @@ In the GitHub App settings → **Advanced** → **Recent Deliveries**, you can s
 
 When an issue is opened, the Worker reads the `### Issue Type` section that GitHub injects into the body from the form's `type: dropdown` field:
 
-```
+```markdown
 ### Issue Type
 
 Bug

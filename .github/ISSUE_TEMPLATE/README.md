@@ -5,15 +5,15 @@ Eight GitHub issue form templates are defined here for use across all repositori
 ## Template List
 
 | File | Template Name | Issue Type | Title Prefix |
-|------|--------------|------------|--------------|
-| `bug.yml` | Bug Report | `Bug` | `[Bug]: ` |
-| `feature.yml` | Feature Request | `Feature` | `[Feature]: ` |
-| `task.yml` | Task | `Task` | `[Task]: ` |
-| `spike.yml` | Research / Spike | `Task` | `[Spike]: ` |
-| `improvement.yml` | Improvement | `Improvement` | `[Improvement]: ` |
-| `devops.yml` | DevOps | `DevOps` | `[DevOps]: ` |
-| `documentation.yml` | Documentation | `Documentation` | `[Docs]: ` |
-| `maintenance.yml` | Maintenance | `Maintenance` | `[Maintenance]: ` |
+| ---- | ------------ | ---------- | ------------ |
+| `bug.yml` | Bug Report | `Bug` | `[Bug]:` |
+| `feature.yml` | Feature Request | `Feature` | `[Feature]:` |
+| `task.yml` | Task | `Task` | `[Task]:` |
+| `spike.yml` | Research / Spike | `Task` | `[Spike]:` |
+| `improvement.yml` | Improvement | `Improvement` | `[Improvement]:` |
+| `devops.yml` | DevOps | `DevOps` | `[DevOps]:` |
+| `documentation.yml` | Documentation | `Documentation` | `[Docs]:` |
+| `maintenance.yml` | Maintenance | `Maintenance` | `[Maintenance]:` |
 
 > **Note:** The Research/Spike template uses the `Task` issue type because GitHub does not have a dedicated Spike type.
 
@@ -23,7 +23,7 @@ Each template contains a `type: dropdown` field with label **Issue Type** and a 
 
 When a new issue is submitted, the Cloudflare Worker reads the rendered body section:
 
-```
+```markdown
 ### Issue Type
 
 Bug
