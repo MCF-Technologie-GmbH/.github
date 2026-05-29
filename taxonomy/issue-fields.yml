@@ -1,0 +1,101 @@
+# Issue Fields — MCF Technologie GmbH
+#
+# This file is the source of truth for all issue fields in the organization.
+# Changes here are synced to GitHub by the taxonomy-sync workflow.
+#
+# Supported data_type values: TEXT, SINGLE_SELECT, DATE, NUMBER, MULTI_SELECT
+# Supported color values: GRAY, BLUE, GREEN, YELLOW, ORANGE, RED, PINK, PURPLE
+
+issue_fields:
+  - key: priority
+    name: Priority
+    id: IFSS_kgDOAYRswg
+    data_type: SINGLE_SELECT
+    options:
+      - name: P0
+        id: IFSSO_kgDOAqem3w
+        color: PINK
+        description: "Urgent / Critical -\nBlockiert Lieferung, Produktion, Abnahme oder ein wichtiges Kundenprojekt"
+      - name: P1
+        id: IFSSO_kgDOAqem4A
+        color: RED
+        description: "High -\nMuss zeitnah erledigt werden, wichtig für Meilenstein oder Teamfortschritt"
+      - name: P2
+        id: IFSSO_kgDOAqem4Q
+        color: YELLOW
+        description: "Medium - Normal wichtige Arbeit, gehört in den geplanten Backlog"
+      - name: P3
+        id: IFSSO_kgDOAqem4g
+        color: GREEN
+        description: "Low - Nice-to-have, Verbesserung, Cleanup, Komfortfunktion"
+
+  - key: start_date
+    name: Start date
+    id: IFD_kgDOAYRsww
+    data_type: DATE
+
+  - key: target_date
+    name: Target date
+    id: IFD_kgDOAYRsxA
+    data_type: DATE
+
+  - key: effort
+    name: Effort
+    id: IFSS_kgDOAYRsxQ
+    data_type: SINGLE_SELECT
+    options:
+      - name: E13
+        id: IFSSO_kgDOAqem4w
+        color: PINK
+        description: "sehr große/unklare Aufgabe\nsollte meistens zerlegt werden"
+      - name: E8
+        id: IFSSO_kgDOAqem5A
+        color: RED
+        description: "große Aufgabe\nmehrere Tage, Integration/Abstimmung"
+      - name: E5
+        id: IFSSO_kgDOAqem5Q
+        color: ORANGE
+        description: "Mittlere Aufgabe\nmehrere Schritte, etwas Abstimmung"
+      - name: E3
+        id: IFSSO_kgDOBG_PTA
+        color: YELLOW
+        description: "Normale Aufgabe\n1–2 Tage, gut planbar"
+      - name: E2
+        id: IFSSO_kgDOBG_PTQ
+        color: GREEN
+        description: "kleine Aufgabe\nca. halber bis ein Tag"
+      - name: E1
+        id: IFSSO_kgDOBG_PTg
+        color: BLUE
+        description: "Mini-Aufgabe\nwenige Stunden, sehr klar"
+
+  - key: customer
+    name: Customer
+    id: IFSS_kgDOAomxWQ
+    data_type: SINGLE_SELECT
+    options:
+      - name: Luetze
+        id: IFSSO_kgDOBHDv_Q
+        color: GRAY
+        description: null
+      - name: Harman
+        id: IFSSO_kgDOBHDv_g
+        color: GRAY
+        description: null
+      - name: Audi
+        id: IFSSO_kgDOBHDv_w
+        color: GRAY
+        description: null
+      - name: Samson
+        id: IFSSO_kgDOBHDwAA
+        color: GRAY
+        description: null
+      - name: B.Braun
+        id: IFSSO_kgDOBHDwAQ
+        color: GRAY
+        description: null
+
+  - key: project_id
+    name: Project ID
+    id: IFT_kgDOAomxng
+    data_type: TEXT

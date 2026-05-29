@@ -1,0 +1,73 @@
+# Issue Type → Fields Mapping — MCF Technologie GmbH
+#
+# Defines which fields are pinned (displayed prominently) for each issue type.
+# GitHub currently calls these "pinned fields" in the UI.
+#
+# NOTE: The GraphQL API exposes pinnedFields as read-only. The sync script will
+# report drift but cannot programmatically update pinned field assignments.
+# Manual changes must be made in the GitHub UI:
+#   Organization Settings → Issue types → Select type → Manage pinned fields
+
+issue_type_fields:
+  - issue_type: task
+    pinned_fields:
+      - priority
+      - effort
+      - start_date
+      - target_date
+
+  - issue_type: bug
+    pinned_fields:
+      - priority
+      - effort
+      - start_date
+      - target_date
+
+  - issue_type: feature
+    pinned_fields:
+      - priority
+      - effort
+      - start_date
+      - target_date
+
+  - issue_type: improvement
+    pinned_fields:
+      - priority
+      - effort
+      - start_date
+      - target_date
+
+  - issue_type: research_spike
+    pinned_fields:
+      - priority
+      - effort
+      - start_date
+      - target_date
+
+  - issue_type: documentation
+    pinned_fields:
+      - priority
+      - effort
+      - start_date
+      - target_date
+
+  - issue_type: maintenance
+    pinned_fields:
+      - priority
+      - effort
+      - start_date
+      - target_date
+
+  - issue_type: project
+    pinned_fields:
+      - customer
+      - project_id
+      - start_date
+      - target_date
+
+  - issue_type: devops
+    pinned_fields:
+      - priority
+      - effort
+      - start_date
+      - target_date
