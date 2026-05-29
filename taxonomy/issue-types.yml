@@ -3,71 +3,63 @@
 # This file is the source of truth for all issue types in the organization.
 # Changes here are synced to GitHub by the taxonomy-sync workflow.
 #
-# To refresh IDs from GitHub:
-#   gh api graphql -H "GraphQL-Features: issue_types" \
-#     -f query='query { organization(login: "MCF-Technologie-GmbH") {
-#       issueTypes(first: 20) { nodes { id name } } } }'
+# IDs are assigned by GitHub and resolved at runtime — do not add them here.
+# The sync script matches types by name.
+#
+# To inspect current state:
+#   gh api /orgs/MCF-Technologie-GmbH/issue-types
 
 issue_types:
   - key: task
     name: Task
-    id: IT_kwDOCAEFQs4BKtmG
     description: "Konkrete Arbeitsaufgabe ohne direkten Feature-Charakter"
     color: YELLOW
     is_enabled: true
 
   - key: bug
     name: Bug
-    id: IT_kwDOCAEFQs4BKtmJ
     description: "Unerwartetes Fehlverhalten oder Problem"
     color: RED
     is_enabled: true
 
   - key: feature
     name: Feature
-    id: IT_kwDOCAEFQs4BKtmM
     description: "Neue fachliche oder technische Funktionalität"
     color: BLUE
     is_enabled: true
 
   - key: improvement
     name: Improvement
-    id: IT_kwDOCAEFQs4BpYBi
     description: "Verbesserung bestehender Funktionalität"
     color: PINK
     is_enabled: true
 
   - key: research_spike
     name: "Research / Spike"
-    id: IT_kwDOCAEFQs4CA6t8
     description: "Untersuchung, Konzept, technische Klärung"
     color: GRAY
     is_enabled: true
 
   - key: documentation
     name: Documentation
-    id: IT_kwDOCAEFQs4CA6uB
     description: "Dokumentation, Anleitung, Spezifikation"
     color: PURPLE
     is_enabled: true
 
   - key: maintenance
     name: Maintenance
-    id: IT_kwDOCAEFQs4CA6uF
     description: "Pflege, Refactoring, technische Schulden"
     color: ORANGE
     is_enabled: true
 
   - key: project
     name: Project
-    id: IT_kwDOCAEFQs4CBH8t
     description: null
     color: GRAY
     is_enabled: true
 
   - key: devops
     name: DevOps
-    id: IT_kwDOCAEFQs4CBIei
     description: "CI/CD, deployment, runners, environments, tooling, build system"
     color: GRAY
     is_enabled: true

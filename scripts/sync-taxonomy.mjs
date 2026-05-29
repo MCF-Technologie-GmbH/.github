@@ -28,8 +28,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const TAXONOMY_DIR = resolve(__dirname, "..", "taxonomy");
 
 const ORGANIZATION = "MCF-Technologie-GmbH";
-const ORG_NODE_ID = "O_kgDOCAEFQg";
 const GRAPHQL_URL = "https://api.github.com/graphql";
+
+let orgNodeId; // resolved dynamically at startup via fetchOrgNodeId()
 const GRAPHQL_FEATURES = "issue_types";
 const API_VERSION = "2022-11-28";
 
@@ -74,6 +75,13 @@ async function graphql(query, variables = {}) {
   }
 
   return body.data;
+}
+
+// --- Fetch org node ID dynamically ---
+
+async function fetchOrgNodeId() {
+  const data = await graphql(`query { organization(login: "${ORGANIZATION}") { id } }`);
+  return data.organization.id;
 }
 
 // --- Fetch current state from GitHub ---
@@ -132,7 +140,7 @@ async function createIssueType(desired) {
     }`,
     {
       input: {
-        ownerId: ORG_NODE_ID,
+        ownerId: orgNodeId,
         name: desired.name,
         description: desired.description || null,
         color: desired.color || "GRAY",
@@ -164,7 +172,7 @@ async function updateIssueType(id, desired) {
 
 async function createIssueField(desired) {
   const input = {
-    ownerId: ORG_NODE_ID,
+    ownerId: orgNodeId,
     name: desired.name,
     dataType: desired.data_type,
   };
@@ -273,12 +281,12 @@ function diffIssueField(desired, actual) {
   return changes;
 }
 
-function diffPinnedFields(desiredFieldKeys, actualPinnedFields, fieldKeyToId) {
-  const desiredIds = new Set(desiredFieldKeys.map((k) => fieldKeyToId[k]).filter(Boolean));
-  const actualIds = new Set(actualPinnedFields.map((f) => f.id));
+function diffPinnedFields(desiredFieldKeys, actualPinnedFields, fieldKeyToName) {
+  const desiredNames = new Set(desiredFieldKeys.map((k) => fieldKeyToName[k]).filter(Boolean));
+  const actualNames = new Set(actualPinnedFields.map((f) => f.name));
 
-  const missing = [...desiredIds].filter((id) => !actualIds.has(id));
-  const extra = [...actualIds].filter((id) => !desiredIds.has(id));
+  const missing = [...desiredNames].filter((name) => !actualNames.has(name));
+  const extra = [...actualNames].filter((name) => !desiredNames.has(name));
 
   return { missing, extra, hasDrift: missing.length > 0 || extra.length > 0 };
 }
@@ -288,12 +296,15 @@ function diffPinnedFields(desiredFieldKeys, actualPinnedFields, fieldKeyToId) {
 async function sync() {
   console.log(`\n🔄 Taxonomy Sync — ${DRY_RUN ? "DRY RUN" : "APPLY"} mode\n`);
   console.log(`Organization: ${ORGANIZATION}`);
-  console.log(`Org Node ID:  ${ORG_NODE_ID}\n`);
 
   // Load desired state
   const desiredTypes = loadYaml("issue-types.yml").issue_types || [];
   const desiredFields = loadYaml("issue-fields.yml").issue_fields || [];
   const desiredMappings = loadYaml("issue-type-fields.yml").issue_type_fields || [];
+
+  // Resolve org node ID (needed for create mutations)
+  orgNodeId = await fetchOrgNodeId();
+  console.log(`Org Node ID:  ${orgNodeId} (resolved)\n`);
 
   // Fetch current state
   console.log("📡 Fetching current state from GitHub...");
@@ -387,7 +398,8 @@ async function sync() {
   // --- Check pinned field mappings (read-only drift detection) ---
   console.log("\n━━━ Pinned Fields (read-only — drift detection only) ━━━");
 
-  const fieldKeyToId = Object.fromEntries(desiredFields.map((f) => [f.key, f.id]));
+  // fieldKeyToName: used for pinned-field drift detection (compare by name, not ID)
+  const fieldKeyToName = Object.fromEntries(desiredFields.map((f) => [f.key, f.name]));
   const typeKeyToName = Object.fromEntries(desiredTypes.map((t) => [t.key, t.name]));
 
   for (const mapping of desiredMappings) {
@@ -399,24 +411,12 @@ async function sync() {
 
     const pinnedFields = actualType.pinnedFields || [];
     const desiredFieldKeys = mapping.pinned_fields || [];
-    const { hasDrift, missing, extra } = diffPinnedFields(desiredFieldKeys, pinnedFields, fieldKeyToId);
+    const { hasDrift, missing, extra } = diffPinnedFields(desiredFieldKeys, pinnedFields, fieldKeyToName);
 
     if (hasDrift) {
       console.log(`  DRIFT: ${typeName} pinned fields mismatch`);
-      if (missing.length > 0) {
-        const missingNames = missing.map((id) => {
-          const f = desiredFields.find((df) => df.id === id);
-          return f ? f.name : id;
-        });
-        console.log(`    Missing in GitHub: ${missingNames.join(", ")}`);
-      }
-      if (extra.length > 0) {
-        const extraNames = extra.map((id) => {
-          const f = currentFields.find((cf) => cf.id === id);
-          return f ? f.name : id;
-        });
-        console.log(`    Extra in GitHub: ${extraNames.join(", ")}`);
-      }
+      if (missing.length > 0) console.log(`    Missing in GitHub: ${missing.join(", ")}`);
+      if (extra.length > 0) console.log(`    Extra in GitHub: ${extra.join(", ")}`);
       summary.drift++;
     }
   }

@@ -44,7 +44,6 @@ function validate() {
   // --- Issue Types validation ---
   const typeKeys = new Set();
   const typeNames = new Set();
-  const typeIds = new Set();
 
   for (const t of types) {
     if (!t.key) {
@@ -65,10 +64,9 @@ function validate() {
       typeNames.add(t.name);
     }
 
-    if (t.id && typeIds.has(t.id)) {
-      errors.push(`Duplicate issue type id: '${t.id}'`);
+    if (t.id) {
+      errors.push(`Issue type '${t.key}' has an 'id' field — IDs are assigned by GitHub and must not be stored in YAML`);
     }
-    if (t.id) typeIds.add(t.id);
 
     if (t.color && !VALID_COLORS.includes(t.color)) {
       errors.push(`Issue type '${t.key}' has invalid color: '${t.color}' (valid: ${VALID_COLORS.join(", ")})`);
@@ -82,7 +80,6 @@ function validate() {
   // --- Issue Fields validation ---
   const fieldKeys = new Set();
   const fieldNames = new Set();
-  const fieldIds = new Set();
 
   for (const f of fields) {
     if (!f.key) {
@@ -103,10 +100,9 @@ function validate() {
       fieldNames.add(f.name);
     }
 
-    if (f.id && fieldIds.has(f.id)) {
-      errors.push(`Duplicate issue field id: '${f.id}'`);
+    if (f.id) {
+      errors.push(`Issue field '${f.key}' has an 'id' field — IDs are assigned by GitHub and must not be stored in YAML`);
     }
-    if (f.id) fieldIds.add(f.id);
 
     if (!f.data_type) {
       errors.push(`Issue field '${f.key}' missing 'data_type'`);
@@ -127,6 +123,9 @@ function validate() {
             errors.push(`Issue field '${f.key}' has duplicate option: '${opt.name}'`);
           } else {
             optionNames.add(opt.name);
+          }
+          if (opt.id) {
+            errors.push(`Issue field '${f.key}' option '${opt.name}' has an 'id' field — IDs are assigned by GitHub and must not be stored in YAML`);
           }
           if (opt.color && !VALID_COLORS.includes(opt.color)) {
             errors.push(`Issue field '${f.key}' option '${opt.name}' has invalid color: '${opt.color}'`);
