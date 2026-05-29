@@ -55,7 +55,7 @@ issue_types:
   - key: project
     name: Project
     description: null
-    color: GRAY
+    color: BLUE
     is_enabled: true
 
   - key: devops
