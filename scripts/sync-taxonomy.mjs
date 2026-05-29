@@ -131,7 +131,7 @@ async function fetchCurrentIssueFields() {
 
 // --- Mutations ---
 
-async function createIssueType(desired) {
+async function createIssueType(desired, pinnedFieldIds = []) {
   const data = await graphql(
     `mutation($input: CreateIssueTypeInput!) {
       createIssueType(input: $input) {
@@ -145,13 +145,14 @@ async function createIssueType(desired) {
         description: desired.description || null,
         color: desired.color || "GRAY",
         isEnabled: desired.is_enabled !== false,
+        pinnedFieldIds,
       },
     }
   );
   return data.createIssueType.issueType;
 }
 
-async function updateIssueType(id, desired) {
+async function updateIssueType(id, desired, pinnedFieldIds = []) {
   await graphql(
     `mutation($input: UpdateIssueTypeInput!) {
       updateIssueType(input: $input) {
@@ -165,6 +166,7 @@ async function updateIssueType(id, desired) {
         description: desired.description || null,
         color: desired.color || "GRAY",
         isEnabled: desired.is_enabled !== false,
+        pinnedFieldIds,
       },
     }
   );
@@ -239,7 +241,7 @@ async function updateIssueField(id, desired) {
 
 // --- Reconciliation logic ---
 
-function diffIssueType(desired, actual) {
+function diffIssueType(desired, actual, desiredPinnedFieldIds) {
   const changes = [];
   if (desired.name !== actual.name) changes.push(`name: '${actual.name}' → '${desired.name}'`);
   if ((desired.description || null) !== (actual.description || null)) {
@@ -251,6 +253,14 @@ function diffIssueType(desired, actual) {
   if (desired.is_enabled !== actual.isEnabled) {
     changes.push(`isEnabled: ${actual.isEnabled} → ${desired.is_enabled}`);
   }
+
+  const actualPinnedIds = (actual.pinnedFields || []).map((f) => f.id).sort();
+  const sortedDesiredIds = [...desiredPinnedFieldIds].sort();
+
+  if (JSON.stringify(actualPinnedIds) !== JSON.stringify(sortedDesiredIds)) {
+    changes.push(`pinnedFields: [${actualPinnedIds.length} fields] → [${sortedDesiredIds.length} fields]`);
+  }
+
   return changes;
 }
 
@@ -281,16 +291,6 @@ function diffIssueField(desired, actual) {
   return changes;
 }
 
-function diffPinnedFields(desiredFieldKeys, actualPinnedFields, fieldKeyToName) {
-  const desiredNames = new Set(desiredFieldKeys.map((k) => fieldKeyToName[k]).filter(Boolean));
-  const actualNames = new Set(actualPinnedFields.map((f) => f.name));
-
-  const missing = [...desiredNames].filter((name) => !actualNames.has(name));
-  const extra = [...actualNames].filter((name) => !desiredNames.has(name));
-
-  return { missing, extra, hasDrift: missing.length > 0 || extra.length > 0 };
-}
-
 // --- Main sync ---
 
 async function sync() {
@@ -308,57 +308,17 @@ async function sync() {
 
   // Fetch current state
   console.log("📡 Fetching current state from GitHub...");
-  const currentTypes = await fetchCurrentIssueTypes();
-  const currentFields = await fetchCurrentIssueFields();
+  const initialTypes = await fetchCurrentIssueTypes();
+  const initialFields = await fetchCurrentIssueFields();
 
-  console.log(`   Found ${currentTypes.length} issue types, ${currentFields.length} issue fields\n`);
+  console.log(`   Found ${initialTypes.length} issue types, ${initialFields.length} issue fields\n`);
 
   const summary = { created: 0, updated: 0, drift: 0, unchanged: 0 };
 
-  // --- Sync Issue Types ---
-  console.log("━━━ Issue Types ━━━");
-
-  const currentTypesByName = Object.fromEntries(currentTypes.map((t) => [t.name, t]));
-
-  for (const desired of desiredTypes) {
-    const actual = currentTypesByName[desired.name];
-
-    if (!actual) {
-      console.log(`  CREATE: ${desired.name} (${desired.color})`);
-      if (!DRY_RUN) {
-        const created = await createIssueType(desired);
-        console.log(`    ✓ Created with id: ${created.id}`);
-      }
-      summary.created++;
-    } else {
-      const changes = diffIssueType(desired, actual);
-      if (changes.length > 0) {
-        console.log(`  UPDATE: ${desired.name}`);
-        for (const c of changes) console.log(`    ${c}`);
-        if (!DRY_RUN) {
-          await updateIssueType(actual.id, desired);
-          console.log(`    ✓ Updated`);
-        }
-        summary.updated++;
-      } else {
-        summary.unchanged++;
-      }
-    }
-  }
-
-  // Drift: types in GitHub but not in YAML
-  const desiredTypeNames = new Set(desiredTypes.map((t) => t.name));
-  for (const actual of currentTypes) {
-    if (!desiredTypeNames.has(actual.name)) {
-      console.log(`  DRIFT: '${actual.name}' exists in GitHub but not in YAML`);
-      summary.drift++;
-    }
-  }
-
   // --- Sync Issue Fields ---
-  console.log("\n━━━ Issue Fields ━━━");
+  console.log("━━━ Issue Fields ━━━");
 
-  const currentFieldsByName = Object.fromEntries(currentFields.map((f) => [f.name, f]));
+  let currentFieldsByName = Object.fromEntries(initialFields.map((f) => [f.name, f]));
 
   for (const desired of desiredFields) {
     const actual = currentFieldsByName[desired.name];
@@ -368,6 +328,7 @@ async function sync() {
       if (!DRY_RUN) {
         const created = await createIssueField(desired);
         console.log(`    ✓ Created with id: ${created.id}`);
+        currentFieldsByName[desired.name] = created; // update local map
       }
       summary.created++;
     } else {
@@ -386,37 +347,65 @@ async function sync() {
     }
   }
 
+  // Refresh fields if we created/updated anything to ensure we have correct IDs for pinning
+  const finalFields = DRY_RUN ? initialFields : await fetchCurrentIssueFields();
+  const fieldKeyToId = Object.fromEntries(
+    desiredFields.map((df) => {
+      const actual = finalFields.find((af) => af.name === df.name);
+      return [df.key, actual?.id];
+    })
+  );
+
   // Drift: fields in GitHub but not in YAML
   const desiredFieldNames = new Set(desiredFields.map((f) => f.name));
-  for (const actual of currentFields) {
+  for (const actual of finalFields) {
     if (!desiredFieldNames.has(actual.name)) {
       console.log(`  DRIFT: '${actual.name}' exists in GitHub but not in YAML`);
       summary.drift++;
     }
   }
 
-  // --- Check pinned field mappings (read-only drift detection) ---
-  console.log("\n━━━ Pinned Fields (read-only — drift detection only) ━━━");
+  // --- Sync Issue Types ---
+  console.log("\n━━━ Issue Types ━━━");
 
-  // fieldKeyToName: used for pinned-field drift detection (compare by name, not ID)
-  const fieldKeyToName = Object.fromEntries(desiredFields.map((f) => [f.key, f.name]));
-  const typeKeyToName = Object.fromEntries(desiredTypes.map((t) => [t.key, t.name]));
+  const currentTypesByName = Object.fromEntries(initialTypes.map((t) => [t.name, t]));
+  const mappingByReturnTypeKey = Object.fromEntries(desiredMappings.map((m) => [m.issue_type, m]));
 
-  for (const mapping of desiredMappings) {
-    const typeName = typeKeyToName[mapping.issue_type];
-    if (!typeName) continue;
+  for (const desired of desiredTypes) {
+    const actual = currentTypesByName[desired.name];
+    const mapping = mappingByReturnTypeKey[desired.key];
+    const desiredPinnedFieldIds = (mapping?.pinned_fields || [])
+      .map((key) => fieldKeyToId[key])
+      .filter(Boolean);
 
-    const actualType = currentTypesByName[typeName];
-    if (!actualType) continue;
+    if (!actual) {
+      console.log(`  CREATE: ${desired.name} (${desired.color})`);
+      if (!DRY_RUN) {
+        const created = await createIssueType(desired, desiredPinnedFieldIds);
+        console.log(`    ✓ Created with id: ${created.id}`);
+      }
+      summary.created++;
+    } else {
+      const changes = diffIssueType(desired, actual, desiredPinnedFieldIds);
+      if (changes.length > 0) {
+        console.log(`  UPDATE: ${desired.name}`);
+        for (const c of changes) console.log(`    ${c}`);
+        if (!DRY_RUN) {
+          await updateIssueType(actual.id, desired, desiredPinnedFieldIds);
+          console.log(`    ✓ Updated`);
+        }
+        summary.updated++;
+      } else {
+        summary.unchanged++;
+      }
+    }
+  }
 
-    const pinnedFields = actualType.pinnedFields || [];
-    const desiredFieldKeys = mapping.pinned_fields || [];
-    const { hasDrift, missing, extra } = diffPinnedFields(desiredFieldKeys, pinnedFields, fieldKeyToName);
-
-    if (hasDrift) {
-      console.log(`  DRIFT: ${typeName} pinned fields mismatch`);
-      if (missing.length > 0) console.log(`    Missing in GitHub: ${missing.join(", ")}`);
-      if (extra.length > 0) console.log(`    Extra in GitHub: ${extra.join(", ")}`);
+  // Drift: types in GitHub but not in YAML
+  const desiredTypeNames = new Set(desiredTypes.map((t) => t.name));
+  for (const actual of initialTypes) {
+    if (!desiredTypeNames.has(actual.name)) {
+      console.log(`  DRIFT: '${actual.name}' exists in GitHub but not in YAML`);
       summary.drift++;
     }
   }
