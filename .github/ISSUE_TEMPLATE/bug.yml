@@ -8,6 +8,8 @@ body:
   - type: markdown
     attributes:
       value: |
+        <!-- mcf-issue-type: Bug -->
+
         # 🐛 Bug Report
 
         > [!IMPORTANT]
