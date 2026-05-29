@@ -368,6 +368,10 @@ async function sync() {
     }
   }
 
+  if (summary.types.created === 0 && summary.types.updated === 0 && summary.types.drift === 0) {
+    console.log("  ✓ All issue types are in sync with taxonomy");
+  }
+
   // --- Sync Issue Fields ---
   console.log("\n━━━ Issue Fields ━━━");
 
@@ -406,6 +410,10 @@ async function sync() {
       console.log(`  DRIFT: '${actual.name}' exists in GitHub but not in YAML`);
       summary.fields.drift++;
     }
+  }
+
+  if (summary.fields.created === 0 && summary.fields.updated === 0 && summary.fields.drift === 0) {
+    console.log("  ✓ All issue fields are in sync with taxonomy");
   }
 
   // --- Check pinned field mappings (read-only drift detection) ---
