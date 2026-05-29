@@ -129,6 +129,16 @@ body:
     validations:
       required: false
 
+  - type: dropdown
+    id: template-type
+    attributes:
+      label: Issue Type
+      description: Identifies which issue template was used. Do not change this value.
+      options:
+        - DevOps
+    validations:
+      required: true
+
   - type: markdown
     attributes:
       value: |

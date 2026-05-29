@@ -4,17 +4,16 @@
  * This Worker is triggered by the GitHub App webhook and enforces these rules:
  *
  * 1. Repository: MCF-Technologie-GmbH/projects
- *    - Only Issue Type `Project` is allowed.
- *    - If an issue was closed because it had the wrong type, users may change it
- *      back to `Project` and reopen it.
+ *    - Only Issue Type `Project` is allowed. Any other type is corrected automatically.
  *
  * 2. Every other repository:
  *    - Issue Type `Project` is reserved and not allowed.
  *    - If an issue is created as `Project`, it is closed automatically.
- *    - When a valid issue is created, the bot writes a neutral metadata comment
- *      containing the original Issue Type.
- *    - If the Issue Type is changed after creation, the Worker reads that bot
- *      metadata comment and restores the original Issue Type.
+ *    - On creation, the issue type is validated against the template detected from
+ *      the Issue Type dropdown field embedded in each template (not changeable during
+ *      form filling — the dropdown has a single option). If wrong, it is corrected.
+ *    - If the Issue Type is changed after creation, the Worker queries the
+ *      IssueTypeChangedEvent timeline to restore the original type.
  *
  * Required Cloudflare secrets / variables:
  *   GITHUB_WEBHOOK_SECRET  Same value configured as the GitHub App webhook secret
@@ -46,26 +45,20 @@ const GITHUB_GRAPHQL_FEATURES = "issue_types";
 const ISSUE_ACTIONS_TO_VALIDATE = new Set(["opened", "reopened", "edited", "typed", "untyped"]);
 const ISSUE_TYPE_CHANGE_ACTIONS = new Set(["typed", "untyped", "edited"]);
 
-// Map from issue type name to its stable GraphQL node ID.
-// Run this to refresh all IDs:
-// gh api graphql -H "GraphQL-Features: issue_types" \
-//   -f query='query { organization(login: "MCF-Technologie-GmbH") { issueTypes(first: 20) { nodes { id name } } } }'
-const ISSUE_TYPE_IDS = {
-  "Task":          "IT_kwDOCAEFQs4BKtmG",
+// Each issue template has a `type: dropdown` field with label "Issue Type" and a
+// single option equal to the type name. With only one option in the dropdown, GitHub's
+// form UI does not allow users to change the value. The submitted body renders as:
+//   ### Issue Type\n\nTypeName
+// Map from the type name (as it appears in the dropdown) to its GraphQL node ID.
+const TEMPLATE_TYPE_IDS = {
   "Bug":           "IT_kwDOCAEFQs4BKtmJ",
   "Feature":       "IT_kwDOCAEFQs4BKtmM",
+  "Task":          "IT_kwDOCAEFQs4BKtmG",
   "Improvement":   "IT_kwDOCAEFQs4BpYBi",
   "Documentation": "IT_kwDOCAEFQs4CA6uB",
   "Maintenance":   "IT_kwDOCAEFQs4CA6uF",
-  "Project":       "IT_kwDOCAEFQs4CBH8t",
   "DevOps":        "IT_kwDOCAEFQs4CBIei",
 };
-
-// Hidden metadata comment embedded in every issue form template.
-// Format: <!-- mcf-issue-type: TypeName -->
-// Injected via a `type: markdown` block so it is part of the submitted body
-// but invisible in the rendered view. Cannot be edited by the user.
-const TEMPLATE_TYPE_MARKER_REGEX = /<!--\s*mcf-issue-type:\s*([^>]+?)\s*-->/;
 
 export default {
   async fetch(request, env) {
@@ -368,14 +361,13 @@ async function closeReservedProjectTypeInImplementationRepo({
 }
 
 function detectTemplateFromIssue(body) {
-  const match = (body || "").match(TEMPLATE_TYPE_MARKER_REGEX);
+  if (!body) return null;
+  const match = body.match(/^### Issue Type\r?\n\r?\n([^\r\n]+)/m);
   if (!match) return null;
-
-  const typeName = match[1].trim();
-  const typeId = ISSUE_TYPE_IDS[typeName];
-  if (!typeId) return null;
-
-  return { expectedType: typeName, expectedTypeId: typeId };
+  const expectedType = match[1].trim();
+  const expectedTypeId = TEMPLATE_TYPE_IDS[expectedType];
+  if (!expectedTypeId) return null;
+  return { expectedType, expectedTypeId };
 }
 
 async function enforceTemplateTypeOnCreation({
@@ -408,7 +400,7 @@ async function enforceTemplateTypeOnCreation({
       repo: repoFullName,
       issue: issueNumber,
       currentType,
-      template: template.titlePrefix,
+      template: template.expectedType,
     };
   }
 
@@ -418,7 +410,7 @@ async function enforceTemplateTypeOnCreation({
   const comment = [
     `The issue type was automatically corrected to \`${template.expectedType}\`.`,
     "",
-    `This issue was created using the **${template.titlePrefix.replace(":", "")}** template, which requires the \`${template.expectedType}\` issue type.`,
+    `This issue was created using the **${template.expectedType}** template.`,
     "",
     "Issue types are determined by the template and cannot be changed.",
   ].join("\n");
@@ -434,7 +426,7 @@ async function enforceTemplateTypeOnCreation({
     issue: issueNumber,
     currentType,
     correctedTo: template.expectedType,
-    template: template.titlePrefix,
+    template: template.expectedType,
   };
 }
 
