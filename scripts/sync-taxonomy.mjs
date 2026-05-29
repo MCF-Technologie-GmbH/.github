@@ -282,13 +282,22 @@ function diffIssueField(desired, actual) {
 }
 
 function diffPinnedFields(desiredFieldKeys, actualPinnedFields, fieldKeyToName) {
-  const desiredNames = new Set(desiredFieldKeys.map((k) => fieldKeyToName[k]).filter(Boolean));
-  const actualNames = new Set(actualPinnedFields.map((f) => f.name));
+  const desiredNames = desiredFieldKeys.map((k) => fieldKeyToName[k]).filter(Boolean);
+  const actualNames = actualPinnedFields.map((f) => f.name);
 
-  const missing = [...desiredNames].filter((name) => !actualNames.has(name));
-  const extra = [...actualNames].filter((name) => !desiredNames.has(name));
+  const desiredSet = new Set(desiredNames);
+  const actualSet = new Set(actualNames);
 
-  return { missing, extra, hasDrift: missing.length > 0 || extra.length > 0 };
+  const missing = desiredNames.filter((name) => !actualSet.has(name));
+  const extra = actualNames.filter((name) => !desiredSet.has(name));
+
+  return { 
+    missing, 
+    extra, 
+    hasDrift: missing.length > 0 || extra.length > 0,
+    actualNames,
+    desiredNames
+  };
 }
 
 // --- Main sync ---
@@ -316,7 +325,7 @@ async function sync() {
   const summary = { created: 0, updated: 0, drift: 0, unchanged: 0 };
 
   // --- Sync Issue Types ---
-  console.log("\n━━━ Issue Types ━━━");
+  console.log("━━━ Issue Types ━━━");
 
   const currentTypesByName = Object.fromEntries(initialTypes.map((t) => [t.name, t]));
 
@@ -407,17 +416,26 @@ async function sync() {
     if (!typeName) continue;
 
     const actualType = currentTypesByName[typeName];
-    if (!actualType) continue;
+    if (!actualType) {
+      console.log(`  SKIP: ${typeName} mapping (type does not exist in GitHub yet)`);
+      continue;
+    }
 
     const pinnedFields = actualType.pinnedFields || [];
     const desiredFieldKeys = mapping.pinned_fields || [];
-    const { hasDrift, missing, extra } = diffPinnedFields(desiredFieldKeys, pinnedFields, fieldKeyToName);
+    const { hasDrift, missing, extra, actualNames, desiredNames } = diffPinnedFields(desiredFieldKeys, pinnedFields, fieldKeyToName);
+
+    const actualStr = actualNames.join(", ") || "(none)";
+    const desiredStr = desiredNames.join(", ");
 
     if (hasDrift) {
-      console.log(`  DRIFT: ${typeName} pinned fields mismatch`);
-      if (missing.length > 0) console.log(`    Missing in GitHub: ${missing.join(", ")}`);
-      if (extra.length > 0) console.log(`    Extra in GitHub: ${extra.join(", ")}`);
+      console.log(`  DRIFT: ${typeName}`);
+      console.log(`    Actual:  [${actualStr}]`);
+      console.log(`    Desired: [${desiredStr}]`);
       summary.drift++;
+    } else {
+      console.log(`  MATCH: ${typeName} [${actualStr}]`);
+      summary.unchanged++;
     }
   }
 
