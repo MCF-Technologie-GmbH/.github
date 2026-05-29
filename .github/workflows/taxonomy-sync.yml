@@ -17,10 +17,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
 
@@ -29,7 +29,8 @@ jobs:
 
       - name: Generate GitHub App token
         id: app-token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
+
         with:
           app-id: ${{ vars.MCF_GITHUB_APP_ID }}
           private-key: ${{ secrets.MCF_GITHUB_PRIVATE_KEY }}
