@@ -32,7 +32,7 @@ jobs:
         uses: actions/create-github-app-token@v3
 
         with:
-          app-id: ${{ vars.MCF_GITHUB_APP_ID }}
+          client-id: ${{ vars.MCF_GITHUB_APP_ID }}
           private-key: ${{ secrets.MCF_GITHUB_PRIVATE_KEY }}
           owner: MCF-Technologie-GmbH
 
