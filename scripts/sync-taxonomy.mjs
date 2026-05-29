@@ -322,7 +322,11 @@ async function sync() {
 
   console.log(`   Found ${initialTypes.length} issue types, ${initialFields.length} issue fields\n`);
 
-  const summary = { created: 0, updated: 0, drift: 0, unchanged: 0 };
+  const summary = {
+    types: { created: 0, updated: 0, unchanged: 0, drift: 0 },
+    fields: { created: 0, updated: 0, unchanged: 0, drift: 0 },
+    pinned: { match: 0, drift: 0 }
+  };
 
   // --- Sync Issue Types ---
   console.log("━━━ Issue Types ━━━");
@@ -338,7 +342,7 @@ async function sync() {
         const created = await createIssueType(desired);
         console.log(`    ✓ Created with id: ${created.id}`);
       }
-      summary.created++;
+      summary.types.created++;
     } else {
       const changes = diffIssueType(desired, actual);
       if (changes.length > 0) {
@@ -348,9 +352,9 @@ async function sync() {
           await updateIssueType(actual.id, desired);
           console.log(`    ✓ Updated`);
         }
-        summary.updated++;
+        summary.types.updated++;
       } else {
-        summary.unchanged++;
+        summary.types.unchanged++;
       }
     }
   }
@@ -360,7 +364,7 @@ async function sync() {
   for (const actual of initialTypes) {
     if (!desiredTypeNames.has(actual.name)) {
       console.log(`  DRIFT: '${actual.name}' exists in GitHub but not in YAML`);
-      summary.drift++;
+      summary.types.drift++;
     }
   }
 
@@ -378,7 +382,7 @@ async function sync() {
         const created = await createIssueField(desired);
         console.log(`    ✓ Created with id: ${created.id}`);
       }
-      summary.created++;
+      summary.fields.created++;
     } else {
       const changes = diffIssueField(desired, actual);
       if (changes.length > 0) {
@@ -388,9 +392,9 @@ async function sync() {
           await updateIssueField(actual.id, desired);
           console.log(`    ✓ Updated`);
         }
-        summary.updated++;
+        summary.fields.updated++;
       } else {
-        summary.unchanged++;
+        summary.fields.unchanged++;
       }
     }
   }
@@ -400,17 +404,18 @@ async function sync() {
   for (const actual of initialFields) {
     if (!desiredFieldNames.has(actual.name)) {
       console.log(`  DRIFT: '${actual.name}' exists in GitHub but not in YAML`);
-      summary.drift++;
+      summary.fields.drift++;
     }
   }
 
   // --- Check pinned field mappings (read-only drift detection) ---
-  console.log("\n━━━ Pinned Fields (read-only — drift detection only) ━━━");
+  console.log("\n━━━ Pinned Fields (drift detection) ━━━");
 
   // fieldKeyToName: used for pinned-field drift detection (compare by name, not ID)
   const fieldKeyToName = Object.fromEntries(desiredFields.map((f) => [f.key, f.name]));
   const typeKeyToName = Object.fromEntries(desiredTypes.map((t) => [t.key, t.name]));
 
+  let totalPinnedDrift = 0;
   for (const mapping of desiredMappings) {
     const typeName = typeKeyToName[mapping.issue_type];
     if (!typeName) continue;
@@ -425,28 +430,44 @@ async function sync() {
     const desiredFieldKeys = mapping.pinned_fields || [];
     const { hasDrift, missing, extra, actualNames, desiredNames } = diffPinnedFields(desiredFieldKeys, pinnedFields, fieldKeyToName);
 
-    const actualStr = actualNames.join(", ") || "(none)";
-    const desiredStr = desiredNames.join(", ");
-
     if (hasDrift) {
+      const actualStr = actualNames.join(", ") || "(none)";
+      const desiredStr = desiredNames.join(", ");
       console.log(`  DRIFT: ${typeName}`);
       console.log(`    Actual:  [${actualStr}]`);
       console.log(`    Desired: [${desiredStr}]`);
-      summary.drift++;
+      summary.pinned.drift++;
+      totalPinnedDrift++;
     } else {
-      console.log(`  MATCH: ${typeName} [${actualStr}]`);
-      summary.unchanged++;
+      summary.pinned.match++;
     }
+  }
+
+  if (totalPinnedDrift === 0) {
+    console.log("  ✓ All pinned fields are in sync with taxonomy");
   }
 
   // --- Summary ---
   console.log("\n━━━ Summary ━━━");
-  console.log(`  Created:   ${summary.created}`);
-  console.log(`  Updated:   ${summary.updated}`);
-  console.log(`  Unchanged: ${summary.unchanged}`);
-  console.log(`  Drift:     ${summary.drift}`);
+  console.log("  Issue Types:");
+  console.log(`    Created:   ${summary.types.created}`);
+  console.log(`    Updated:   ${summary.types.updated}`);
+  console.log(`    Unchanged: ${summary.types.unchanged}`);
+  console.log(`    Drift:     ${summary.types.drift}`);
 
-  if (DRY_RUN && (summary.created > 0 || summary.updated > 0)) {
+  console.log("\n  Issue Fields:");
+  console.log(`    Created:   ${summary.fields.created}`);
+  console.log(`    Updated:   ${summary.fields.updated}`);
+  console.log(`    Unchanged: ${summary.fields.unchanged}`);
+  console.log(`    Drift:     ${summary.fields.drift}`);
+
+  console.log("\n  Pinned Fields (manual sync required):");
+  console.log(`    In sync:   ${summary.pinned.match}`);
+  console.log(`    Drift:     ${summary.pinned.drift}`);
+
+  const totalActions = summary.types.created + summary.types.updated + summary.fields.created + summary.fields.updated;
+
+  if (DRY_RUN && totalActions > 0) {
     console.log("\n⚠️  DRY RUN — no changes were applied. Run without DRY_RUN=true to apply.");
   }
 
