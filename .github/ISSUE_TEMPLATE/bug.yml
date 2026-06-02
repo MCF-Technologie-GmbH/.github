@@ -8,28 +8,14 @@ body:
   - type: markdown
     attributes:
       value: |
-        <!-- mcf-issue-type: Bug -->
-
-        # 🐛 Bug Report
-
         > [!IMPORTANT]
-        > This form automatically sets the issue type to `Bug` and adds the issue to the `Softwareentwicklung` project.
-        >
-        > Use this form only when something existing is not working as expected.
-        >
-        > Before submitting this issue, please complete all required GitHub fields at the bottom of the form or in the issue sidebar.
-        >
-        > Required/important fields may include:
-        > - Customer
-        > - Priority
-        > - Target milestone / release
-        >
-        > If the problem is unclear or cannot be reproduced yet, the issue may later be marked with `needs-info`.
+        > This form automatically sets the issue type to **Bug** and adds it to the **Softwareentwicklung** project board.
+        > Before submitting, please ensure you fill in all required sidebar fields (Priority, Customer, Target milestone/release).
 
   - type: input
     id: bug-summary
     attributes:
-      label: Bug Summary
+      label: Summary
       description: Short and clear description of the problem.
       placeholder: "Example: Device status remains offline after reconnect"
     validations:
@@ -38,7 +24,7 @@ body:
   - type: textarea
     id: current-behavior
     attributes:
-      label: 1. Current Behavior
+      label: Current Behavior
       description: Describe what is currently happening.
       placeholder: |
         What happens right now?
@@ -51,7 +37,7 @@ body:
   - type: textarea
     id: expected-behavior
     attributes:
-      label: 2. Expected Behavior
+      label: Expected Behavior
       description: Describe what should happen instead.
       placeholder: |
         What should happen?
@@ -64,7 +50,7 @@ body:
   - type: textarea
     id: steps-to-reproduce
     attributes:
-      label: 3. Steps to Reproduce
+      label: Steps to Reproduce
       description: Provide clear steps so the issue can be reproduced.
       placeholder: |
         1. Start the application / service
@@ -80,7 +66,7 @@ body:
   - type: textarea
     id: environment
     attributes:
-      label: 4. Environment
+      label: Environment
       description: Add relevant runtime, software, hardware, or deployment context.
       placeholder: |
         Application / service:
@@ -97,7 +83,7 @@ body:
   - type: dropdown
     id: frequency
     attributes:
-      label: 5. Frequency
+      label: Frequency
       description: How often does the bug occur?
       options:
         - Always reproducible
@@ -110,7 +96,7 @@ body:
   - type: textarea
     id: impact
     attributes:
-      label: 6. Impact
+      label: Impact
       description: Describe the operational, user, customer, or technical impact.
       placeholder: |
         Who or what is affected?
@@ -126,7 +112,7 @@ body:
   - type: textarea
     id: logs
     attributes:
-      label: 7. Logs / Error Output
+      label: Logs / Error Output
       description: Paste relevant logs, stack traces, console output, or error messages.
       placeholder: |
         Paste logs or error output here.
@@ -145,7 +131,7 @@ body:
   - type: textarea
     id: workaround
     attributes:
-      label: 8. Workaround
+      label: Workaround
       description: Optional. Describe any known workaround.
       placeholder: |
         Is there a temporary workaround?
@@ -158,7 +144,7 @@ body:
   - type: textarea
     id: additional-context
     attributes:
-      label: 9. Additional Context
+      label: Additional Context
       description: Add anything else that may help with diagnosis or debugging.
       placeholder: |
         Add related issues, PRs, customer reports, assumptions, suspected root cause, or debugging notes.
@@ -174,17 +160,3 @@ body:
         - Bug
     validations:
       required: true
-
-  - type: markdown
-    attributes:
-      value: |
-        ---
-
-        > [!NOTE]
-        > A bug should describe a mismatch between expected behavior and actual behavior.
-
-        > [!TIP]
-        > Add logs, screenshots, reproduction steps, and environment details whenever possible. This reduces triage time.
-
-        > [!IMPORTANT]
-        > If the issue cannot be reproduced or lacks required information, add `needs-info` until the missing details are provided.

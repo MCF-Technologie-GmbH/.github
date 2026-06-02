@@ -8,26 +8,14 @@ body:
   - type: markdown
     attributes:
       value: |
-        <!-- mcf-issue-type: Feature -->
-
-        # ✨ Feature Request
-
         > [!IMPORTANT]
-        > This form automatically sets the issue type to `Feature` and adds the issue to the `Softwareentwicklung` project.
-        >
-        > Use this form to propose new functionality that does not yet exist.
-        >
-        > Before submitting this issue, please complete all required GitHub fields at the bottom of the form or in the issue sidebar.
-        >
-        > Required/important fields may include:
-        > - Customer
-        > - Priority
-        > - Target milestone / release
+        > This form automatically sets the issue type to **Feature** and adds it to the **Softwareentwicklung** project board.
+        > Before submitting, please ensure you fill in all required sidebar fields (Priority, Customer, Target milestone/release).
 
   - type: input
     id: feature-summary
     attributes:
-      label: Feature Summary
+      label: Summary
       description: Short and clear name for the feature.
       placeholder: "Example: Add CSV export for device telemetry data"
     validations:
@@ -36,7 +24,7 @@ body:
   - type: textarea
     id: problem-statement
     attributes:
-      label: 1. Problem Statement / Motivation
+      label: Problem Statement / Motivation
       description: What problem does this feature solve? Who is affected and why does it matter?
       placeholder: |
         Describe the problem or need this feature addresses.
@@ -49,7 +37,7 @@ body:
   - type: textarea
     id: proposed-solution
     attributes:
-      label: 2. Proposed Solution
+      label: Proposed Solution
       description: Describe the feature you'd like to see implemented.
       placeholder: |
         How should this feature work?
@@ -62,7 +50,7 @@ body:
   - type: textarea
     id: acceptance-criteria
     attributes:
-      label: 3. Acceptance Criteria
+      label: Acceptance Criteria
       description: Define what "done" looks like for this feature.
       placeholder: |
         - [ ] User can trigger an export from the device detail view
@@ -75,7 +63,7 @@ body:
   - type: textarea
     id: out-of-scope
     attributes:
-      label: 4. Out of Scope
+      label: Out of Scope
       description: Explicitly list anything that is NOT part of this feature to prevent scope creep.
       placeholder: |
         - Real-time streaming exports
@@ -86,7 +74,7 @@ body:
   - type: textarea
     id: alternatives
     attributes:
-      label: 5. Alternatives Considered
+      label: Alternatives Considered
       description: Have you considered any alternative approaches?
       placeholder: |
         Describe any alternatives you considered and why they were rejected.
@@ -96,7 +84,7 @@ body:
   - type: textarea
     id: dependencies
     attributes:
-      label: 6. Dependencies
+      label: Dependencies
       description: List any issues, teams, or external systems this feature depends on.
       placeholder: |
         - Requires API endpoint from service X
@@ -115,7 +103,7 @@ body:
   - type: textarea
     id: additional-context
     attributes:
-      label: 7. Additional Context
+      label: Additional Context
       description: Add any other relevant information, customer requests, or links.
       placeholder: |
         Related issues, customer feedback, external references, etc.
@@ -131,17 +119,3 @@ body:
         - Feature
     validations:
       required: true
-
-  - type: markdown
-    attributes:
-      value: |
-        ---
-
-        > [!NOTE]
-        > A feature request should describe new functionality. For improving something that already exists, use an Improvement issue instead.
-
-        > [!TIP]
-        > The clearer the acceptance criteria, the faster this issue can be estimated, implemented, and reviewed.
-
-        > [!IMPORTANT]
-        > If the feature is large, consider breaking it into smaller tasks or opening a Research/Spike first.

@@ -8,26 +8,14 @@ body:
   - type: markdown
     attributes:
       value: |
-        <!-- mcf-issue-type: Maintenance -->
-
-        # 🛠️ Maintenance
-
         > [!IMPORTANT]
-        > This form automatically sets the issue type to `Maintenance` and adds the issue to the `Softwareentwicklung` project.
-        >
-        > Use this form for technical debt, dependency upgrades, code refactoring, cleanup, or other housekeeping that keeps the codebase healthy.
-        >
-        > Before submitting this issue, please complete all required GitHub fields at the bottom of the form or in the issue sidebar.
-        >
-        > Required/important fields may include:
-        > - Assignee
-        > - Priority
-        > - Target milestone / release
+        > This form automatically sets the issue type to **Maintenance** and adds it to the **Softwareentwicklung** project board.
+        > Before submitting, please ensure you fill in all required sidebar fields (Priority, Assignee, Target milestone/release).
 
   - type: input
     id: maintenance-summary
     attributes:
-      label: Maintenance Summary
+      label: Summary
       description: Short and clear description of the maintenance work needed.
       placeholder: "Example: Upgrade axios from v0.x to v1.x and fix breaking changes"
     validations:
@@ -36,7 +24,7 @@ body:
   - type: dropdown
     id: maintenance-type
     attributes:
-      label: 1. Type of Maintenance
+      label: Type of Maintenance
       description: What category of maintenance is this?
       options:
         - Dependency upgrade
@@ -54,7 +42,7 @@ body:
   - type: textarea
     id: description
     attributes:
-      label: 2. Description
+      label: Description
       description: Describe the maintenance work in detail.
       placeholder: |
         What needs to be done and where?
@@ -67,7 +55,7 @@ body:
   - type: textarea
     id: reason
     attributes:
-      label: 3. Reason / Trigger
+      label: Reason / Trigger
       description: Why is this maintenance work needed now?
       placeholder: |
         Example:
@@ -81,7 +69,7 @@ body:
   - type: textarea
     id: risk
     attributes:
-      label: 4. Risk / Impact if Not Done
+      label: Risk / Impact if Not Done
       description: What happens if this work is deferred or skipped?
       placeholder: |
         Example:
@@ -94,7 +82,7 @@ body:
   - type: textarea
     id: acceptance-criteria
     attributes:
-      label: 5. Acceptance Criteria
+      label: Acceptance Criteria
       description: Define what "done" looks like for this maintenance task.
       placeholder: |
         - [ ] Dependency updated to target version
@@ -107,7 +95,7 @@ body:
   - type: textarea
     id: additional-context
     attributes:
-      label: 6. Additional Context
+      label: Additional Context
       description: Add any related issues, PRs, links, or notes.
       placeholder: |
         Related issues, Dependabot alerts, changelogs, migration guides, etc.
@@ -123,17 +111,3 @@ body:
         - Maintenance
     validations:
       required: true
-
-  - type: markdown
-    attributes:
-      value: |
-        ---
-
-        > [!NOTE]
-        > Maintenance work keeps the codebase healthy and reduces future risk. It should be prioritized alongside feature work, not always deferred.
-
-        > [!TIP]
-        > Link to the upstream changelog or migration guide when upgrading dependencies.
-
-        > [!IMPORTANT]
-        > Ensure tests pass and no regressions are introduced before closing this issue.

@@ -8,28 +8,14 @@ body:
   - type: markdown
     attributes:
       value: |
-        <!-- mcf-issue-type: Task -->
-
-        # 🔬 Research / Spike
-
         > [!IMPORTANT]
-        > This form automatically sets the issue type to `Task` and adds the issue to the `Softwareentwicklung` project.
-        >
-        > Use this form when you need to investigate a problem, evaluate options, or reduce uncertainty before committing to an implementation.
-        >
-        > A spike should be time-boxed and produce a concrete output (summary, decision, PoC, or recommendation).
-        >
-        > Before submitting this issue, please complete all required GitHub fields at the bottom of the form or in the issue sidebar.
-        >
-        > Required/important fields may include:
-        > - Assignee
-        > - Priority
-        > - Time box (estimate)
+        > This form automatically sets the issue type to **Task** and adds it to the **Softwareentwicklung** project board.
+        > Before submitting, please ensure you fill in all required sidebar fields (Priority, Assignee, Time box/estimate).
 
   - type: input
     id: spike-summary
     attributes:
-      label: Spike Summary
+      label: Summary
       description: Short and clear description of what needs to be investigated.
       placeholder: "Example: Evaluate real-time messaging solutions (WebSocket vs. SSE vs. polling)"
     validations:
@@ -38,7 +24,7 @@ body:
   - type: textarea
     id: background
     attributes:
-      label: 1. Background / Motivation
+      label: Background / Motivation
       description: Why is this investigation necessary? What triggered it?
       placeholder: |
         What uncertainty, risk, or open question is driving this spike?
@@ -51,7 +37,7 @@ body:
   - type: textarea
     id: goals
     attributes:
-      label: 2. Goals / Questions to Answer
+      label: Goals / Questions to Answer
       description: List the specific questions this spike must answer.
       placeholder: |
         - Which approach best fits our current infrastructure?
@@ -64,7 +50,7 @@ body:
   - type: textarea
     id: scope
     attributes:
-      label: 3. Scope & Time Box
+      label: Scope & Time Box
       description: Define the boundaries of this investigation and the maximum time to spend.
       placeholder: |
         In scope:
@@ -80,7 +66,7 @@ body:
   - type: textarea
     id: expected-output
     attributes:
-      label: 4. Expected Output / Deliverable
+      label: Expected Output / Deliverable
       description: What should this spike produce when complete?
       placeholder: |
         Example:
@@ -94,7 +80,7 @@ body:
   - type: textarea
     id: additional-context
     attributes:
-      label: 5. Additional Context
+      label: Additional Context
       description: Add any related issues, existing research, constraints, or reference material.
       placeholder: |
         Related issues, external documentation, constraints, known approaches, etc.
@@ -110,17 +96,3 @@ body:
         - Task
     validations:
       required: true
-
-  - type: markdown
-    attributes:
-      value: |
-        ---
-
-        > [!NOTE]
-        > A spike should be time-boxed. If it grows beyond its scope, reassess and open follow-up issues.
-
-        > [!TIP]
-        > The output of a spike is a decision or recommendation — not necessarily production-ready code.
-
-        > [!IMPORTANT]
-        > Close this issue with a summary comment linking to findings, decisions, or follow-up tasks.

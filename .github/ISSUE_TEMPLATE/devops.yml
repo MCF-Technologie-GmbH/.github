@@ -8,21 +8,9 @@ body:
   - type: markdown
     attributes:
       value: |
-        <!-- mcf-issue-type: DevOps -->
-
-        # ⚙️ DevOps
-
         > [!IMPORTANT]
-        > This form automatically sets the issue type to `DevOps` and adds the issue to the `Softwareentwicklung` project.
-        >
-        > Use this form for infrastructure changes, CI/CD pipeline work, deployment automation, monitoring, secrets management, or other platform-level tasks.
-        >
-        > Before submitting this issue, please complete all required GitHub fields at the bottom of the form or in the issue sidebar.
-        >
-        > Required/important fields may include:
-        > - Assignee
-        > - Priority
-        > - Target milestone / release
+        > This form automatically sets the issue type to **DevOps** and adds it to the **Softwareentwicklung** project board.
+        > Before submitting, please ensure you fill in all required sidebar fields (Priority, Assignee, Target milestone/release).
 
   - type: input
     id: devops-summary
@@ -36,7 +24,7 @@ body:
   - type: dropdown
     id: devops-type
     attributes:
-      label: 1. Type of Work
+      label: Type of Work
       description: What category of DevOps work is this?
       options:
         - CI/CD pipeline
@@ -56,7 +44,7 @@ body:
   - type: textarea
     id: description
     attributes:
-      label: 2. Description
+      label: Description
       description: Describe the work in detail.
       placeholder: |
         What needs to be done and why?
@@ -69,7 +57,7 @@ body:
   - type: textarea
     id: motivation
     attributes:
-      label: 3. Motivation / Trigger
+      label: Motivation / Trigger
       description: What is driving this work?
       placeholder: |
         Example:
@@ -83,7 +71,7 @@ body:
   - type: textarea
     id: affected-systems
     attributes:
-      label: 4. Affected Systems / Services / Environments
+      label: Affected Systems / Services / Environments
       description: List the systems, services, repositories, or environments involved.
       placeholder: |
         Systems / services:
@@ -96,7 +84,7 @@ body:
   - type: textarea
     id: rollback-plan
     attributes:
-      label: 5. Rollback Plan
+      label: Rollback Plan
       description: How can this change be reverted if something goes wrong?
       placeholder: |
         Example:
@@ -109,7 +97,7 @@ body:
   - type: textarea
     id: acceptance-criteria
     attributes:
-      label: 6. Acceptance Criteria
+      label: Acceptance Criteria
       description: Define what "done" looks like.
       placeholder: |
         - [ ] Pipeline runs successfully end-to-end
@@ -122,7 +110,7 @@ body:
   - type: textarea
     id: additional-context
     attributes:
-      label: 7. Additional Context
+      label: Additional Context
       description: Add any related issues, runbooks, infrastructure diagrams, or notes.
       placeholder: |
         Related issues, PRs, runbooks, architecture diagrams, external references, etc.
@@ -138,17 +126,3 @@ body:
         - DevOps
     validations:
       required: true
-
-  - type: markdown
-    attributes:
-      value: |
-        ---
-
-        > [!NOTE]
-        > Infrastructure and pipeline changes affect shared systems. Coordinate with the team before applying changes to production environments.
-
-        > [!TIP]
-        > Test in a non-production environment first and document the rollback procedure.
-
-        > [!IMPORTANT]
-        > Never commit secrets, credentials, or sensitive values directly into configuration files or pipelines.
