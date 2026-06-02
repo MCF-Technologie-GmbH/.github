@@ -2,7 +2,7 @@ name: Improvement
 description: Improve or enhance something that already exists.
 title: "[Improvement]: "
 type: Improvement
-projects: ["MCF-Technologie-GmbH/36"]
+projects: ["MCF-Technologie-GmbH/37"]
 
 body:
   - type: markdown
@@ -11,15 +11,6 @@ body:
         > [!IMPORTANT]
         > This form automatically sets the issue type to **Improvement** and adds it to the **Softwareentwicklung** project board.
         > Before submitting, please ensure you fill in all required sidebar fields (Priority, Target milestone/release).
-
-  - type: input
-    id: improvement-summary
-    attributes:
-      label: Summary
-      description: Short and clear description of what should be improved.
-      placeholder: "Example: Speed up device list loading by adding pagination"
-    validations:
-      required: true
 
   - type: textarea
     id: current-state

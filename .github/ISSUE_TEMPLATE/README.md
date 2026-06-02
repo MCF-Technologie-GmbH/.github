@@ -6,8 +6,8 @@ Eight GitHub issue form templates are defined here for use across all repositori
 
 | File | Template Name | Issue Type | Title Prefix |
 | ---- | ------------ | ---------- | ------------ |
-| `bug.yml` | Bug Report | `Bug` | `[Bug]:` |
-| `feature.yml` | Feature Request | `Feature` | `[Feature]:` |
+| `bug.yml` | Bug | `Bug` | `[Bug]:` |
+| `feature.yml` | Feature | `Feature` | `[Feature]:` |
 | `task.yml` | Task | `Task` | `[Task]:` |
 | `spike.yml` | Research / Spike | `Task` | `[Spike]:` |
 | `improvement.yml` | Improvement | `Improvement` | `[Improvement]:` |

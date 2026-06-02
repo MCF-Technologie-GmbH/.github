@@ -1,8 +1,8 @@
-name: Bug Report
+name: Bug
 description: Report a confirmed or suspected bug.
 title: "[Bug]: "
 type: Bug
-projects: ["MCF-Technologie-GmbH/36"]
+projects: ["MCF-Technologie-GmbH/37"]
 
 body:
   - type: markdown
@@ -11,15 +11,6 @@ body:
         > [!IMPORTANT]
         > This form automatically sets the issue type to **Bug** and adds it to the **Softwareentwicklung** project board.
         > Before submitting, please ensure you fill in all required sidebar fields (Priority, Customer, Target milestone/release).
-
-  - type: input
-    id: bug-summary
-    attributes:
-      label: Summary
-      description: Short and clear description of the problem.
-      placeholder: "Example: Device status remains offline after reconnect"
-    validations:
-      required: true
 
   - type: textarea
     id: current-behavior

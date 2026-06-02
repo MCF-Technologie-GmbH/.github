@@ -2,7 +2,7 @@ name: Maintenance
 description: Address technical debt, dependency updates, refactoring, or other housekeeping work.
 title: "[Maintenance]: "
 type: Maintenance
-projects: ["MCF-Technologie-GmbH/36"]
+projects: ["MCF-Technologie-GmbH/37"]
 
 body:
   - type: markdown
@@ -11,15 +11,6 @@ body:
         > [!IMPORTANT]
         > This form automatically sets the issue type to **Maintenance** and adds it to the **Softwareentwicklung** project board.
         > Before submitting, please ensure you fill in all required sidebar fields (Priority, Assignee, Target milestone/release).
-
-  - type: input
-    id: maintenance-summary
-    attributes:
-      label: Summary
-      description: Short and clear description of the maintenance work needed.
-      placeholder: "Example: Upgrade axios from v0.x to v1.x and fix breaking changes"
-    validations:
-      required: true
 
   - type: dropdown
     id: maintenance-type

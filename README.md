@@ -34,8 +34,8 @@ Eight templates are available when creating issues across any repository in the 
 
 | Template | Issue Type | When to use |
 | -------- | ---------- | ----------- |
-| Bug Report | `Bug` | Something existing is not working as expected |
-| Feature Request | `Feature` | Propose new functionality that does not yet exist |
+| Bug | `Bug` | Something existing is not working as expected |
+| Feature | `Feature` | Propose new functionality that does not yet exist |
 | Task | `Task` | A concrete, well-defined unit of work |
 | Research / Spike | `Task` | Investigation or spike before committing to implementation |
 | Improvement | `Improvement` | Enhance existing functionality |
