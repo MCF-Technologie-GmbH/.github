@@ -36,8 +36,8 @@ Eight templates are available when creating issues across any repository in the 
 | -------- | ---------- | ----------- |
 | Bug | `Bug` | Something existing is not working as expected |
 | Feature | `Feature` | Propose new functionality that does not yet exist |
-| Task | `Task` | A concrete, well-defined unit of work |
-| Research / Spike | `Task` | Investigation or spike before committing to implementation |
+| Chore | `Chore` | A concrete, well-defined unit of work |
+| Spike | `Spike` | A timeboxed technical investigation used to reduce uncertainty before implementation. |
 | Improvement | `Improvement` | Enhance existing functionality |
 | DevOps | `DevOps` | Infrastructure, CI/CD, deployments, monitoring |
 | Documentation | `Documentation` | Create, update, or restructure documentation |

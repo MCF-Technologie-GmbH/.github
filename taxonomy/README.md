@@ -4,7 +4,7 @@ This directory contains the declarative definition of the organization's issue m
 
 ## Files
 
-- **`issue-types.yml`**: The list of all issue types (Bug, Task, Feature, etc.). Each entry must have a unique `key`, a `name`, a `color`, and an `isEnabled` flag.
+- **`issue-types.yml`**: The list of all issue types (Bug, Chore, Feature, etc.). Each entry must have a unique `key`, a `name`, a `color`, and an `isEnabled` flag.
 - **`issue-fields.yml`**: Custom metadata fields. Supported data types: `TEXT`, `NUMBER`, `DATE`, `SINGLE_SELECT`, `MULTI_SELECT`. For select fields, `options` must be provided.
 - **`issue-type-fields.yml`**: Defines the "Pinned Fields" for each type. These are the fields that appear in the sidebar by default when an issue of that type is selected.
 

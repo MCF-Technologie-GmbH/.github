@@ -103,11 +103,11 @@ Issue type node IDs are **stable GraphQL node IDs** specific to this organizatio
 
 | Type | GraphQL Node ID |
 | ---- | --------------- |
-| `Task` | `IT_kwDOCAEFQs4BKtmG` |
+| `Chore` | `IT_kwDOCAEFQs4BKtmG` |
 | `Bug` | `IT_kwDOCAEFQs4BKtmJ` |
 | `Feature` | `IT_kwDOCAEFQs4BKtmM` |
 | `Improvement` | `IT_kwDOCAEFQs4BpYBi` |
-| `Research/Spike` | `IT_kwDOCAEFQs4CA6t8` |
+| `Spike` | `IT_kwDOCAEFQs4CA6t8` |
 | `Documentation` | `IT_kwDOCAEFQs4CA6uB` |
 | `Maintenance` | `IT_kwDOCAEFQs4CA6uF` |
 | `Project` | `IT_kwDOCAEFQs4CBH8t` |

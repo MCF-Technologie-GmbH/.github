@@ -53,11 +53,12 @@ const ISSUE_TYPE_CHANGE_ACTIONS = new Set(["typed", "untyped", "edited"]);
 const TEMPLATE_TYPE_IDS = {
   "Bug":           "IT_kwDOCAEFQs4BKtmJ",
   "Feature":       "IT_kwDOCAEFQs4BKtmM",
-  "Task":          "IT_kwDOCAEFQs4BKtmG",
+  "Chore":         "IT_kwDOCAEFQs4BKtmG",
   "Improvement":   "IT_kwDOCAEFQs4BpYBi",
   "Documentation": "IT_kwDOCAEFQs4CA6uB",
   "Maintenance":   "IT_kwDOCAEFQs4CA6uF",
   "DevOps":        "IT_kwDOCAEFQs4CBIei",
+  "Spike":         "IT_kwDOCAEFQs4CA6t8",
 };
 
 export default {
@@ -343,7 +344,7 @@ async function closeReservedProjectTypeInImplementationRepo({
     "",
     `Current issue type: \`${currentType}\``,
     "",
-    "Use a repository-specific issue type such as Bug, Feature, Improvement, Task, Documentation, Test, DevOps, Maintenance, or Research.",
+    "Use a repository-specific issue type such as Bug, Feature, Improvement, Chore, Documentation, Test, DevOps, Maintenance, or Research.",
   ].join("\n");
 
   await gh.createComment(owner, repo, issueNumber, comment);
@@ -456,7 +457,7 @@ async function revertIssueTypeChangeInImplementationRepo({
         "",
         `Current issue type: \`${currentType}\``,
         "",
-        "Use a repository-specific issue type such as Bug, Feature, Improvement, Task, Documentation, Test, DevOps, Maintenance, or Research.",
+        "Use a repository-specific issue type such as Bug, Feature, Improvement, Chore, Documentation, Test, DevOps, Maintenance, or Research.",
       ].join("\n");
 
       await gh.createComment(owner, repo, issueNumber, comment);

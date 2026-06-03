@@ -10,8 +10,8 @@
 #   gh api /orgs/MCF-Technologie-GmbH/issue-types
 
 issue_types:
-  - key: task
-    name: Task
+  - key: chore
+    name: Chore
     description: "Konkrete Arbeitsaufgabe ohne direkten Feature-Charakter"
     color: YELLOW
     is_enabled: true
@@ -34,9 +34,9 @@ issue_types:
     color: PINK
     is_enabled: true
 
-  - key: research_spike
-    name: "Research / Spike"
-    description: "Untersuchung, Konzept, technische Klärung"
+  - key: spike
+    name: Spike
+    description: "A timeboxed technical investigation used to reduce uncertainty before implementation. It does not directly deliver production functionality, but must produce a clear technical conclusion, recommendation, or proof of concept."
     color: GRAY
     is_enabled: true
 

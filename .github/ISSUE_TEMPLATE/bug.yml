@@ -38,11 +38,24 @@ body:
     validations:
       required: true
 
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: Frequency
+      description: How often does the bug occur?
+      options:
+        - Always reproducible
+        - Sometimes reproducible
+        - Happened once
+        - Unknown / not tested
+    validations:
+      required: false
+
   - type: textarea
     id: steps-to-reproduce
     attributes:
       label: Steps to Reproduce
-      description: Provide clear steps so the issue can be reproduced.
+      description: Provide clear steps so the issue can be reproduced, if applicable.
       placeholder: |
         1. Start the application / service
         2. Connect a device
@@ -52,7 +65,7 @@ body:
 
         Include commands, test data, user actions, or configuration if relevant.
     validations:
-      required: true
+      required: false
 
   - type: textarea
     id: environment
@@ -68,19 +81,6 @@ body:
         Browser / device:
         Hardware:
         Relevant configuration:
-    validations:
-      required: false
-
-  - type: dropdown
-    id: frequency
-    attributes:
-      label: Frequency
-      description: How often does the bug occur?
-      options:
-        - Always reproducible
-        - Sometimes reproducible
-        - Happened once
-        - Unknown / not tested
     validations:
       required: false
 

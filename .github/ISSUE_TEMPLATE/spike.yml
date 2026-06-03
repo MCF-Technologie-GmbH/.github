@@ -1,7 +1,7 @@
-name: Research / Spike
-description: Investigate an unknown, evaluate options, or reduce uncertainty before implementation.
+name: Spike
+description: A timeboxed technical investigation used to reduce uncertainty before implementation.
 title: "[Spike]: "
-type: Task
+type: Spike
 projects: ["MCF-Technologie-GmbH/37"]
 
 body:
@@ -9,7 +9,7 @@ body:
     attributes:
       value: |
         > [!IMPORTANT]
-        > This form automatically sets the issue type to **Task** and adds it to the **Softwareentwicklung** project board.
+        > This form automatically sets the issue type to **Spike** and adds it to the **Softwareentwicklung** project board.
         > Before submitting, please ensure you fill in all required sidebar fields (Priority, Assignee, Time box/estimate).
 
   - type: textarea
@@ -84,6 +84,6 @@ body:
       label: Issue Type
       description: Identifies which issue template was used. Do not change this value.
       options:
-        - Task
+        - Spike
     validations:
       required: true

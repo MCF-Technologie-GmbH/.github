@@ -9,7 +9,7 @@
 #   Organization Settings → Issue types → Select type → Manage pinned fields
 
 issue_type_fields:
-  - issue_type: task
+  - issue_type: chore
     pinned_fields:
       - priority
       - effort
@@ -37,7 +37,7 @@ issue_type_fields:
       - start_date
       - target_date
 
-  - issue_type: research_spike
+  - issue_type: spike
     pinned_fields:
       - priority
       - effort
