@@ -414,6 +414,20 @@ async function enforceIssueTypePolicy({
   let hasBodyChanges = false;
   let resolvedType = currentType;
 
+  // 1. Revert scope changes in the title if edited
+  if (action === "edited" && changes?.title) {
+    const oldScope = extractScopeFromTitle(changes.title.from);
+    const newScope = extractScopeFromTitle(currentIssue.title);
+    if (oldScope && newScope && oldScope !== newScope) {
+      const correctedTitle = formatTitle(currentIssue.title, resolvedType, oldScope);
+      if (correctedTitle !== currentIssue.title) {
+        await gh.updateIssueTitleAndBody(owner, repo, issueNumber, correctedTitle, undefined);
+        console.log(`Reverted scope change in title from "${newScope}" back to "${oldScope}"`);
+        currentIssue.title = correctedTitle;
+      }
+    }
+  }
+
   if (action === "opened" || action === "reopened") {
     const template = detectTemplateFromIssue(issueBody, typeMap);
     if (template && currentType !== template.expectedType) {
@@ -449,7 +463,10 @@ async function enforceIssueTypePolicy({
       finalBody = replaceSection(finalBody, "protected", oldProtected);
     }
 
-    const healed = healChecklist(finalBody, changes.body.from);
+    let healed = healChecklist(finalBody, changes.body.from);
+    healed = removeIssueTypeSection(healed);
+    healed = removeScopeSection(healed);
+
     if (healed !== issueBody) {
       updatedBody = healed;
       hasBodyChanges = true;
@@ -477,7 +494,11 @@ async function enforceIssueTypePolicy({
     await gh.removeLabel(owner, repo, issueNumber, l);
   }
 
-  const scopeValue = detectScopeFromBody(issueBody);
+  let scopeValue = detectScopeFromBody(issueBody);
+  if (!scopeValue) {
+    scopeValue = extractScopeFromTitle(currentIssue.title);
+  }
+
   if (scopeValue && scopeField) {
     const scopeOption = scopeField.options?.find(
       (opt) => opt.name.toLowerCase() === scopeValue.toLowerCase()
@@ -614,6 +635,12 @@ function detectScopeFromBody(body) {
   return match[1].trim().toLowerCase();
 }
 
+function extractScopeFromTitle(title) {
+  if (!title) return null;
+  const match = title.match(/^[a-zA-Z0-9_-]+\(([^)]+)\)\s*:\s*/);
+  return match ? match[1].trim().toLowerCase() : null;
+}
+
 function formatTitle(currentTitle, issueType, scope) {
   const typePrefixMap = {
     "Bug": "fix",
@@ -628,14 +655,7 @@ function formatTitle(currentTitle, issueType, scope) {
   const commitType = typePrefixMap[issueType];
   if (!commitType) return currentTitle;
 
-  let resolvedScope = scope;
-  if (!resolvedScope) {
-    const scopeMatch = currentTitle.match(/^[a-zA-Z0-9_-]+\(([^)]+)\)\s*:\s*/);
-    if (scopeMatch) {
-      resolvedScope = scopeMatch[1];
-    }
-  }
-
+  const resolvedScope = scope || extractScopeFromTitle(currentTitle);
   const targetPrefix = resolvedScope ? `${commitType}(${resolvedScope}): ` : `${commitType}: `;
 
   const cleanTitle = currentTitle
