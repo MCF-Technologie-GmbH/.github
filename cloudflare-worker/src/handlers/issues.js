@@ -125,11 +125,18 @@ export async function enforceIssueTypePolicy({
 
   // Detect scope from raw body (form submission) or fall back to sidebar / title
   let scopeValue = detectScopeFromBody(issueBody);
+  if (scopeValue) {
+    const cleanScope = scopeValue.trim().toLowerCase();
+    if (cleanScope === "_no response_" || cleanScope === "none" || cleanScope === "not set" || cleanScope === "not_set") {
+      scopeValue = "Not Set";
+    }
+  }
+
   if (action === "edited" && currentSidebarScope) {
     // During edits, the sidebar field value is the source of truth for the title prefix
     scopeValue = currentSidebarScope;
-  } else if (!scopeValue) {
-    scopeValue = currentSidebarScope || extractScopeFromTitle(currentIssue.title);
+  } else if (!scopeValue || scopeValue === "Not Set") {
+    scopeValue = scopeValue || currentSidebarScope || extractScopeFromTitle(currentIssue.title);
   }
 
   // Default scope to "Not Set" on creation if not specified
@@ -139,7 +146,20 @@ export async function enforceIssueTypePolicy({
 
   // Detect priority and effort from the raw body
   let priorityValue = detectPriorityFromBody(issueBody);
+  if (priorityValue) {
+    const cleanPriority = priorityValue.trim().toLowerCase();
+    if (cleanPriority === "_no response_" || cleanPriority === "none" || cleanPriority === "not set" || cleanPriority === "not_set") {
+      priorityValue = "Not Set";
+    }
+  }
+
   let effortValue = detectEffortFromBody(issueBody);
+  if (effortValue) {
+    const cleanEffort = effortValue.trim().toLowerCase();
+    if (cleanEffort === "_no response_" || cleanEffort === "none" || cleanEffort === "not set" || cleanEffort === "not_set") {
+      effortValue = "Not Set";
+    }
+  }
 
   // Default priority and effort to "Not Set" on creation if not specified
   if (action === "opened" || action === "reopened") {
@@ -210,9 +230,8 @@ export async function enforceIssueTypePolicy({
     }
   }
 
-  // 7. Update Issue body in GitHub if changes were made by enforcers.
+  // 7. Update Issue body in GitHub if changes were made by enforcers (postponed to end).
   if (hasBodyChanges) {
-    await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, updatedBody);
     issueBody = updatedBody;
   }
 
@@ -273,11 +292,20 @@ export async function enforceIssueTypePolicy({
     }
   }
 
-  // 10. Format Issue Title to conventional format type(scope): description.
+  // 10. Format Issue Title to conventional format type(scope): description, and update title and body in a single PATCH call.
   const formattedTitle = formatTitle(currentIssue.title, resolvedType, scopeValue);
-  if (formattedTitle !== currentIssue.title) {
-    await gh.updateIssueTitleAndBody(owner, repo, issueNumber, formattedTitle, undefined);
-    console.log(`Re-formatted issue title to: ${formattedTitle}`);
+  const hasTitleChanges = formattedTitle !== currentIssue.title;
+
+  if (hasBodyChanges || hasTitleChanges) {
+    await gh.updateIssueTitleAndBody(
+      owner,
+      repo,
+      issueNumber,
+      hasTitleChanges ? formattedTitle : undefined,
+      hasBodyChanges ? issueBody : undefined
+    );
+    if (hasTitleChanges) console.log(`Re-formatted issue title to: ${formattedTitle}`);
+    if (hasBodyChanges) console.log(`Sanitized issue body and injected zoning comments`);
   }
 
   return {
