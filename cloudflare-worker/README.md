@@ -83,23 +83,39 @@ The codebase is modularized under `src/`:
 
 ---
 
-## Secrets
+## Secrets & Environment Variables
 
-All secrets are stored in Cloudflare and never committed to the repository.
+All secrets must be stored securely inside Cloudflare or GitHub Actions Secrets (never committed to the repository). Understanding how they map to the inbound and outbound communication flows prevents configuration errors:
 
-| Secret | Description |
-| ------ | ----------- |
-| `GITHUB_WEBHOOK_SECRET` | The webhook secret configured in the GitHub App settings |
-| `GITHUB_APP_ID` | The numeric App ID (found on the GitHub App settings page) |
-| `GITHUB_PRIVATE_KEY` | The RSA private key PEM generated in the GitHub App settings |
+### 1. Inbound Flow (GitHub ➔ Cloudflare Worker)
+When a webhook event occurs on GitHub, it notifies the Cloudflare Worker. To prevent unauthorized requests (spoofing) to the public Worker URL, we verify the payload signature:
+*   **`GITHUB_WEBHOOK_SECRET`** (Stored in **Cloudflare** as a Secret):
+    GitHub signs the payload with this secret before sending the webhook request. The Worker verifies this signature using Web Crypto API. If they match, the request is processed; otherwise, it is rejected with a `401 Unauthorized` error.
 
-Set each secret with:
+### 2. Outbound Flow (Cloudflare Worker ➔ GitHub API)
+When the Worker needs to write back to GitHub (e.g. updating issue titles, syncing labels, or posting comments), it must authenticate as a trusted GitHub App installation:
+*   **`GITHUB_APP_ID`** (Stored in **Cloudflare** as a Variable or Secret):
+    The unique ID identifying your GitHub App (e.g., `3893672`).
+*   **`GITHUB_PRIVATE_KEY`** (Stored in **Cloudflare** as a Secret):
+    The RSA Private Key PEM generated in the GitHub App settings. Used to digitally sign JWT authentication tokens. Together with the App ID, it allows the Worker to request a temporary installation token from GitHub to update repository issues.
+
+### 3. Deploy Flow (GitHub Actions ➔ Cloudflare)
+Used only during the automated CI/CD pipeline to deploy changes to production:
+*   **`CLOUDFLARE_API_TOKEN`** (Stored in **GitHub Secrets**):
+    Provides the GitHub runner with permissions to deploy the modular build directory to Cloudflare. The running Worker itself never uses this token.
+
+---
+
+### How to set Secrets in Cloudflare
+
+Run the following commands using the Wrangler CLI:
 ```bash
 cd cloudflare-worker
 npx wrangler secret put GITHUB_WEBHOOK_SECRET
 npx wrangler secret put GITHUB_APP_ID
 npx wrangler secret put GITHUB_PRIVATE_KEY
 ```
+*(Alternatively, you can manage these under your Worker settings in the Cloudflare Dashboard: **Workers & Pages** ➔ **github-automation-bot** ➔ **Settings** ➔ **Variables**).*
 
 ---
 
