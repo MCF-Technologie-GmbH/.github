@@ -1,3 +1,8 @@
+/**
+ * Configuration constants for the MCF GitHub Automation platform.
+ * Contains whitelists, org details, and static settings.
+ */
+
 export const ORGANIZATION = "MCF-Technologie-GmbH";
 export const PROJECTS_REPO_FULL_NAME = `${ORGANIZATION}/projects`.toLowerCase();
 export const RESERVED_PROJECT_ISSUE_TYPE = "Project";
@@ -11,6 +16,10 @@ export const GITHUB_GRAPHQL_FEATURES = "issue_types, issue_fields";
 export const ISSUE_ACTIONS_TO_VALIDATE = new Set(["opened", "reopened", "edited", "typed", "untyped"]);
 export const ISSUE_TYPE_CHANGE_ACTIONS = new Set(["typed", "untyped", "edited"]);
 
+/**
+ * Mapping of checklist item names to their corresponding requires/* labels.
+ * Only items defined in this whitelist are valid and managed by the bot.
+ */
 export const REQUIRES_WHITELIST = {
   "Documentation": "requires/docs",
   "Tests": "requires/tests",

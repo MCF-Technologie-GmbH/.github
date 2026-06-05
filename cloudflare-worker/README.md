@@ -13,8 +13,9 @@ A Cloudflare Worker that receives GitHub App webhooks (`issues` and `issue_comme
 - **Dynamic Issue Type Enforcement:**
   - **On creation:** the Worker detects which template was used (via the `### Issue Type` section in the body) and corrects the type if it does not match.
   - **After creation:** any type change is detected and reverted back to the original type using the `IssueTypeChangedEvent` timeline history.
-- **Scope Field Syncing:**
-  - When an issue is created or the body is edited, the Worker parses the `### Scope` section from the body and updates the organization-level single-select `Scope` Issue Field via GraphQL.
+- **Scope Field Syncing & Immutability:**
+  - **On creation:** the Worker parses the `### Scope` section from the body, updates the organization-level `Scope` Issue Field via GraphQL, formats the title with the scope, and cleans the body.
+  - **On edits:** the Worker extracts the scope from the title `type(scope): description` and keeps the sidebar in sync. If the user edits the title to change the scope tag, the Worker automatically reverts it back to the original scope value.
 - **Title Auto-Formatting:**
   - The Worker automatically updates the issue title to match the Conventional Commit format: `type(scope): description`.
   - For example, if a Bug template is used with scope `ui` and title `correct modal validation`, the Worker rewrites the title to `fix(ui): correct modal validation`.
@@ -38,7 +39,7 @@ A Cloudflare Worker that receives GitHub App webhooks (`issues` and `issue_comme
 GitHub Issues / Comments
         │
         ▼
-  GitHub App webhook ──▶ Cloudflare Worker (worker.js)
+  GitHub App webhook ──▶ Cloudflare Worker (src/index.js)
                                  │
                      ┌───────────┴───────────┐
                      │                       │
@@ -49,13 +50,20 @@ GitHub Issues / Comments
                                   Comment        Issue
                                   Command        Event
                                      │             │
-                                  Process     - Enforce Type
-                                  Slash       - Sync Scope field
+                                  Process     - Enforce Type & Scope Immutability
+                                  Slash       - Sync Scope field (Sidebar)
                                   Command     - Format Title
                                               - Sync Checklist
 ```
 
-The entire implementation lives in a single file (`worker.js`). It dynamically queries all Issue Types and organization Issue Fields via the GraphQL API on request startup.
+The codebase is modularized under `src/`:
+*   `src/index.js`: Webhook handler entrypoint and signature validator.
+*   `src/config.js`: Central configuration constants and whitelists.
+*   `src/utils/crypto.js`: App JWT authentication and signature helpers.
+*   `src/utils/text.js`: Title formatting and string parsing helpers.
+*   `src/utils/checklist.js`: Checklist and labels syncing logic.
+*   `src/services/github.js`: GraphQL/REST API client wrapper.
+*   `src/handlers/`: Modular handlers for issue event policies and comment slash commands.
 
 ---
 

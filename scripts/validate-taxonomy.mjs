@@ -180,13 +180,13 @@ function validate() {
       .map(line => line.trim())
       .filter(line => line && !line.startsWith("#"));
 
-    const workerPath = resolve(__dirname, "..", "cloudflare-worker", "worker.js");
-    const workerContent = readFileSync(workerPath, "utf-8");
+    const configPath = resolve(__dirname, "..", "cloudflare-worker", "src", "config.js");
+    const configContent = readFileSync(configPath, "utf-8");
 
-    // Extract KEYS from REQUIRES_WHITELIST in worker.js
-    const whitelistMatch = workerContent.match(/const REQUIRES_WHITELIST = \{([\s\S]*?)\};/);
+    // Extract KEYS from REQUIRES_WHITELIST in src/config.js
+    const whitelistMatch = configContent.match(/const REQUIRES_WHITELIST = \{([\s\S]*?)\};/);
     if (!whitelistMatch) {
-      errors.push(`Could not find REQUIRES_WHITELIST block in cloudflare-worker/worker.js`);
+      errors.push(`Could not find REQUIRES_WHITELIST block in cloudflare-worker/src/config.js`);
     } else {
       const whitelistText = whitelistMatch[1];
       const whitelistKeys = [];
@@ -199,12 +199,12 @@ function validate() {
       // Cross check lists
       for (const item of requiredUpdatesTxt) {
         if (!whitelistKeys.includes(item)) {
-          errors.push(`Required update option '${item}' in taxonomy/required-updates.txt is missing from REQUIRES_WHITELIST in cloudflare-worker/worker.js`);
+          errors.push(`Required update option '${item}' in taxonomy/required-updates.txt is missing from REQUIRES_WHITELIST in cloudflare-worker/src/config.js`);
         }
       }
       for (const key of whitelistKeys) {
         if (!requiredUpdatesTxt.includes(key)) {
-          errors.push(`Whitelist key '${key}' in cloudflare-worker/worker.js is missing from taxonomy/required-updates.txt`);
+          errors.push(`Whitelist key '${key}' in cloudflare-worker/src/config.js is missing from taxonomy/required-updates.txt`);
         }
       }
     }

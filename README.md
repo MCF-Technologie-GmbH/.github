@@ -59,8 +59,8 @@ We enforce a strict **Type + Scope + Requires** semantic model using a Cloudflar
 Developers write normal titles when creating issues. The Worker automatically reads the issue type and selected `Scope`, and rewrites the title to: `type(scope): description`.
 *Example: Creating a Bug issue with scope `ui` and title `fix login error` gets automatically renamed to `fix(ui): fix login error`.*
 
-### 2. Scope Field Syncing
-The selected `Scope` from the issue form dropdown is parsed from the body and synced directly to the organization-level **`Scope`** single-select Issue Field.
+### 2. Scope Field Syncing & Immutability
+The selected `Scope` is parsed from the body on creation and synced directly to the organization-level **`Scope`** single-select Issue Field. The Scope is **immutable** after creation; subsequent edits to the scope tag in the title are automatically reverted to the original, and the sidebar is kept in sync using the title's scope as the source of truth.
 
 ### 3. Required Updates Checklist
 Issues contain a **Required updates** checklist in their description body (Documentation, Tests, Release notes, Security review, etc.).

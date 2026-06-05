@@ -18,6 +18,23 @@ import {
   getRequiresLabelsForChecklist
 } from "../utils/checklist.js";
 
+/**
+ * Enforces organizational policies on GitHub Issues when they are opened, edited, or reopened.
+ * Handles issue type and scope immutability, title formatting, checklist validation, and label sync.
+ *
+ * @param {object} params
+ * @param {GitHubClient} params.gh - API client wrapper
+ * @param {string} params.owner - Repo owner
+ * @param {string} params.repo - Repo name
+ * @param {string} params.repoFullName - Normalized repository full name (owner/repo)
+ * @param {number} params.issueNumber - GitHub Issue number
+ * @param {string} params.action - The webhook action (e.g. opened, edited)
+ * @param {object} params.currentIssue - GraphQL issue object representation
+ * @param {string} params.currentType - Current GraphQL issue type name
+ * @param {object} params.changes - Description of modified fields from webhook
+ * @param {Map} params.typeMap - Map of issue type names to GraphQL Node IDs
+ * @param {object} params.scopeField - Single-select Scope issue field metadata
+ */
 export async function enforceIssueTypePolicy({
   gh,
   owner,
@@ -36,6 +53,7 @@ export async function enforceIssueTypePolicy({
   const isTypeChange = ISSUE_TYPE_CHANGE_ACTIONS.has(action) &&
     (action !== "edited" || changes?.type != null);
 
+  // 1. Projects repository: Only "Project" (Epics) issues are permitted.
   if (isProjectsRepo) {
     return enforceProjectsRepositoryPolicy({
       gh,
@@ -50,6 +68,7 @@ export async function enforceIssueTypePolicy({
     });
   }
 
+  // 2. Codebase repositories: Revert manual type changes using timeline history.
   if (isTypeChange) {
     return revertIssueTypeChangeInImplementationRepo({
       gh,
@@ -64,6 +83,7 @@ export async function enforceIssueTypePolicy({
     });
   }
 
+  // 3. Codebase repositories: Prevent "Project" (Epic) types from being assigned.
   if (isProjectType) {
     return closeReservedProjectTypeInImplementationRepo({
       gh,
@@ -81,7 +101,7 @@ export async function enforceIssueTypePolicy({
   let hasBodyChanges = false;
   let resolvedType = currentType;
 
-  // 1. Revert scope changes in the title if edited
+  // 4. Scope Immutability: Revert edits that change the scope tag in the title.
   if (action === "edited" && changes?.title) {
     const oldScope = extractScopeFromTitle(changes.title.from);
     const newScope = extractScopeFromTitle(currentIssue.title);
@@ -95,7 +115,9 @@ export async function enforceIssueTypePolicy({
     }
   }
 
+  // 5. Handling issue creation: Extract configuration fields and clean templates.
   if (action === "opened" || action === "reopened") {
+    // Correct issue type if it doesn't match the form template used.
     const template = detectTemplateFromIssue(issueBody, typeMap);
     if (template && currentType !== template.expectedType) {
       await gh.updateIssueType(currentIssue.id, template.expectedTypeId);
@@ -112,6 +134,7 @@ export async function enforceIssueTypePolicy({
       await gh.createComment(owner, repo, issueNumber, comment);
     }
 
+    // Sanitize body: remove helper blocks (Issue Type, Scope) and clean checklist.
     let cleaned = cleanChecklistOnCreation(issueBody);
     cleaned = removeIssueTypeSection(cleaned);
     cleaned = removeScopeSection(cleaned);
@@ -121,11 +144,13 @@ export async function enforceIssueTypePolicy({
     }
   }
 
+  // 6. Handling body edits: Prevent re-injecting helper blocks and enforce protected zones.
   if (action === "edited" && changes?.body) {
     const oldProtected = extractSection(changes.body.from, "protected");
     const newProtected = extractSection(issueBody, "protected");
 
     let finalBody = issueBody;
+    // Revert edits inside <!-- protected:start/end --> blocks
     if (oldProtected && newProtected && oldProtected !== newProtected) {
       finalBody = replaceSection(finalBody, "protected", oldProtected);
     }
@@ -140,11 +165,13 @@ export async function enforceIssueTypePolicy({
     }
   }
 
+  // 7. Update Issue body in GitHub if changes were made by enforcers.
   if (hasBodyChanges) {
     await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, updatedBody);
     issueBody = updatedBody;
   }
 
+  // 8. Synchronize requirement checkbox labels (requires/*).
   const { checklist } = parseChecklist(issueBody);
   const currentLabels = currentIssue.labels?.nodes?.map((l) => l.name) ?? [];
   const currentRequiresLabels = currentLabels.filter((name) => name.startsWith("requires/"));
@@ -161,6 +188,7 @@ export async function enforceIssueTypePolicy({
     await gh.removeLabel(owner, repo, issueNumber, l);
   }
 
+  // 9. Sync Scope single-select sidebar field (fallback to Title scope).
   let scopeValue = detectScopeFromBody(issueBody);
   if (!scopeValue) {
     scopeValue = extractScopeFromTitle(currentIssue.title);
@@ -178,6 +206,7 @@ export async function enforceIssueTypePolicy({
     }
   }
 
+  // 10. Format Issue Title to conventional format type(scope): description.
   const formattedTitle = formatTitle(currentIssue.title, resolvedType, scopeValue);
   if (formattedTitle !== currentIssue.title) {
     await gh.updateIssueTitleAndBody(owner, repo, issueNumber, formattedTitle, undefined);
@@ -196,6 +225,10 @@ export async function enforceIssueTypePolicy({
   };
 }
 
+/**
+ * Enforces policy for the centralized Projects Epic repository.
+ * Only the "Project" issue type is allowed.
+ */
 async function enforceProjectsRepositoryPolicy({
   gh,
   owner,
@@ -242,6 +275,9 @@ async function enforceProjectsRepositoryPolicy({
   };
 }
 
+/**
+ * Closes Project (Epic) type issues if created in standard codebase repositories.
+ */
 async function closeReservedProjectTypeInImplementationRepo({
   gh,
   owner,
@@ -273,6 +309,9 @@ async function closeReservedProjectTypeInImplementationRepo({
   };
 }
 
+/**
+ * Helper to identify the issue type requested by the YAML form template.
+ */
 function detectTemplateFromIssue(body, typeMap) {
   if (!body) return null;
   const match = body.match(/^### Issue Type\r?\n\r?\n([^\r\n]+)/m);
@@ -283,16 +322,25 @@ function detectTemplateFromIssue(body, typeMap) {
   return { expectedType, expectedTypeId };
 }
 
+/**
+ * Removes the temporary "### Issue Type" section from the markdown body.
+ */
 function removeIssueTypeSection(body) {
   if (!body) return "";
   return body.replace(/^### Issue Type\r?\n\r?\n[^\r\n]+(\r?\n)*/m, "");
 }
 
+/**
+ * Removes the temporary "### Scope" section from the markdown body.
+ */
 function removeScopeSection(body) {
   if (!body) return "";
   return body.replace(/^### Scope\r?\n\r?\n[^\r\n]+(\r?\n)*/m, "");
 }
 
+/**
+ * Reverts manual changes to the Issue Type back to the original creation type.
+ */
 async function revertIssueTypeChangeInImplementationRepo({
   gh,
   owner,
@@ -373,3 +421,4 @@ async function revertIssueTypeChangeInImplementationRepo({
     revertedTo: originalType.name,
   };
 }
+

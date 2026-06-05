@@ -1,5 +1,17 @@
 import { REQUIRES_WHITELIST } from "../config.js";
 
+/**
+ * Parses the "Required updates" checklist from the issue body.
+ * It first searches within the managed HTML comments (`<!-- managed:start -->` and `<!-- managed:end -->`).
+ * If not found, it falls back to parsing the checklist under the heading matching "# Required updates" for backwards compatibility.
+ *
+ * @param {string} body - The issue description body.
+ * @returns {object} An object containing:
+ *   - {array} checklist - List of items parsed (e.g. [{ checked: false, name: "Tests", rawLine: "- [ ] Tests" }])
+ *   - {number} startIndex - Character index where the checklist items start in the body
+ *   - {number} endIndex - Character index where the checklist items end in the body
+ *   - {string} heading - The header text used (e.g. "## Required updates")
+ */
 export function parseChecklist(body) {
   if (!body) return { checklist: [], startIndex: -1, endIndex: -1 };
 
@@ -50,6 +62,17 @@ export function parseChecklist(body) {
   return { checklist, startIndex, endIndex, heading };
 }
 
+/**
+ * Validates, restores, and heals the checklist block when an issue body is edited.
+ * It ensures:
+ * 1. Only items from the whitelist (REQUIRES_WHITELIST) are kept.
+ * 2. Whitelisted items that were present in the old body but deleted in the new body are restored.
+ * 3. Case-insensitivity in item names is corrected to match the whitelist casing.
+ *
+ * @param {string} newBody - The newly edited issue description body.
+ * @param {string} oldBody - The previous issue description body (used for restoration).
+ * @returns {string} The healed issue description body.
+ */
 export function healChecklist(newBody, oldBody) {
   const { checklist: newChecklist, startIndex, endIndex } = parseChecklist(newBody);
   if (startIndex === -1) return newBody;
@@ -60,6 +83,7 @@ export function healChecklist(newBody, oldBody) {
   const healedChecklist = [];
   const processedNames = new Set();
 
+  // 1. Process items currently in the edited body. Keep them if they are in the whitelist.
   for (const item of newChecklist) {
     const matchedName = validNames.find((v) => v.toLowerCase() === item.name.toLowerCase());
     if (matchedName) {
@@ -70,6 +94,7 @@ export function healChecklist(newBody, oldBody) {
     }
   }
 
+  // 2. Proactively restore whitelisted items that were deleted in the edit.
   for (const item of oldChecklist) {
     const matchedName = validNames.find((v) => v.toLowerCase() === item.name.toLowerCase());
     if (matchedName && !processedNames.has(matchedName)) {
@@ -86,6 +111,14 @@ export function healChecklist(newBody, oldBody) {
   return newBody.slice(0, startIndex) + checklistText + newBody.slice(endIndex);
 }
 
+/**
+ * Sanitizes the checklist when an issue is created.
+ * Extracts items checked in the initial issue form template and lists them in the body
+ * as unchecked (`- [ ]`) requirements. All other whitelisted items are removed.
+ *
+ * @param {string} body - The raw issue description body on creation.
+ * @returns {string} The cleaned body containing only the active, pending checklist.
+ */
 export function cleanChecklistOnCreation(body) {
   const { checklist, startIndex, endIndex } = parseChecklist(body);
   if (startIndex === -1) return body;
@@ -94,6 +127,8 @@ export function cleanChecklistOnCreation(body) {
   const healedChecklist = [];
   const processedNames = new Set();
 
+  // Keep only whitelisted items that the user checked in the form template,
+  // but reset their status to unchecked [ ] (pending developer action).
   for (const item of checklist) {
     const matchedName = validNames.find((v) => v.toLowerCase() === item.name.toLowerCase());
     if (matchedName && item.checked && !processedNames.has(matchedName)) {
@@ -110,6 +145,13 @@ export function cleanChecklistOnCreation(body) {
   return body.slice(0, startIndex) + checklistText + body.slice(endIndex);
 }
 
+/**
+ * Determines which `requires/*` labels should be applied to the issue
+ * based on pending (unchecked) checklist items.
+ *
+ * @param {array} checklist - List of parsed checklist items.
+ * @returns {array} A list of labels to set on the issue (e.g. ["requires/docs", "requires/tests"]).
+ */
 export function getRequiresLabelsForChecklist(checklist) {
   const desiredLabels = [];
   for (const item of checklist) {

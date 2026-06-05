@@ -1,6 +1,20 @@
 import { REQUIRES_WHITELIST } from "../config.js";
 import { parseChecklist, getRequiresLabelsForChecklist } from "../utils/checklist.js";
 
+/**
+ * Parses and executes slash commands (/require, /unrequire, /resolve, etc.) found in comments.
+ * Sychronizes checklist states and updates issue labels.
+ * Deletes the command comment afterwards to keep the timeline clean.
+ *
+ * @param {object} params
+ * @param {GitHubClient} params.gh - API client wrapper
+ * @param {string} params.owner - Repo owner
+ * @param {string} params.repo - Repo name
+ * @param {string} params.repoFullName - Normalized repository full name (owner/repo)
+ * @param {number} params.issueNumber - GitHub Issue number
+ * @param {object} params.comment - Comment payload from webhook
+ * @param {object} params.scopeField - Single-select Scope issue field metadata
+ */
 export async function handleIssueCommentEvent({
   gh,
   owner,
@@ -15,6 +29,7 @@ export async function handleIssueCommentEvent({
   const commands = [];
   const validNames = Object.keys(REQUIRES_WHITELIST);
 
+  // 1. Parse lines to look for commands (e.g. "/require Documentation")
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed.startsWith("/")) continue;
@@ -25,6 +40,7 @@ export async function handleIssueCommentEvent({
     const commandName = match[1].toLowerCase();
     const itemNameRaw = match[2].trim();
 
+    // Check if the parameter matches a valid checklist item (case-insensitive)
     const matchedName = validNames.find((v) => v.toLowerCase() === itemNameRaw.toLowerCase());
 
     if (matchedName) {
@@ -41,8 +57,10 @@ export async function handleIssueCommentEvent({
   const currentIssue = await gh.getIssue(owner, repo, issueNumber);
   let issueBody = currentIssue.body || "";
 
+  // 2. Parse the active checklist block from the body
   let { checklist, startIndex, endIndex } = parseChecklist(issueBody);
 
+  // If the issue doesn't have a checklist block, initialize one
   if (startIndex === -1) {
     issueBody += "\n\n<!-- managed:start -->\n## Required updates\n<!-- managed:end -->\n";
     const reParsed = parseChecklist(issueBody);
@@ -51,6 +69,7 @@ export async function handleIssueCommentEvent({
     endIndex = reParsed.endIndex;
   }
 
+  // 3. Process each parsed command sequentially and update the checklist model
   for (const cmd of commands) {
     const itemIdx = checklist.findIndex((item) => item.name === cmd.item);
 
@@ -77,6 +96,7 @@ export async function handleIssueCommentEvent({
     }
   }
 
+  // 4. Format the updated checklist text block
   let checklistText = "\n";
   for (const item of checklist) {
     checklistText += `- [${item.checked ? "x" : " "}] ${item.name}\n`;
@@ -84,8 +104,10 @@ export async function handleIssueCommentEvent({
 
   const updatedBody = issueBody.slice(0, startIndex) + checklistText + issueBody.slice(endIndex);
 
+  // 5. Update issue body in GitHub
   await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, updatedBody);
 
+  // 6. Update labels (add requires/* for unchecked, remove for checked)
   const currentLabels = currentIssue.labels?.nodes?.map((l) => l.name) ?? [];
   const currentRequiresLabels = currentLabels.filter((name) => name.startsWith("requires/"));
   const desiredRequiresLabels = getRequiresLabelsForChecklist(checklist);
@@ -101,6 +123,7 @@ export async function handleIssueCommentEvent({
     await gh.removeLabel(owner, repo, issueNumber, l);
   }
 
+  // 7. Cleanup: add a rocket reaction to the user command comment and delete it
   try {
     await gh.createCommentReaction(owner, repo, comment.id, "rocket");
     await gh.deleteComment(owner, repo, comment.id);

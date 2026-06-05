@@ -10,7 +10,12 @@ import { handleIssueCommentEvent } from "./handlers/comments.js";
 import { enforceIssueTypePolicy } from "./handlers/issues.js";
 
 export default {
+  /**
+   * Main entrypoint for Cloudflare Worker.
+   * Receives and routes incoming GitHub webhooks (issues & issue_comments).
+   */
   async fetch(request, env) {
+    // 1. Health check endpoint (for verifying Worker is active)
     if (request.method === "GET") {
       return json({ ok: true, service: "github-automation-bot" }, 200);
     }
@@ -33,6 +38,7 @@ export default {
       return json({ error: "Server misconfiguration: missing webhook secret" }, 500);
     }
 
+    // 2. Validate HMAC Webhook Signature (verifies payload came from GitHub)
     const isValid = await verifyGitHubSignature(
       rawBody,
       signatureHeader,
@@ -44,7 +50,6 @@ export default {
     }
 
     let payload;
-
     try {
       payload = JSON.parse(new TextDecoder().decode(rawBody));
     } catch {
@@ -59,6 +64,7 @@ export default {
       sender: payload.sender?.login,
     });
 
+    // 3. Handle GitHub Ping Event (initial webhook connection verification)
     if (event === "ping") {
       return json({ ok: true, pong: true }, 200);
     }
@@ -101,14 +107,15 @@ export default {
       const token = await createInstallationAccessToken(env, installationId);
       const gh = new GitHubClient(token);
 
-      // Fetch organization issue types and fields dynamically
+      // 4. Resolve metadata (Issue Types and Fields) dynamically via GitHub GraphQL API.
+      // This prevents relying on hardcoded Node IDs.
       const orgIssueTypes = await gh.getOrgIssueTypes(ORGANIZATION);
       const typeMap = new Map(orgIssueTypes.map((t) => [t.name, t.id]));
 
       const orgIssueFields = await gh.getOrgIssueFields(ORGANIZATION);
       const scopeField = orgIssueFields.find((f) => f.name === "Scope");
 
-      // Handle Comment Command Event
+      // 5. Handle Comment Slash Command Webhook Event
       if (event === "issue_comment") {
         if (payload.action !== "created") {
           return json(
@@ -134,7 +141,7 @@ export default {
         return json({ ok: true, ...result }, 200);
       }
 
-      // Handle Issues Event
+      // 6. Handle Issue State Policy Webhook Event
       const action = payload.action;
 
       if (!ISSUE_ACTIONS_TO_VALIDATE.has(action)) {

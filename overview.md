@@ -81,7 +81,12 @@ Beyond templates, this repo hosts the full **Taxonomy-as-Code** system and a **C
 │   ├── update-template-scopes.mjs # Propagates scopes.txt and required-updates.txt -> templates/fields
 │   └── README.md
 ├── cloudflare-worker/            # Webhook-powered automation
-│   ├── worker.js                 # Single-file Worker (~1300 lines)
+│   ├── src/                      # Modular ES Modules source directory
+│   │   ├── index.js              # Webhook entrypoint & routing
+│   │   ├── config.js             # Whitelists & constant configurations
+│   │   ├── handlers/             # Event handlers (issues, comments)
+│   │   ├── services/             # GitHub Client & token generation
+│   │   └── utils/                # Crypto, text, and checklist helpers
 │   ├── wrangler.toml             # Cloudflare deployment config
 │   └── README.md
 ├── package.json                  # npm scripts: validate, sync, sync:dry
@@ -165,7 +170,7 @@ The validation script (`validate-taxonomy.mjs`) cross-checks that `scopes.txt` a
 
 A plain-text file listing every valid required update item, one per line. This is the **single source of truth** shared by:
 - The `Required updates` checkboxes in all relevant issue templates
-- The `REQUIRES_WHITELIST` in `cloudflare-worker/worker.js` (validated offline)
+- The `REQUIRES_WHITELIST` in `cloudflare-worker/src/config.js` (validated offline)
 
 Current required updates:
 ```text
@@ -232,8 +237,8 @@ Key elements present in **every** template (except `spike.yml` and `documentatio
 
 ## 5. Cloudflare Worker (Automation Bot)
 
-**Location:** [`cloudflare-worker/worker.js`](cloudflare-worker/worker.js) (~1300 lines, single file)
-**Deployment target:** Cloudflare Workers (`gh-issue-type-enforcer`)
+**Location:** [`cloudflare-worker/src/index.js`](cloudflare-worker/src/index.js) (Modular ES Modules, under `src/` folder)
+**Deployment target:** Cloudflare Workers (`github-automation-bot`)
 **GitHub App:** `mcf-automation-bot` (App ID: `3893672`)
 **Subscribed events:** `issues`, `issue_comment`
 
@@ -243,7 +248,7 @@ Key elements present in **every** template (except `spike.yml` and `documentatio
 GitHub Issues / Comments
         │
         ▼
-  GitHub App webhook ──▶ Cloudflare Worker (worker.js)
+  GitHub App webhook ──▶ Cloudflare Worker (src/index.js)
                                  │
                      ┌───────────┴───────────┐
                      │                       │
@@ -254,17 +259,26 @@ GitHub Issues / Comments
                                   Comment        Issue
                                   Command        Event
                                      │             │
-                                  Process     - Enforce Type
-                                  Slash       - Sync Scope field
+                                  Process     - Enforce Type & Scope Immutability
+                                  Slash       - Sync Scope field (Sidebar)
                                   Command     - Format Title
                                               - Sync Checklist
 ```
 
-The Worker receives every `issues` and `issue_comment` webhook from the GitHub App. On each request it:
-1. Verifies the webhook signature (HMAC-SHA256).
-2. Generates a GitHub App installation token (JWT + RSA).
+The Worker receives every `issues` and `issue_comment` webhook from the GitHub App. The codebase is modularized:
+*   `src/index.js`: Handles webhook entrypoint, signature checks (HMAC-SHA256), and event routing.
+*   `src/config.js`: Centralized constants and whitelists.
+*   `src/utils/crypto.js`: App JWT authentication and crypto helpers.
+*   `src/utils/text.js`: Title formatting and string parsing helpers.
+*   `src/utils/checklist.js`: Checklist and labels syncing logic.
+*   `src/services/github.js`: API client wrapper.
+*   `src/handlers/`: Contains modular handlers for comments and issues logic.
+
+On each request it:
+1. Verifies the webhook signature.
+2. Generates a GitHub App installation token.
 3. Dynamically fetches organization issue types and fields via GraphQL.
-4. Routes to the appropriate policy handler based on the repository and event.
+4. Routes to the appropriate handler.
 
 ### 5.2 Dynamic Resolution
 
@@ -314,12 +328,14 @@ fix(ui): correct modal validation
 
 If the title already has the correct prefix, no change is made. If the scope is missing, the prefix is just `type: description`.
 
-### 5.6 Scope Field Syncing
+### 5.6 Scope Field Syncing & Immutability
 
-When an issue is created or the body is edited, the Worker:
-1. Parses the `### Scope` section from the rendered issue body.
-2. Looks up the corresponding option ID in the dynamically loaded `Scope` field.
-3. Calls `updateIssueFieldValue` (with `GraphQL-Features: issue_fields` header) to set the organization-level **Scope** single-select Issue Field on the issue.
+The **Scope** is a critical metadata field. To enforce compliance, the Worker ensures the Scope is **immutable** after creation and stays synchronized between the issue title and the sidebar field:
+
+1.  **Detección Inicial (On Creation):** The Worker parses the temporary `### Scope` block from the template's markdown body, updates the organization-level **Scope** single-select sidebar field, prefixes the title to `type(scope): description`, and deletes the `### Scope` block from the body.
+2.  **Sincronización en Ediciones (On Body/Sidebar Edits):** Since the `### Scope` block is removed from the body on creation, the Worker falls back to extracting the scope from the issue title (`type(scope): description`). It continuously overwrites the sidebar single-select field with the scope found in the title, preventing manual drift or unauthorized sidebar changes.
+3.  **Inmutabilidad del Scope en el Título (On Title Edits):** If a user attempts to edit the title to change the scope tag (e.g. changing `fix(ui): login` to `fix(api): login`), the Worker compares it to the previous title (`changes.title.from`). If the scope tags differ, the Worker automatically resets the title's scope prefix back to the original scope value (`ui`).
+4.  **Continuous Sanitization:** If a user attempts to re-inject `### Scope` or `### Issue Type` blocks into the body during an edit, the Worker automatically strips them off during webhook processing.
 
 ### 5.7 Required Updates Checklist
 
@@ -436,7 +452,7 @@ npm run sync:dry          # DRY_RUN=true node scripts/sync-taxonomy.mjs
 - All `issue_type` references in `issue-type-fields.yml` exist in `issue-types.yml`.
 - All `pinned_fields` references exist in `issue-fields.yml`.
 - **Cross-validation:** `scopes.txt` and `issue-fields.yml` `scope` options are identical.
-- **Cross-validation:** `required-updates.txt` and `cloudflare-worker/worker.js` `REQUIRES_WHITELIST` keys are identical.
+- **Cross-validation:** `required-updates.txt` and `cloudflare-worker/src/config.js` `REQUIRES_WHITELIST` keys are identical.
 
 ```bash
 node scripts/validate-taxonomy.mjs
@@ -599,8 +615,8 @@ Developer comments: /require Tests
 
 | Setting | Value |
 | :--- | :--- |
-| Worker name | `gh-issue-type-enforcer` |
-| Main file | `worker.js` |
+| Worker name | `github-automation-bot` |
+| Main file | `src/index.js` |
 | Compatibility date | `2025-01-01` |
 
 ### Secrets (Cloudflare)
@@ -640,4 +656,3 @@ npx wrangler secret put GITHUB_PRIVATE_KEY
 | **`IssueTypeChangedEvent` may not appear immediately** in the timeline | Extremely rare race condition — the Worker may fail to revert a type change if the webhook fires faster than GitHub records the timeline event |
 | **Scope field sync depends on body parsing** | If a developer manually removes the `### Scope` section from the body, the field will not be updated |
 | **Comment commands are case-insensitive** for item matching | Items are matched against `REQUIRES_WHITELIST` using case-insensitive comparison |
-| **Single-file Worker architecture** | At ~1300 lines, the Worker is manageable. If it grows significantly, natural split points are `auth.js` and `github.js` |
