@@ -253,16 +253,48 @@ export async function enforceIssueTypePolicy({
   }
 
   // 9. Sync Scope single-select sidebar field.
+  const debug = {
+    scope: {
+      value: scopeValue,
+      fieldFound: !!scopeField,
+      optionFound: false,
+      mutationCalled: false,
+      mutationResult: null
+    },
+    priority: {
+      value: priorityValue,
+      fieldFound: !!priorityField,
+      optionFound: false,
+      mutationCalled: false,
+      mutationResult: null
+    },
+    effort: {
+      value: effortValue,
+      fieldFound: !!effortField,
+      optionFound: false,
+      mutationCalled: false,
+      mutationResult: null
+    }
+  };
 
   if (scopeValue && scopeField) {
     const scopeOption = scopeField.options?.find(
       (opt) => opt.name.toLowerCase() === scopeValue.toLowerCase()
     );
     if (scopeOption) {
-      await gh.updateIssueFieldValue(currentIssue.id, scopeField.id, {
-        singleSelectOptionId: scopeOption.id,
-      });
-      console.log(`Updated Scope Issue Field to: ${scopeOption.name}`);
+      debug.scope.optionFound = true;
+      debug.scope.optionId = scopeOption.id;
+      debug.scope.mutationCalled = true;
+      try {
+        const res = await gh.updateIssueFieldValue(currentIssue.id, scopeField.id, {
+          singleSelectOptionId: scopeOption.id,
+        });
+        debug.scope.mutationResult = res;
+        console.log(`Updated Scope Issue Field to: ${scopeOption.name}`);
+      } catch (err) {
+        debug.scope.mutationError = err.message;
+        throw err;
+      }
     }
   }
 
@@ -272,10 +304,19 @@ export async function enforceIssueTypePolicy({
       (opt) => opt.name.toLowerCase() === priorityValue.toLowerCase()
     );
     if (priorityOption) {
-      await gh.updateIssueFieldValue(currentIssue.id, priorityField.id, {
-        singleSelectOptionId: priorityOption.id,
-      });
-      console.log(`Updated Priority Issue Field to: ${priorityOption.name}`);
+      debug.priority.optionFound = true;
+      debug.priority.optionId = priorityOption.id;
+      debug.priority.mutationCalled = true;
+      try {
+        const res = await gh.updateIssueFieldValue(currentIssue.id, priorityField.id, {
+          singleSelectOptionId: priorityOption.id,
+        });
+        debug.priority.mutationResult = res;
+        console.log(`Updated Priority Issue Field to: ${priorityOption.name}`);
+      } catch (err) {
+        debug.priority.mutationError = err.message;
+        throw err;
+      }
     }
   }
 
@@ -285,10 +326,19 @@ export async function enforceIssueTypePolicy({
       (opt) => opt.name.toLowerCase() === effortValue.toLowerCase()
     );
     if (effortOption) {
-      await gh.updateIssueFieldValue(currentIssue.id, effortField.id, {
-        singleSelectOptionId: effortOption.id,
-      });
-      console.log(`Updated Effort Issue Field to: ${effortOption.name}`);
+      debug.effort.optionFound = true;
+      debug.effort.optionId = effortOption.id;
+      debug.effort.mutationCalled = true;
+      try {
+        const res = await gh.updateIssueFieldValue(currentIssue.id, effortField.id, {
+          singleSelectOptionId: effortOption.id,
+        });
+        debug.effort.mutationResult = res;
+        console.log(`Updated Effort Issue Field to: ${effortOption.name}`);
+      } catch (err) {
+        debug.effort.mutationError = err.message;
+        throw err;
+      }
     }
   }
 
@@ -317,6 +367,7 @@ export async function enforceIssueTypePolicy({
     currentType: resolvedType,
     scope: scopeValue,
     title: formattedTitle,
+    debug,
   };
 }
 
