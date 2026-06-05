@@ -132,6 +132,31 @@ export class GitHubClient {
                 }
               }
             }
+            projectItems(first: 10) {
+              nodes {
+                id
+                project {
+                  id
+                  title
+                  number
+                }
+                fieldValues(first: 20) {
+                  nodes {
+                    ... on ProjectV2ItemFieldSingleSelectValue {
+                      id
+                      name
+                      optionId
+                      field {
+                        ... on ProjectV2SingleSelectField {
+                          id
+                          name
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }`,
@@ -415,6 +440,94 @@ export class GitHubClient {
       "DELETE",
       `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issueNumber}/labels/${encodeURIComponent(labelName)}`
     );
+  }
+
+  /**
+   * Adds an Issue or Pull Request to a ProjectV2.
+   *
+   * @param {string} projectId - Node ID of the ProjectV2.
+   * @param {string} contentId - Node ID of the Issue or Pull Request.
+   * @returns {Promise<object>} The added ProjectV2Item data.
+   */
+  async addProjectV2ItemById(projectId, contentId) {
+    const res = await this.graphql(
+      `mutation($projectId: ID!, $contentId: ID!) {
+        addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
+          item {
+            id
+          }
+        }
+      }`,
+      { projectId, contentId }
+    );
+    return res.addProjectV2ItemById?.item;
+  }
+
+  /**
+   * Updates a custom field value on a ProjectV2Item.
+   *
+   * @param {string} projectId - Node ID of the ProjectV2.
+   * @param {string} itemId - Node ID of the ProjectV2Item.
+   * @param {string} fieldId - Node ID of the ProjectV2Field.
+   * @param {object} valueInput - Object representing value (e.g. { singleSelectOptionId: "opt-id" }).
+   * @returns {Promise<object>} Mutation result.
+   */
+  async updateProjectV2ItemFieldValue(projectId, itemId, fieldId, valueInput) {
+    return this.graphql(
+      `mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $value: ProjectV2FieldValue!) {
+        updateProjectV2ItemFieldValue(input: {
+          projectId: $projectId
+          itemId: $itemId
+          fieldId: $fieldId
+          value: $value
+        }) {
+          projectV2Item {
+            id
+          }
+        }
+      }`,
+      { projectId, itemId, fieldId, value: valueInput }
+    );
+  }
+
+  /**
+   * Retrieves the fields and ID of a specific ProjectV2 by number.
+   *
+   * @param {string} orgName - The organization login.
+   * @param {number} projectNumber - The project number.
+   * @returns {Promise<object>} Object containing project ID and fields array.
+   */
+  async getProjectFieldsAndId(orgName, projectNumber) {
+    const data = await this.graphql(
+      `query($orgName: String!, $projectNumber: Int!) {
+        organization(login: $orgName) {
+          projectV2(number: $projectNumber) {
+            id
+            title
+            fields(first: 50) {
+              nodes {
+                ... on ProjectV2SingleSelectField {
+                  id
+                  name
+                  dataType
+                  options {
+                    id
+                    name
+                  }
+                }
+                ... on ProjectV2Field {
+                  id
+                  name
+                  dataType
+                }
+              }
+            }
+          }
+        }
+      }`,
+      { orgName, projectNumber }
+    );
+    return data.organization?.projectV2 ?? null;
   }
 }
 

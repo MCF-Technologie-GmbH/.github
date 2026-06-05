@@ -11,63 +11,33 @@
 issue_type_fields:
   - issue_type: chore
     pinned_fields:
-      - priority
       - scope
-      - effort
-      - start_date
-      - target_date
 
   - issue_type: bug
     pinned_fields:
-      - priority
       - scope
-      - effort
-      - start_date
-      - target_date
 
   - issue_type: feature
     pinned_fields:
-      - priority
       - scope
-      - effort
-      - start_date
-      - target_date
 
   - issue_type: refactor
     pinned_fields:
-      - priority
       - scope
-      - effort
-      - start_date
-      - target_date
 
   - issue_type: test
     pinned_fields:
-      - priority
       - scope
-      - effort
-      - start_date
-      - target_date
 
   - issue_type: spike
     pinned_fields:
-      - priority
       - scope
-      - effort
-      - start_date
-      - target_date
 
   - issue_type: documentation
     pinned_fields:
-      - priority
       - scope
-      - effort
-      - start_date
-      - target_date
 
   - issue_type: project
     pinned_fields:
       - customer
       - project_id
-      - start_date
-      - target_date

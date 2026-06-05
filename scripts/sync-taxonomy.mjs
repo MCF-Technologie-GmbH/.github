@@ -206,8 +206,11 @@ async function createIssueField(desired) {
   return data.createIssueField.issueField;
 }
 
-async function updateIssueField(id, desired, actualOptions = []) {
-  const input = { id, name: desired.name };
+async function updateIssueField(id, desired, actual) {
+  const input = { id };
+  if (desired.name !== actual.name) {
+    input.name = desired.name;
+  }
 
   if (desired.description !== undefined) {
     input.description = desired.description;
@@ -215,20 +218,17 @@ async function updateIssueField(id, desired, actualOptions = []) {
 
   if (["SINGLE_SELECT", "MULTI_SELECT"].includes(desired.data_type) && desired.options) {
     input.options = desired.options.map((opt, idx) => {
-      const existingOpt = actualOptions.find((o) => o.name === opt.name);
       const optInput = {
         name: opt.name,
         color: opt.color || "GRAY",
         description: opt.description || null,
         priority: idx,
       };
-      if (existingOpt) {
-        optInput.id = existingOpt.id;
-      }
       return optInput;
     });
   }
 
+  console.log("updateIssueField input:", JSON.stringify(input, null, 2));
   await graphql(
     `mutation($input: UpdateIssueFieldInput!) {
       updateIssueField(input: $input) {
@@ -403,7 +403,7 @@ async function sync() {
         console.log(`  UPDATE: ${desired.name}`);
         for (const c of changes) console.log(`    ${c}`);
         if (!DRY_RUN) {
-          await updateIssueField(actual.id, desired, actual.options || []);
+          await updateIssueField(actual.id, desired, actual);
           console.log(`    ✓ Updated`);
         }
         summary.fields.updated++;

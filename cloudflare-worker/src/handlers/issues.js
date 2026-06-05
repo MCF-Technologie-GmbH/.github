@@ -47,6 +47,7 @@ export async function enforceIssueTypePolicy({
   changes,
   typeMap,
   scopeField,
+  projectId,
   priorityField,
   effortField,
 }) {
@@ -301,8 +302,37 @@ export async function enforceIssueTypePolicy({
     }
   }
 
-  // Sync Priority single-select sidebar field.
-  if (priorityValue && priorityField) {
+  // Resolve ProjectV2 Item ID for the Software Engineering project (number 37)
+  let itemId = null;
+  const projectItemNode = currentIssue.projectItems?.nodes?.find(
+    (node) => node.project?.number === 37 || node.project?.id === projectId
+  );
+  if (projectItemNode) {
+    itemId = projectItemNode.id;
+  }
+
+  const hasValidPriority = priorityValue && priorityField?.options?.some(
+    (opt) => opt.name.toLowerCase() === priorityValue.toLowerCase()
+  );
+  const hasValidEffort = effortValue && effortField?.options?.some(
+    (opt) => opt.name.toLowerCase() === effortValue.toLowerCase()
+  );
+  const needsProjectAdd = hasValidPriority || hasValidEffort;
+
+  if (!itemId && needsProjectAdd && projectId) {
+    try {
+      const addedItem = await gh.addProjectV2ItemById(projectId, currentIssue.id);
+      if (addedItem) {
+        itemId = addedItem.id;
+        console.log(`Added issue to Project 37, Item ID: ${itemId}`);
+      }
+    } catch (err) {
+      console.error(`Failed to add issue to Project 37: ${err.message}`);
+    }
+  }
+
+  // Sync Priority single-select sidebar field (ProjectV2 custom field).
+  if (priorityValue && priorityField && itemId) {
     const priorityOption = priorityField.options?.find(
       (opt) => opt.name.toLowerCase() === priorityValue.toLowerCase()
     );
@@ -311,11 +341,11 @@ export async function enforceIssueTypePolicy({
       debug.priority.optionId = priorityOption.id;
       debug.priority.mutationCalled = true;
       try {
-        const res = await gh.updateIssueFieldValue(currentIssue.id, priorityField.id, {
+        const res = await gh.updateProjectV2ItemFieldValue(projectId, itemId, priorityField.id, {
           singleSelectOptionId: priorityOption.id,
         });
         debug.priority.mutationResult = res;
-        console.log(`Updated Priority Issue Field to: ${priorityOption.name}`);
+        console.log(`Updated ProjectV2 Priority field to: ${priorityOption.name}`);
       } catch (err) {
         debug.priority.mutationError = err.message;
         throw err;
@@ -323,8 +353,8 @@ export async function enforceIssueTypePolicy({
     }
   }
 
-  // Sync Effort single-select sidebar field.
-  if (effortValue && effortField) {
+  // Sync Effort single-select sidebar field (ProjectV2 custom field).
+  if (effortValue && effortField && itemId) {
     const effortOption = effortField.options?.find(
       (opt) => opt.name.toLowerCase() === effortValue.toLowerCase()
     );
@@ -333,11 +363,11 @@ export async function enforceIssueTypePolicy({
       debug.effort.optionId = effortOption.id;
       debug.effort.mutationCalled = true;
       try {
-        const res = await gh.updateIssueFieldValue(currentIssue.id, effortField.id, {
+        const res = await gh.updateProjectV2ItemFieldValue(projectId, itemId, effortField.id, {
           singleSelectOptionId: effortOption.id,
         });
         debug.effort.mutationResult = res;
-        console.log(`Updated Effort Issue Field to: ${effortOption.name}`);
+        console.log(`Updated ProjectV2 Effort field to: ${effortOption.name}`);
       } catch (err) {
         debug.effort.mutationError = err.message;
         throw err;
