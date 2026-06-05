@@ -115,6 +115,12 @@ export async function enforceIssueTypePolicy({
     }
   }
 
+  // Detect scope from the raw body or title before sanitization strips the Scope section
+  let scopeValue = detectScopeFromBody(issueBody);
+  if (!scopeValue) {
+    scopeValue = extractScopeFromTitle(currentIssue.title);
+  }
+
   // 5. Handling issue creation: Extract configuration fields and clean templates.
   if (action === "opened" || action === "reopened") {
     // Correct issue type if it doesn't match the form template used.
@@ -188,11 +194,7 @@ export async function enforceIssueTypePolicy({
     await gh.removeLabel(owner, repo, issueNumber, l);
   }
 
-  // 9. Sync Scope single-select sidebar field (fallback to Title scope).
-  let scopeValue = detectScopeFromBody(issueBody);
-  if (!scopeValue) {
-    scopeValue = extractScopeFromTitle(currentIssue.title);
-  }
+  // 9. Sync Scope single-select sidebar field.
 
   if (scopeValue && scopeField) {
     const scopeOption = scopeField.options?.find(

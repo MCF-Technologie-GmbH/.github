@@ -103,6 +103,10 @@ export function healChecklist(newBody, oldBody) {
     }
   }
 
+  if (healedChecklist.length === 0) {
+    return newBody.slice(0, startIndex) + "\n_No response_\n" + newBody.slice(endIndex);
+  }
+
   let checklistText = "\n";
   for (const item of healedChecklist) {
     checklistText += `- [${item.checked ? "x" : " "}] ${item.name}\n`;
@@ -135,6 +139,10 @@ export function cleanChecklistOnCreation(body) {
       healedChecklist.push({ name: matchedName, checked: false });
       processedNames.add(matchedName);
     }
+  }
+
+  if (healedChecklist.length === 0) {
+    return body.slice(0, startIndex) + "\n_No response_\n" + body.slice(endIndex);
   }
 
   let checklistText = "\n";
