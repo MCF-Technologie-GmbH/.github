@@ -1,4 +1,4 @@
-name = "gh-issue-type-enforcer"
+name = "github-automation-bot"
 main = "worker.js"
 compatibility_date = "2025-01-01"
 
