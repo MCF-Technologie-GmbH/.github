@@ -107,9 +107,9 @@ export class GitHubClient {
                 name
               }
             }
-            fieldValues(first: 20) {
+            issueFieldValues(first: 20) {
               nodes {
-                ... on IssueFieldValueSingleSelect {
+                ... on IssueFieldSingleSelectValue {
                   field {
                     id
                     name

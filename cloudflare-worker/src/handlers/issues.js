@@ -118,7 +118,7 @@ export async function enforceIssueTypePolicy({
   }
 
   // Extract custom field values currently set in the sidebar
-  const scopeFieldValueNode = currentIssue.fieldValues?.nodes?.find(
+  const scopeFieldValueNode = currentIssue.issueFieldValues?.nodes?.find(
     (fv) => fv.field?.name === "Scope"
   );
   const currentSidebarScope = scopeFieldValueNode?.option?.name;
