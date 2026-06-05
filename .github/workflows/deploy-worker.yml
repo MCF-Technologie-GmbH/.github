@@ -27,3 +27,4 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           workingDirectory: cloudflare-worker
+          wranglerVersion: "4.98.0"
