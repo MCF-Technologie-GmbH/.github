@@ -91,7 +91,13 @@ export function formatTitle(currentTitle, issueType, scope) {
   if (!commitType) return currentTitle;
 
   // Prefer the provided scope, fallback to extracting it from the title itself
-  const resolvedScope = scope || extractScopeFromTitle(currentTitle);
+  let resolvedScope = scope || extractScopeFromTitle(currentTitle);
+  if (resolvedScope) {
+    resolvedScope = resolvedScope.trim().toLowerCase();
+    if (resolvedScope === "not set" || resolvedScope === "not_set" || resolvedScope === "none") {
+      resolvedScope = null;
+    }
+  }
   const targetPrefix = resolvedScope ? `${commitType}(${resolvedScope}): ` : `${commitType}: `;
 
   // Strip existing conventional prefixes or bracket prefixes (e.g. "feat(ui): ", "[fix]: ", etc.)

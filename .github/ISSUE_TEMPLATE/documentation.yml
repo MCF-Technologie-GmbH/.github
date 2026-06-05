@@ -1,7 +1,7 @@
 name: Documentation
 description: Create, update, or improve documentation.
 type: Documentation
-projects: ["MCF-Technologie-GmbH/37"]
+projects: [ "MCF-Technologie-GmbH/37" ]
 
 body:
   - type: markdown
@@ -17,6 +17,7 @@ body:
       label: Scope
       description: Select the scope of this issue (the codebase area affected).
       options:
+        - Not Set
         - ui
         - api
         - backend
@@ -33,7 +34,7 @@ body:
         - config
         - security
     validations:
-      required: true
+      required: false
 
   - type: dropdown
     id: priority
@@ -47,7 +48,7 @@ body:
         - P2
         - P3
     validations:
-      required: true
+      required: false
 
   - type: dropdown
     id: effort
@@ -63,7 +64,7 @@ body:
         - E8
         - E13
     validations:
-      required: true
+      required: false
 
   - type: markdown
     attributes:
@@ -87,7 +88,8 @@ body:
     id: what-to-document
     attributes:
       label: What Needs to Be Documented
-      description: Describe the subject matter — what feature, process, or API should be documented or updated?
+      description: Describe the subject matter — what feature, process, or API should
+        be documented or updated?
       placeholder: |
         Example:
         The device management REST API endpoints, request/response schemas, and authentication must be documented.
@@ -111,7 +113,8 @@ body:
     id: existing-docs
     attributes:
       label: Existing Documentation
-      description: Link to any existing documentation that is related, outdated, or should be replaced.
+      description: Link to any existing documentation that is related, outdated, or
+        should be replaced.
       placeholder: |
         Example:
         - Wiki page: https://github.com/.../wiki/Device-Management

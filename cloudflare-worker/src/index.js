@@ -157,22 +157,7 @@ export default {
         );
       }
 
-      // "edited" without changes in type, body, or title — skip it.
-      if (
-        action === "edited" &&
-        !payload.changes?.type &&
-        !payload.changes?.body &&
-        !payload.changes?.title
-      ) {
-        return json(
-          {
-            ok: true,
-            skipped: true,
-            reason: "edited event without type/body/title change",
-          },
-          200
-        );
-      }
+
 
       const currentIssue = await gh.getIssue(owner, repo, issueNumber);
       const currentType = currentIssue.issueType?.name || "none";

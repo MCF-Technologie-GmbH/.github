@@ -35,7 +35,7 @@ This document is a single-source technical overview of how the `.github` reposit
 6. [Automation Scripts](#6-automation-scripts)
    - 6.1 [validate-taxonomy.mjs](#61-validate-taxonomymjs)
    - 6.2 [sync-taxonomy.mjs](#62-sync-taxonomymjs)
-   - 6.3 [update-template-scopes.mjs](#63-update-template-scopesmjs)
+   - 6.3 [generate-taxonomy.mjs](#63-generate-taxonomymjs)
 7. [End-to-End Data Flow](#7-end-to-end-data-flow)
    - 7.1 [Taxonomy Change Flow](#71-taxonomy-change-flow)
    - 7.2 [Issue Creation Flow](#72-issue-creation-flow)
@@ -78,7 +78,7 @@ Beyond templates, this repo hosts the full **Taxonomy-as-Code** system and a **C
 ├── scripts/                      # Node.js automation scripts
 │   ├── validate-taxonomy.mjs     # YAML validation & cross-reference checks
 │   ├── sync-taxonomy.mjs         # GraphQL reconciler (org ↔ YAML)
-│   ├── update-template-scopes.mjs # Propagates scopes.txt and required-updates.txt -> templates/fields
+│   ├── generate-taxonomy.mjs     # Compiles scopes.txt and required-updates.txt -> templates/fields
 │   └── README.md
 ├── cloudflare-worker/            # Webhook-powered automation
 │   ├── src/                      # Modular ES Modules source directory
@@ -224,8 +224,8 @@ body:
 
 Key elements present in **every** template (except `spike.yml` and `documentation.yml` which exclude `required-updates`):
 
-1. **Scope dropdown** — Populated automatically by the `update-template-scopes.mjs` script from `scopes.txt`.
-2. **Required updates checkboxes** — Populated automatically by the `update-template-scopes.mjs` script from `required-updates.txt`.
+1. **Scope dropdown** — Populated automatically by the `generate-taxonomy.mjs` script from `scopes.txt`.
+2. **Required updates checkboxes** — Populated automatically by the `generate-taxonomy.mjs` script from `required-updates.txt`.
 3. **Issue Type dropdown** — A single-option dropdown that locks the expected type into the rendered body (used by the Worker for type detection).
 
 ### 4.3 Template Configuration
@@ -481,17 +481,16 @@ export GITHUB_TOKEN=your_token
 node scripts/sync-taxonomy.mjs
 ```
 
-### 6.3 update-template-scopes.mjs
+### 6.3 generate-taxonomy.mjs
 
-**Purpose:** Acts as the central options injector. It:
-1. Reads `taxonomy/scopes.txt` and updates the `options:` block under the `id: scope` dropdown in all 7 issue templates, as well as `taxonomy/issue-fields.yml`.
-2. Reads `taxonomy/required-updates.txt` and updates the `options:` block under `id: required-updates` checkboxes in the 5 templates using it.
+**Purpose:** Acts as the compiler and central options injector. It:
+1. Reads `taxonomy/scopes.txt` and updates the `options:` block under the `id: scope` dropdown in all issue templates, as well as `taxonomy/issue-fields.yml`.
+2. Reads `taxonomy/required-updates.txt` and updates the `options:` block under `id: required-updates` checkboxes in the issue templates using it.
 
 This ensures single sources of truth propagate automatically to templates and metadata files.
 
 ```bash
-node scripts/update-template-scopes.mjs
-# 🎉 Completed. Updated 5 issue templates.
+npm run generate
 ```
 
 ---
@@ -508,7 +507,7 @@ Developer edits taxonomy/ YAML or scopes.txt
         │
         ├──▶ CI: validate-taxonomy.mjs ── checks integrity ── ✅ / ❌
         │
-        ├──▶ CI: update-template-scopes.mjs ── syncs scope dropdowns
+        ├──▶ CI: generate-taxonomy.mjs ── syncs scope dropdowns
         │
         ├──▶ (Optional) DRY_RUN=true sync-taxonomy.mjs ── preview changes
         │

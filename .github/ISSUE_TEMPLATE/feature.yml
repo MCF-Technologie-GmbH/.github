@@ -1,7 +1,7 @@
 name: Feature
 description: Propose a new feature or capability.
 type: Feature
-projects: ["MCF-Technologie-GmbH/37"]
+projects: [ "MCF-Technologie-GmbH/37" ]
 
 body:
   - type: markdown
@@ -17,6 +17,7 @@ body:
       label: Scope
       description: Select the scope of this issue (the codebase area affected).
       options:
+        - Not Set
         - ui
         - api
         - backend
@@ -33,7 +34,7 @@ body:
         - config
         - security
     validations:
-      required: true
+      required: false
 
   - type: dropdown
     id: priority
@@ -47,7 +48,7 @@ body:
         - P2
         - P3
     validations:
-      required: true
+      required: false
 
   - type: dropdown
     id: effort
@@ -63,7 +64,7 @@ body:
         - E8
         - E13
     validations:
-      required: true
+      required: false
 
   - type: markdown
     attributes:
@@ -73,7 +74,8 @@ body:
     id: problem-statement
     attributes:
       label: Problem Statement / Motivation
-      description: What problem does this feature solve? Who is affected and why does it matter?
+      description: What problem does this feature solve? Who is affected and why does
+        it matter?
       placeholder: |
         Example:
         Customers currently have no way to export historical telemetry data for offline analysis.
@@ -109,7 +111,8 @@ body:
     id: out-of-scope
     attributes:
       label: Out of Scope
-      description: Explicitly list anything that is NOT part of this feature to prevent scope creep.
+      description: Explicitly list anything that is NOT part of this feature to
+        prevent scope creep.
       placeholder: |
         Example:
         - Real-time streaming exports

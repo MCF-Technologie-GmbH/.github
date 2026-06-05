@@ -4,15 +4,22 @@ These scripts handle the validation and synchronization of the organization's is
 
 ## Scripts
 
+- **`generate-taxonomy.mjs`**: The local compilation script. It reads [scopes.txt](file:///home/marklagarie/repos/.github/taxonomy/scopes.txt) and [required-updates.txt](file:///home/marklagarie/repos/.github/taxonomy/required-updates.txt) and automatically injects them into [issue-fields.yml](file:///home/marklagarie/repos/.github/taxonomy/issue-fields.yml) and all GitHub Issue templates.
 - **`validate-taxonomy.mjs`**: Ensures that the YAML files in `/taxonomy` are valid, have unique keys/names, and that all cross-references are correct. It also enforces the "No ID" policy.
 - **`sync-taxonomy.mjs`**: The reconciler script. It compares the YAML definitions with the actual state in the GitHub Organization via GraphQL and applies necessary changes (Create/Update). It also detects and reports drift for Pinned Fields.
 
 ## Usage
 
+### Local Generation
+
+```bash
+npm run generate
+```
+
 ### Local Validation
 
 ```bash
-node scripts/validate-taxonomy.mjs
+npm run validate
 ```
 
 ### Dry Run (Report differences without applying)

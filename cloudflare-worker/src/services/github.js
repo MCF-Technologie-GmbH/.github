@@ -107,6 +107,20 @@ export class GitHubClient {
                 name
               }
             }
+            fieldValues(first: 20) {
+              nodes {
+                ... on IssueFieldValueSingleSelect {
+                  field {
+                    id
+                    name
+                  }
+                  option {
+                    id
+                    name
+                  }
+                }
+              }
+            }
           }
         }
       }`,

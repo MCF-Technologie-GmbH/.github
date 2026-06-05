@@ -26,7 +26,7 @@ The organization's metadata (Issue Types and Issue Fields) is managed declarativ
 
 1. **Change:** A developer modifies a YAML file or `scopes.txt` in a Pull Request.
 2. **Validate:** GitHub Actions runs [`validate-taxonomy.mjs`](scripts/validate-taxonomy.mjs) to ensure data integrity and reference consistency.
-3. **Generate:** The script [`update-template-scopes.mjs`](scripts/update-template-scopes.mjs) is used to automatically populate the `Scope` dropdown in all issue templates from `scopes.txt`.
+3. **Generate:** The script [`generate-taxonomy.mjs`](scripts/generate-taxonomy.mjs) compiles the options from `scopes.txt` and `required-updates.txt` directly into `issue-fields.yml` and all issue templates.
 4. **Dry Run:** On PRs, the sync script can be run in `DRY_RUN=true` mode to report what changes would be applied.
 5. **Apply:** Once merged to `main`, GitHub Actions runs [`sync-taxonomy.mjs`](scripts/sync-taxonomy.mjs) using the GraphQL API to reconcile the organization's state.
 

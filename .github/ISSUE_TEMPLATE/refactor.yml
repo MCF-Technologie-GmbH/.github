@@ -1,7 +1,7 @@
 name: Refactor
 description: Code cleanup, restructuring, or technical debt reduction.
 type: Refactor
-projects: ["MCF-Technologie-GmbH/37"]
+projects: [ "MCF-Technologie-GmbH/37" ]
 
 body:
   - type: markdown
@@ -18,6 +18,7 @@ body:
       label: Scope
       description: Select the scope of this issue (the codebase area affected).
       options:
+        - Not Set
         - ui
         - api
         - backend
@@ -34,7 +35,7 @@ body:
         - config
         - security
     validations:
-      required: true
+      required: false
 
   - type: dropdown
     id: priority
@@ -48,7 +49,7 @@ body:
         - P2
         - P3
     validations:
-      required: true
+      required: false
 
   - type: dropdown
     id: effort
@@ -64,7 +65,7 @@ body:
         - E8
         - E13
     validations:
-      required: true
+      required: false
 
   - type: markdown
     attributes:
@@ -85,7 +86,8 @@ body:
     id: motivation
     attributes:
       label: Motivation / Benefits
-      description: Why are we refactoring this now? What are the expected benefits (e.g., testability, performance, maintainability)?
+      description: Why are we refactoring this now? What are the expected benefits
+        (e.g., testability, performance, maintainability)?
       placeholder: |
         Example:
         Improves testability by allowing us to mock providers easily, and prepares the codebase for integrating PayPal next month.
@@ -109,7 +111,8 @@ body:
     id: dependencies
     attributes:
       label: Dependencies
-      description: List any tasks, issues, PRs, or external requirements this refactor depends on.
+      description: List any tasks, issues, PRs, or external requirements this refactor
+        depends on.
       placeholder: |
         Example:
         - Blocked by #123

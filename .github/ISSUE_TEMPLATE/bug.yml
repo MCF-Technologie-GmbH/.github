@@ -1,7 +1,7 @@
 name: Bug
 description: Report a confirmed or suspected bug.
 type: Bug
-projects: ["MCF-Technologie-GmbH/37"]
+projects: [ "MCF-Technologie-GmbH/37" ]
 
 body:
   - type: markdown
@@ -17,6 +17,7 @@ body:
       label: Scope
       description: Select the scope of this issue (the codebase area affected).
       options:
+        - Not Set
         - ui
         - api
         - backend
@@ -33,7 +34,7 @@ body:
         - config
         - security
     validations:
-      required: true
+      required: false
 
   - type: dropdown
     id: priority
@@ -47,7 +48,7 @@ body:
         - P2
         - P3
     validations:
-      required: true
+      required: false
 
   - type: dropdown
     id: effort
@@ -63,7 +64,7 @@ body:
         - E8
         - E13
     validations:
-      required: true
+      required: false
 
   - type: markdown
     attributes:
@@ -108,7 +109,8 @@ body:
     id: steps-to-reproduce
     attributes:
       label: Steps to Reproduce
-      description: Provide clear steps, commands, test data, user actions, or configuration needed to reproduce the bug.
+      description: Provide clear steps, commands, test data, user actions, or
+        configuration needed to reproduce the bug.
       placeholder: |
         Example:
         1. Start the application

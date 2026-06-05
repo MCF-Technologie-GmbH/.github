@@ -1,7 +1,8 @@
 name: Spike
-description: A timeboxed technical investigation used to reduce uncertainty before implementation.
+description: A timeboxed technical investigation used to reduce uncertainty
+  before implementation.
 type: Spike
-projects: ["MCF-Technologie-GmbH/37"]
+projects: [ "MCF-Technologie-GmbH/37" ]
 
 body:
   - type: markdown
@@ -17,6 +18,7 @@ body:
       label: Scope
       description: Select the scope of this issue (the codebase area affected).
       options:
+        - Not Set
         - ui
         - api
         - backend
@@ -33,7 +35,7 @@ body:
         - config
         - security
     validations:
-      required: true
+      required: false
 
   - type: dropdown
     id: priority
@@ -47,7 +49,7 @@ body:
         - P2
         - P3
     validations:
-      required: true
+      required: false
 
   - type: dropdown
     id: effort
@@ -63,7 +65,7 @@ body:
         - E8
         - E13
     validations:
-      required: true
+      required: false
 
   - type: markdown
     attributes:
@@ -96,7 +98,8 @@ body:
     id: investigation-scope
     attributes:
       label: Scope & Time Box
-      description: Define the boundaries of this investigation and the maximum time to spend.
+      description: Define the boundaries of this investigation and the maximum time to
+        spend.
       placeholder: |
         Example:
         In scope:
@@ -133,7 +136,8 @@ body:
     id: additional-context
     attributes:
       label: Additional Context
-      description: Add any related issues, existing research, constraints, or reference material.
+      description: Add any related issues, existing research, constraints, or
+        reference material.
       placeholder: |
         Example:
         - MDN WebSockets documentation

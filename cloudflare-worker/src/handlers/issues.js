@@ -117,10 +117,24 @@ export async function enforceIssueTypePolicy({
     }
   }
 
-  // Detect scope from the raw body or title before sanitization strips the Scope section
+  // Extract custom field values currently set in the sidebar
+  const scopeFieldValueNode = currentIssue.fieldValues?.nodes?.find(
+    (fv) => fv.field?.name === "Scope"
+  );
+  const currentSidebarScope = scopeFieldValueNode?.option?.name;
+
+  // Detect scope from raw body (form submission) or fall back to sidebar / title
   let scopeValue = detectScopeFromBody(issueBody);
-  if (!scopeValue) {
-    scopeValue = extractScopeFromTitle(currentIssue.title);
+  if (action === "edited" && currentSidebarScope) {
+    // During edits, the sidebar field value is the source of truth for the title prefix
+    scopeValue = currentSidebarScope;
+  } else if (!scopeValue) {
+    scopeValue = currentSidebarScope || extractScopeFromTitle(currentIssue.title);
+  }
+
+  // Default scope to "Not Set" on creation if not specified
+  if (action === "opened" || action === "reopened") {
+    if (!scopeValue) scopeValue = "Not Set";
   }
 
   // Detect priority and effort from the raw body

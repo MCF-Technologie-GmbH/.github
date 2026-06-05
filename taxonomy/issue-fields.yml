@@ -19,10 +19,16 @@ issue_fields:
         description: "Not set / Unassigned"
       - name: P0
         color: PINK
-        description: "Urgent / Critical -\nBlockiert Lieferung, Produktion, Abnahme oder ein wichtiges Kundenprojekt"
+        description: "Urgent / Critical -
+
+          Blockiert Lieferung, Produktion, Abnahme oder ein wichtiges
+          Kundenprojekt"
       - name: P1
         color: RED
-        description: "High -\nMuss zeitnah erledigt werden, wichtig für Meilenstein oder Teamfortschritt"
+        description: "High -
+
+          Muss zeitnah erledigt werden, wichtig für Meilenstein oder
+          Teamfortschritt"
       - name: P2
         color: YELLOW
         description: "Medium - Normal wichtige Arbeit, gehört in den geplanten Backlog"
@@ -47,22 +53,34 @@ issue_fields:
         description: "Not set / Unassigned"
       - name: E13
         color: PINK
-        description: "sehr große/unklare Aufgabe\nsollte meistens zerlegt werden"
+        description: "sehr große/unklare Aufgabe
+
+          sollte meistens zerlegt werden"
       - name: E8
         color: RED
-        description: "große Aufgabe\nmehrere Tage, Integration/Abstimmung"
+        description: "große Aufgabe
+
+          mehrere Tage, Integration/Abstimmung"
       - name: E5
         color: ORANGE
-        description: "Mittlere Aufgabe\nmehrere Schritte, etwas Abstimmung"
+        description: "Mittlere Aufgabe
+
+          mehrere Schritte, etwas Abstimmung"
       - name: E3
         color: YELLOW
-        description: "Normale Aufgabe\n1–2 Tage, gut planbar"
+        description: "Normale Aufgabe
+
+          1–2 Tage, gut planbar"
       - name: E2
         color: GREEN
-        description: "kleine Aufgabe\nca. halber bis ein Tag"
+        description: "kleine Aufgabe
+
+          ca. halber bis ein Tag"
       - name: E1
         color: BLUE
-        description: "Mini-Aufgabe\nwenige Stunden, sehr klar"
+        description: "Mini-Aufgabe
+
+          wenige Stunden, sehr klar"
 
   - key: customer
     name: Customer
@@ -92,6 +110,8 @@ issue_fields:
     name: Scope
     data_type: SINGLE_SELECT
     options:
+      - name: Not Set
+        color: GRAY
       - name: ui
         color: GRAY
       - name: api
