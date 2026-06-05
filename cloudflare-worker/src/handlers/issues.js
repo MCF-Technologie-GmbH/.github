@@ -257,6 +257,7 @@ export async function enforceIssueTypePolicy({
     scope: {
       value: scopeValue,
       fieldFound: !!scopeField,
+      availableOptions: scopeField?.options?.map(o => o.name) || [],
       optionFound: false,
       mutationCalled: false,
       mutationResult: null
@@ -264,6 +265,7 @@ export async function enforceIssueTypePolicy({
     priority: {
       value: priorityValue,
       fieldFound: !!priorityField,
+      availableOptions: priorityField?.options?.map(o => o.name) || [],
       optionFound: false,
       mutationCalled: false,
       mutationResult: null
@@ -271,6 +273,7 @@ export async function enforceIssueTypePolicy({
     effort: {
       value: effortValue,
       fieldFound: !!effortField,
+      availableOptions: effortField?.options?.map(o => o.name) || [],
       optionFound: false,
       mutationCalled: false,
       mutationResult: null
