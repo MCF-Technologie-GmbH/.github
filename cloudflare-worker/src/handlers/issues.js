@@ -144,6 +144,10 @@ export async function enforceIssueTypePolicy({
     let cleaned = cleanChecklistOnCreation(issueBody);
     cleaned = removeIssueTypeSection(cleaned);
     cleaned = removeScopeSection(cleaned);
+
+    // Inject protected/editable HTML comments programmatically.
+    cleaned = injectZoningComments(cleaned);
+
     if (cleaned !== issueBody) {
       updatedBody = cleaned;
       hasBodyChanges = true;
@@ -156,9 +160,14 @@ export async function enforceIssueTypePolicy({
     const newProtected = extractSection(issueBody, "protected");
 
     let finalBody = issueBody;
-    // Revert edits inside <!-- protected:start/end --> blocks
-    if (oldProtected && newProtected && oldProtected !== newProtected) {
-      finalBody = replaceSection(finalBody, "protected", oldProtected);
+    // Revert edits inside <!-- protected:start/end --> blocks or full body if tags were deleted.
+    if (oldProtected) {
+      if (!newProtected) {
+        // If protected tags were removed, revert the entire body to the previous state.
+        finalBody = changes.body.from;
+      } else if (oldProtected !== newProtected) {
+        finalBody = replaceSection(finalBody, "protected", oldProtected);
+      }
     }
 
     let healed = healChecklist(finalBody, changes.body.from);
@@ -422,5 +431,73 @@ async function revertIssueTypeChangeInImplementationRepo({
     currentType,
     revertedTo: originalType.name,
   };
+}
+
+/**
+ * Programmatically injects HTML comments to divide the issue body into protected,
+ * editable, and managed zones. This is required because GitHub Form Templates (YAML)
+ * discard markdown-type fields from the final issue body description.
+ *
+ * @param {string} body - The sanitized Markdown issue description.
+ * @returns {string} The zoned issue description containing comments tags.
+ */
+function injectZoningComments(body) {
+  if (!body) return "";
+
+  // If the body is already zoned, do not modify it.
+  if (body.includes("<!-- protected:start -->")) {
+    return body;
+  }
+
+  const result = body.trim();
+
+  // Common headers that mark the start of the editable/unprotected section
+  const editableHeaders = [
+    /### Logs \/ Error Output/i,
+    /### Attachments/i,
+    /### Workaround/i,
+    /### Additional Context/i,
+    /## Required updates/i,
+    /<!-- managed:start -->/i
+  ];
+
+  let firstIndex = -1;
+
+  for (const pattern of editableHeaders) {
+    const match = result.match(pattern);
+    if (match && match.index !== undefined) {
+      if (firstIndex === -1 || match.index < firstIndex) {
+        firstIndex = match.index;
+      }
+    }
+  }
+
+  if (firstIndex !== -1) {
+    const protectedPart = result.slice(0, firstIndex).trim();
+    const restPart = result.slice(firstIndex).trim();
+
+    let editablePart = restPart;
+    let managedPart = "";
+
+    // Identify if there is a managed/checklist section at the end of the restPart
+    const managedMatch = restPart.match(/<!-- managed:start -->|## Required updates/i);
+    if (managedMatch && managedMatch.index !== undefined && managedMatch.index > 0) {
+      editablePart = restPart.slice(0, managedMatch.index).trim();
+      managedPart = restPart.slice(managedMatch.index).trim();
+    }
+
+    let zoned = "<!-- protected:start -->\n" + protectedPart + "\n<!-- protected:end -->\n\n";
+    if (editablePart) {
+      zoned += "<!-- editable:start -->\n" + editablePart + "\n<!-- editable:end -->\n\n";
+    }
+    if (managedPart) {
+      zoned += managedPart;
+    }
+
+    return zoned.trim();
+  }
+
+  // If no editable or managed headers are found, protect the entire body.
+  return "<!-- protected:start -->\n" + result + "\n<!-- protected:end -->";
 }
 
