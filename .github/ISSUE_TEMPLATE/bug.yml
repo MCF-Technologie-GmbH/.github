@@ -17,7 +17,6 @@ body:
       label: Scope
       description: Select the scope of this issue (the codebase area affected).
       options:
-        - Not Set
         - ui
         - api
         - backend

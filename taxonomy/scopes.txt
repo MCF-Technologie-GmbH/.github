@@ -1,4 +1,3 @@
-Not Set
 ui
 api
 backend
