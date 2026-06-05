@@ -20,7 +20,7 @@ A Cloudflare Worker that receives GitHub App webhooks (`issues` and `issue_comme
   - The Worker automatically updates the issue title to match the Conventional Commit format: `type(scope): description`.
   - For example, if a Bug template is used with scope `ui` and title `correct modal validation`, the Worker rewrites the title to `fix(ui): correct modal validation`.
 - **Required Updates Checklist & Label Syncing:**
-  - The Worker manages the checklist under the `## Required updates` (or `### Required updates`) section in the issue body.
+  - The Worker manages the checklist under the `### Required updates` section in the issue body.
   - Sychronizes `requires/*` labels based ONLY on **pending** (unchecked, `[ ]`) checklist items. If an item is checked (`[x]`), its label is removed.
   - **Auto-healing:** If a developer manually edits the issue body and deletes valid checklist items, the Worker restores them. If they add invalid items (not in the whitelist), the Worker removes them.
 - **Comment Slash Commands:**

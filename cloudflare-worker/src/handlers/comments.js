@@ -62,7 +62,7 @@ export async function handleIssueCommentEvent({
 
   // If the issue doesn't have a checklist block, initialize one
   if (startIndex === -1) {
-    issueBody += "\n\n<!-- managed:start -->\n## Required updates\n<!-- managed:end -->\n";
+    issueBody += "\n\n<!-- managed:start -->\n### Required updates\n<!-- managed:end -->\n";
     const reParsed = parseChecklist(issueBody);
     checklist = reParsed.checklist;
     startIndex = reParsed.startIndex;

@@ -10,7 +10,7 @@ import { REQUIRES_WHITELIST } from "../config.js";
  *   - {array} checklist - List of items parsed (e.g. [{ checked: false, name: "Tests", rawLine: "- [ ] Tests" }])
  *   - {number} startIndex - Character index where the checklist items start in the body
  *   - {number} endIndex - Character index where the checklist items end in the body
- *   - {string} heading - The header text used (e.g. "## Required updates")
+ *   - {string} heading - The header text used (e.g. "### Required updates")
  */
 export function parseChecklist(body) {
   if (!body) return { checklist: [], startIndex: -1, endIndex: -1 };
@@ -33,7 +33,7 @@ export function parseChecklist(body) {
       checklist.push({ checked, name, rawLine: itemMatch[0] });
     }
 
-    return { checklist, startIndex, endIndex, heading: "## Required updates" };
+    return { checklist, startIndex, endIndex, heading: "### Required updates" };
   }
 
   // Fallback to old heading-based parsing for backward compatibility

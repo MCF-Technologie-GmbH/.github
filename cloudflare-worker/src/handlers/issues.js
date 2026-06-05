@@ -457,7 +457,7 @@ function injectZoningComments(body) {
     /### Attachments/i,
     /### Workaround/i,
     /### Additional Context/i,
-    /## Required updates/i,
+    /### Required updates/i,
     /<!-- managed:start -->/i
   ];
 
@@ -480,7 +480,7 @@ function injectZoningComments(body) {
     let managedPart = "";
 
     // Identify if there is a managed/checklist section at the end of the restPart
-    const managedMatch = restPart.match(/<!-- managed:start -->|## Required updates/i);
+    const managedMatch = restPart.match(/<!-- managed:start -->|### Required updates/i);
     if (managedMatch && managedMatch.index !== undefined && managedMatch.index > 0) {
       editablePart = restPart.slice(0, managedMatch.index).trim();
       managedPart = restPart.slice(managedMatch.index).trim();

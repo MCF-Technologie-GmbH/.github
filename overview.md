@@ -349,7 +349,7 @@ The Worker:
 For example, checking `Documentation` and `Tests` in the form will result in the following section in the final issue body:
 
 ```markdown
-## Required updates
+### Required updates
 - [ ] Documentation
 - [ ] Tests
 ```
