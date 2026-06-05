@@ -121,7 +121,7 @@ export async function enforceIssueTypePolicy({
   const scopeFieldValueNode = currentIssue.issueFieldValues?.nodes?.find(
     (fv) => fv.field?.name === "Scope"
   );
-  const currentSidebarScope = scopeFieldValueNode?.option?.name;
+  const currentSidebarScope = scopeFieldValueNode?.name;
 
   // Detect scope from raw body (form submission) or fall back to sidebar / title
   let scopeValue = detectScopeFromBody(issueBody);

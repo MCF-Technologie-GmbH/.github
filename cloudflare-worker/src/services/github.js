@@ -114,10 +114,7 @@ export class GitHubClient {
                     id
                     name
                   }
-                  option {
-                    id
-                    name
-                  }
+                  name
                 }
               }
             }
