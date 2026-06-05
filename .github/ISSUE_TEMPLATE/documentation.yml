@@ -11,6 +11,30 @@ body:
         > This form automatically sets the issue type to **Documentation** and adds it to the **Softwareentwicklung** project board.
         > Before submitting, please ensure you fill in all required sidebar fields (Priority, Assignee, Target milestone/release).
 
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      description: Select the scope of this issue (the codebase area affected).
+      options:
+        - ui
+        - api
+        - backend
+        - frontend
+        - ci
+        - gha
+        - worker
+        - deps
+        - repo
+        - tooling
+        - infra
+        - deploy
+        - docs
+        - config
+        - security
+    validations:
+      required: true
+
   - type: markdown
     attributes:
       value: "<!-- protected:start -->"
@@ -35,10 +59,8 @@ body:
       label: What Needs to Be Documented
       description: Describe the subject matter — what feature, process, or API should be documented or updated?
       placeholder: |
-        What is the topic, feature, or system that needs documentation?
-
         Example:
-        The device management REST API currently has no public reference. Endpoints, request/response schemas, and authentication must be documented.
+        The device management REST API endpoints, request/response schemas, and authentication must be documented.
     validations:
       required: true
 
@@ -61,8 +83,9 @@ body:
       label: Existing Documentation
       description: Link to any existing documentation that is related, outdated, or should be replaced.
       placeholder: |
-        - Link to current docs (if any)
-        - Related wiki pages, README sections, Confluence pages, etc.
+        Example:
+        - Wiki page: https://github.com/.../wiki/Device-Management
+        - README.md section on deployment
     validations:
       required: false
 
@@ -72,6 +95,7 @@ body:
       label: Acceptance Criteria
       description: Define what "done" looks like for this documentation task.
       placeholder: |
+        Example:
         - [ ] All endpoints are documented with request/response examples
         - [ ] Documentation is reviewed and approved
         - [ ] Published to the correct location
@@ -92,37 +116,15 @@ body:
       label: Additional Context
       description: Add any other relevant information, related issues, or links.
       placeholder: |
-        Related issues, PRs, source material, etc.
+        Example:
+        - PR #123 contains the implementation details
+        - Slack thread link: https://...
     validations:
       required: false
 
   - type: markdown
     attributes:
       value: "<!-- editable:end -->"
-
-  - type: dropdown
-    id: scope
-    attributes:
-      label: Scope
-      description: Select the scope of this issue (the codebase area affected).
-      options:
-        - ui
-        - api
-        - backend
-        - frontend
-        - ci
-        - gha
-        - worker
-        - deps
-        - repo
-        - tooling
-        - infra
-        - deploy
-        - docs
-        - config
-        - security
-    validations:
-      required: true
 
   - type: dropdown
     id: template-type

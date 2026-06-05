@@ -1,4 +1,4 @@
-1name: Test
+name: Test
 description: Add, improve, or repair tests.
 type: Test
 projects: ["MCF-Technologie-GmbH/37"]
@@ -11,74 +11,6 @@ body:
         > Use **Test** for adding, fixing, or improving tests (unit tests, integration tests, E2E tests, smoke tests).
         > - **Do NOT** use Test for bug fixes (use **Bug**) or new features (use **Feature**).
         > Before submitting, please ensure you fill in all required sidebar fields (Priority, Scope, Effort, Target milestone/release).
-
-  - type: markdown
-    attributes:
-      value: "<!-- protected:start -->"
-
-  - type: textarea
-    id: what-to-test
-    attributes:
-      label: What Needs to Be Tested
-      description: Describe the target component, module, service, or flow that lacks testing or has failing tests.
-      placeholder: |
-        Which parts of the application need tests?
-    validations:
-      required: true
-
-  - type: textarea
-    id: test-approach
-    attributes:
-      label: Test Approach / Tools
-      description: What kind of test are we writing (e.g. Unit, Integration, E2E)? What framework, mock strategy, or test suite should be used?
-      placeholder: |
-        Describe the testing methodology or tools.
-    validations:
-      required: true
-
-  - type: textarea
-    id: acceptance-criteria
-    attributes:
-      label: Acceptance Criteria
-      description: Define what "done" looks like for this test task.
-      placeholder: |
-        - [ ] Tests are written and passing
-        - [ ] Coverage for target code is increased to X%
-        - [ ] Tests run successfully in the CI pipeline
-    validations:
-      required: false
-
-  - type: textarea
-    id: dependencies
-    attributes:
-      label: Dependencies
-      description: List any tasks, issues, PRs, or external requirements this test task depends on.
-      placeholder: |
-        - Blocked by #123
-    validations:
-      required: false
-
-  - type: markdown
-    attributes:
-      value: "<!-- protected:end -->"
-
-  - type: markdown
-    attributes:
-      value: "<!-- editable:start -->"
-
-  - type: textarea
-    id: additional-context
-    attributes:
-      label: Additional Context
-      description: Add any other relevant information, links, or notes.
-      placeholder: |
-        Related issues, PRs, documentation, design decisions, etc.
-    validations:
-      required: false
-
-  - type: markdown
-    attributes:
-      value: "<!-- editable:end -->"
 
   - type: dropdown
     id: scope
@@ -103,6 +35,79 @@ body:
         - security
     validations:
       required: true
+
+  - type: markdown
+    attributes:
+      value: "<!-- protected:start -->"
+
+  - type: textarea
+    id: what-to-test
+    attributes:
+      label: What Needs to Be Tested
+      description: Describe the target component, module, service, or flow that lacks testing or has failing tests.
+      placeholder: |
+        Example:
+        The auth helper functions in src/utils/auth.js have 0% coverage and need unit tests.
+    validations:
+      required: true
+
+  - type: textarea
+    id: test-approach
+    attributes:
+      label: Test Approach / Tools
+      description: What kind of test are we writing (e.g. Unit, Integration, E2E)? What framework, mock strategy, or test suite should be used?
+      placeholder: |
+        Example:
+        Write unit tests using Jest, mocking the external auth API response.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Define what "done" looks like for this test task.
+      placeholder: |
+        Example:
+        - [ ] Tests are written and passing
+        - [ ] Coverage for target code is increased to X%
+        - [ ] Tests run successfully in the CI pipeline
+    validations:
+      required: false
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: List any tasks, issues, PRs, or external requirements this test task depends on.
+      placeholder: |
+        Example:
+        - Blocked by #123
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: "<!-- protected:end -->"
+
+  - type: markdown
+    attributes:
+      value: "<!-- editable:start -->"
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Add any other relevant information, links, or notes.
+      placeholder: |
+        Example:
+        - Reference PR: #123
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: "<!-- editable:end -->"
 
   - type: markdown
     attributes:

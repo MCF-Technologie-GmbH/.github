@@ -11,6 +11,30 @@ body:
         > This form automatically sets the issue type to **Spike** and adds it to the **Softwareentwicklung** project board.
         > Before submitting, please ensure you fill in all required sidebar fields (Priority, Assignee, Time box/estimate).
 
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      description: Select the scope of this issue (the codebase area affected).
+      options:
+        - ui
+        - api
+        - backend
+        - frontend
+        - ci
+        - gha
+        - worker
+        - deps
+        - repo
+        - tooling
+        - infra
+        - deploy
+        - docs
+        - config
+        - security
+    validations:
+      required: true
+
   - type: markdown
     attributes:
       value: "<!-- protected:start -->"
@@ -21,10 +45,8 @@ body:
       label: Background / Motivation
       description: Why is this investigation necessary? What triggered it?
       placeholder: |
-        What uncertainty, risk, or open question is driving this spike?
-
         Example:
-        We need to implement real-time device status updates but are unsure which transport mechanism is most suitable given our infrastructure constraints.
+        We need to implement real-time device status updates but are unsure if WebSockets or Server-Sent Events is more suitable for our server constraints.
     validations:
       required: true
 
@@ -34,10 +56,9 @@ body:
       label: Goals / Questions to Answer
       description: List the specific questions this spike must answer.
       placeholder: |
-        - Which approach best fits our current infrastructure?
-        - What is the estimated effort for each option?
-        - Are there any security or scalability concerns?
-        - What are the trade-offs?
+        Example:
+        - Does WebSocket connection overhead impact our memory usage significantly?
+        - What is the estimated development effort for SSE vs WebSockets?
     validations:
       required: true
 
@@ -47,13 +68,12 @@ body:
       label: Scope & Time Box
       description: Define the boundaries of this investigation and the maximum time to spend.
       placeholder: |
+        Example:
         In scope:
-        - ...
-
+        - Prototype SSE and WebSockets in a test branch
         Out of scope:
-        - ...
-
-        Time box: X days / X hours
+        - Production-ready implementation
+        Time box: 2 days
     validations:
       required: false
 
@@ -85,37 +105,14 @@ body:
       label: Additional Context
       description: Add any related issues, existing research, constraints, or reference material.
       placeholder: |
-        Related issues, external documentation, constraints, known approaches, etc.
+        Example:
+        - MDN WebSockets documentation
     validations:
       required: false
 
   - type: markdown
     attributes:
       value: "<!-- editable:end -->"
-
-  - type: dropdown
-    id: scope
-    attributes:
-      label: Scope
-      description: Select the scope of this issue (the codebase area affected).
-      options:
-        - ui
-        - api
-        - backend
-        - frontend
-        - ci
-        - gha
-        - worker
-        - deps
-        - repo
-        - tooling
-        - infra
-        - deploy
-        - docs
-        - config
-        - security
-    validations:
-      required: true
 
   - type: dropdown
     id: template-type

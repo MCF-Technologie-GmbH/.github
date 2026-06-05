@@ -433,6 +433,7 @@ async function enforceIssueTypePolicy({
 
     let cleaned = cleanChecklistOnCreation(issueBody);
     cleaned = removeIssueTypeSection(cleaned);
+    cleaned = removeScopeSection(cleaned);
     if (cleaned !== issueBody) {
       updatedBody = cleaned;
       hasBodyChanges = true;
@@ -600,6 +601,12 @@ function removeIssueTypeSection(body) {
   return body.replace(/^### Issue Type\r?\n\r?\n[^\r\n]+(\r?\n)*/m, "");
 }
 
+function removeScopeSection(body) {
+  if (!body) return "";
+  // Match "### Scope", its value, and any trailing whitespace/newlines
+  return body.replace(/^### Scope\r?\n\r?\n[^\r\n]+(\r?\n)*/m, "");
+}
+
 function detectScopeFromBody(body) {
   if (!body) return null;
   const match = body.match(/^### Scope\r?\n\r?\n([^\r\n]+)/m);
@@ -621,7 +628,15 @@ function formatTitle(currentTitle, issueType, scope) {
   const commitType = typePrefixMap[issueType];
   if (!commitType) return currentTitle;
 
-  const targetPrefix = scope ? `${commitType}(${scope}): ` : `${commitType}: `;
+  let resolvedScope = scope;
+  if (!resolvedScope) {
+    const scopeMatch = currentTitle.match(/^[a-zA-Z0-9_-]+\(([^)]+)\)\s*:\s*/);
+    if (scopeMatch) {
+      resolvedScope = scopeMatch[1];
+    }
+  }
+
+  const targetPrefix = resolvedScope ? `${commitType}(${resolvedScope}): ` : `${commitType}: `;
 
   const cleanTitle = currentTitle
     .replace(/^[a-zA-Z0-9_-]+(?:\([^)]*\))?\s*:\s*/, "")

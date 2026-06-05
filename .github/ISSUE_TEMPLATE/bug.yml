@@ -11,152 +11,6 @@ body:
         > This form automatically sets the issue type to **Bug** and adds it to the **Softwareentwicklung** project board.
         > Before submitting, please ensure you fill in all required sidebar fields (Priority, Customer, Target milestone/release).
 
-  - type: markdown
-    attributes:
-      value: "<!-- protected:start -->"
-
-  - type: textarea
-    id: current-behavior
-    attributes:
-      label: Current Behavior
-      description: Describe what is currently happening.
-      placeholder: |
-        What happens right now?
-
-        Example:
-        After reconnecting a device, the UI still shows the device as offline even though the backend receives status updates.
-    validations:
-      required: true
-
-  - type: textarea
-    id: expected-behavior
-    attributes:
-      label: Expected Behavior
-      description: Describe what should happen instead.
-      placeholder: |
-        What should happen?
-
-        Example:
-        After reconnecting a device, the UI should update the device status to online within a few seconds.
-    validations:
-      required: true
-
-  - type: dropdown
-    id: frequency
-    attributes:
-      label: Frequency
-      description: How often does the bug occur?
-      options:
-        - Always reproducible
-        - Sometimes reproducible
-        - Happened once
-        - Unknown / not tested
-    validations:
-      required: false
-
-  - type: textarea
-    id: steps-to-reproduce
-    attributes:
-      label: Steps to Reproduce
-      description: Provide clear steps so the issue can be reproduced, if applicable.
-      placeholder: |
-        1. Start the application / service
-        2. Connect a device
-        3. Disconnect the device
-        4. Reconnect the device
-        5. Observe the device status
-
-        Include commands, test data, user actions, or configuration if relevant.
-    validations:
-      required: false
-
-  - type: textarea
-    id: environment
-    attributes:
-      label: Environment
-      description: Add relevant runtime, software, hardware, or deployment context.
-      placeholder: |
-        Application / service:
-        Version / commit:
-        Repository:
-        Environment: local / staging / production / customer system
-        OS / platform:
-        Browser / device:
-        Hardware:
-        Relevant configuration:
-    validations:
-      required: false
-
-  - type: textarea
-    id: impact
-    attributes:
-      label: Impact
-      description: Describe the operational, user, customer, or technical impact.
-      placeholder: |
-        Who or what is affected?
-
-        Example:
-        - Blocks customer testing
-        - Breaks a critical workflow
-        - Causes incorrect data display
-        - Workaround exists / no workaround exists
-    validations:
-      required: false
-
-  - type: markdown
-    attributes:
-      value: "<!-- protected:end -->"
-
-  - type: markdown
-    attributes:
-      value: "<!-- editable:start -->"
-
-  - type: textarea
-    id: logs
-    attributes:
-      label: Logs / Error Output
-      description: Paste relevant logs, stack traces, console output, or error messages.
-      placeholder: |
-        Paste logs or error output here.
-      render: shell
-    validations:
-      required: false
-
-  - type: upload
-    id: attachments
-    attributes:
-      label: Screenshots / Attachments
-      description: Attach screenshots, videos, logs, exports, test files, or other evidence.
-    validations:
-      required: false
-
-  - type: textarea
-    id: workaround
-    attributes:
-      label: Workaround
-      description: Optional. Describe any known workaround.
-      placeholder: |
-        Is there a temporary workaround?
-
-        Example:
-        Restarting the backend service restores the device status updates.
-    validations:
-      required: false
-
-  - type: textarea
-    id: additional-context
-    attributes:
-      label: Additional Context
-      description: Add anything else that may help with diagnosis or debugging.
-      placeholder: |
-        Add related issues, PRs, customer reports, assumptions, suspected root cause, or debugging notes.
-    validations:
-      required: false
-
-  - type: markdown
-    attributes:
-      value: "<!-- editable:end -->"
-
   - type: dropdown
     id: scope
     attributes:
@@ -180,6 +34,137 @@ body:
         - security
     validations:
       required: true
+
+  - type: markdown
+    attributes:
+      value: "<!-- protected:start -->"
+
+  - type: textarea
+    id: current-behavior
+    attributes:
+      label: Current Behavior
+      description: Describe what is currently happening.
+      placeholder: |
+        Example:
+        After reconnecting a device, the UI still shows the device as offline even though the backend receives status updates.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: Describe what should happen instead.
+      placeholder: |
+        Example:
+        After reconnecting a device, the UI should update the device status to online within a few seconds.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: Frequency
+      description: How often does the bug occur?
+      options:
+        - Always reproducible
+        - Sometimes reproducible
+        - Happened once
+        - Unknown / not tested
+    validations:
+      required: false
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: Provide clear steps, commands, test data, user actions, or configuration needed to reproduce the bug.
+      placeholder: |
+        Example:
+        1. Start the application
+        2. Connect a device
+        3. Observe the offline status in the UI
+    validations:
+      required: false
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Add relevant runtime, software, hardware, or deployment context.
+      placeholder: |
+        Example:
+        - App version: v1.4.2
+        - OS: macOS 14.5
+        - Browser: Chrome 126
+    validations:
+      required: false
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: Describe the operational, user, customer, or technical impact.
+      placeholder: |
+        Example:
+        - Blocks customer testing
+        - Workaround exists: refresh the page
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: "<!-- protected:end -->"
+
+  - type: markdown
+    attributes:
+      value: "<!-- editable:start -->"
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Error Output
+      description: Paste relevant logs, stack traces, console output, or error messages.
+      placeholder: |
+        Example:
+        Error: Connection failed: timeout of 5000ms exceeded
+      render: shell
+    validations:
+      required: false
+
+  - type: upload
+    id: attachments
+    attributes:
+      label: Screenshots / Attachments
+      description: Attach screenshots, videos, logs, exports, test files, or other evidence.
+    validations:
+      required: false
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Workaround
+      description: Optional. Describe any known workaround.
+      placeholder: |
+        Example:
+        Restarting the backend service restores the device status updates.
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Add anything else that may help with diagnosis or debugging.
+      placeholder: |
+        Example:
+        - Related issue: #123
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: "<!-- editable:end -->"
 
   - type: markdown
     attributes:

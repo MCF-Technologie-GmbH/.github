@@ -12,68 +12,6 @@ body:
         > - **Do NOT** use Chore for bug fixes (use **Bug**), new features (use **Feature**), code restructuring/cleanup (use **Refactor**), or test additions/fixes (use **Test**).
         > Before submitting, please ensure you fill in all required sidebar fields (Priority, Scope, Effort, Target milestone/release).
 
-  - type: markdown
-    attributes:
-      value: "<!-- protected:start -->"
-
-  - type: textarea
-    id: description
-    attributes:
-      label: Description
-      description: Describe the chore in detail.
-      placeholder: |
-        What exactly needs to be done and why?
-
-        Include any relevant background, context, or constraints.
-    validations:
-      required: true
-
-  - type: textarea
-    id: acceptance-criteria
-    attributes:
-      label: Acceptance Criteria
-      description: Define what "done" looks like for this chore.
-      placeholder: |
-        - [ ] Criteria 1
-        - [ ] Criteria 2
-        - [ ] Criteria 3
-    validations:
-      required: false
-
-  - type: textarea
-    id: dependencies
-    attributes:
-      label: Dependencies
-      description: List any tasks, issues, PRs, or external requirements this chore depends on.
-      placeholder: |
-        - Blocked by #123
-        - Requires access to ...
-        - Depends on team X completing ...
-    validations:
-      required: false
-
-  - type: markdown
-    attributes:
-      value: "<!-- protected:end -->"
-
-  - type: markdown
-    attributes:
-      value: "<!-- editable:start -->"
-
-  - type: textarea
-    id: additional-context
-    attributes:
-      label: Additional Context
-      description: Add any other relevant information, links, or notes.
-      placeholder: |
-        Related issues, PRs, documentation, design decisions, etc.
-    validations:
-      required: false
-
-  - type: markdown
-    attributes:
-      value: "<!-- editable:end -->"
-
   - type: dropdown
     id: scope
     attributes:
@@ -97,6 +35,69 @@ body:
         - security
     validations:
       required: true
+
+  - type: markdown
+    attributes:
+      value: "<!-- protected:start -->"
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe the chore in detail, including why, background, context, or constraints.
+      placeholder: |
+        Example:
+        Upgrade React from version 18.2 to 19.0 to support the new compiler and hooks.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Define what "done" looks like for this chore.
+      placeholder: |
+        Example:
+        - [ ] All tests pass on Node.js v22
+        - [ ] Dependency warnings are resolved
+    validations:
+      required: false
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: List any tasks, issues, PRs, or external requirements this chore depends on.
+      placeholder: |
+        Example:
+        - Blocked by #123
+        - Requires access to API server
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: "<!-- protected:end -->"
+
+  - type: markdown
+    attributes:
+      value: "<!-- editable:start -->"
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Add any other relevant information, links, or notes.
+      placeholder: |
+        Example:
+        - Links to design doc: https://...
+        - Related issue: #456
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: "<!-- editable:end -->"
 
   - type: markdown
     attributes:

@@ -11,6 +11,30 @@ body:
         > This form automatically sets the issue type to **Feature** and adds it to the **Softwareentwicklung** project board.
         > Before submitting, please ensure you fill in all required sidebar fields (Priority, Customer, Target milestone/release).
 
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      description: Select the scope of this issue (the codebase area affected).
+      options:
+        - ui
+        - api
+        - backend
+        - frontend
+        - ci
+        - gha
+        - worker
+        - deps
+        - repo
+        - tooling
+        - infra
+        - deploy
+        - docs
+        - config
+        - security
+    validations:
+      required: true
+
   - type: markdown
     attributes:
       value: "<!-- protected:start -->"
@@ -21,10 +45,8 @@ body:
       label: Problem Statement / Motivation
       description: What problem does this feature solve? Who is affected and why does it matter?
       placeholder: |
-        Describe the problem or need this feature addresses.
-
         Example:
-        Customers currently have no way to export historical telemetry data for offline analysis. This leads to manual workarounds and support requests.
+        Customers currently have no way to export historical telemetry data for offline analysis.
     validations:
       required: true
 
@@ -34,10 +56,8 @@ body:
       label: Proposed Solution
       description: Describe the feature you'd like to see implemented.
       placeholder: |
-        How should this feature work?
-
         Example:
-        Add a "Export as CSV" button to the device detail view that downloads the last 30 days of telemetry data.
+        Add an "Export as CSV" button to the device detail view that downloads the last 30 days of telemetry data.
     validations:
       required: true
 
@@ -47,6 +67,7 @@ body:
       label: Acceptance Criteria
       description: Define what "done" looks like for this feature.
       placeholder: |
+        Example:
         - [ ] User can trigger an export from the device detail view
         - [ ] Exported file contains timestamp and all telemetry fields
         - [ ] Export works for up to 30 days of data
@@ -60,6 +81,7 @@ body:
       label: Out of Scope
       description: Explicitly list anything that is NOT part of this feature to prevent scope creep.
       placeholder: |
+        Example:
         - Real-time streaming exports
         - Custom date range selection (follow-up)
     validations:
@@ -71,7 +93,8 @@ body:
       label: Alternatives Considered
       description: Have you considered any alternative approaches?
       placeholder: |
-        Describe any alternatives you considered and why they were rejected.
+        Example:
+        We considered exporting as PDF, but CSV is preferred because customers want to import the raw data into Excel.
     validations:
       required: false
 
@@ -81,7 +104,8 @@ body:
       label: Dependencies
       description: List any issues, teams, or external systems this feature depends on.
       placeholder: |
-        - Requires API endpoint from service X
+        Example:
+        - Requires API endpoint from backend
         - Blocked by #123
     validations:
       required: false
@@ -108,37 +132,14 @@ body:
       label: Additional Context
       description: Add any other relevant information, customer requests, or links.
       placeholder: |
-        Related issues, customer feedback, external references, etc.
+        Example:
+        - Customer request Zendesk link: https://...
     validations:
       required: false
 
   - type: markdown
     attributes:
       value: "<!-- editable:end -->"
-
-  - type: dropdown
-    id: scope
-    attributes:
-      label: Scope
-      description: Select the scope of this issue (the codebase area affected).
-      options:
-        - ui
-        - api
-        - backend
-        - frontend
-        - ci
-        - gha
-        - worker
-        - deps
-        - repo
-        - tooling
-        - infra
-        - deploy
-        - docs
-        - config
-        - security
-    validations:
-      required: true
 
   - type: markdown
     attributes:

@@ -12,74 +12,6 @@ body:
         > - **Do NOT** use Refactor for bug fixes (use **Bug**) or new features (use **Feature**).
         > Before submitting, please ensure you fill in all required sidebar fields (Priority, Scope, Effort, Target milestone/release).
 
-  - type: markdown
-    attributes:
-      value: "<!-- protected:start -->"
-
-  - type: textarea
-    id: description
-    attributes:
-      label: Description
-      description: Describe what needs to be refactored.
-      placeholder: |
-        What is the current implementation and what are the plan and steps for refactoring it?
-    validations:
-      required: true
-
-  - type: textarea
-    id: motivation
-    attributes:
-      label: Motivation / Benefits
-      description: Why are we refactoring this now? What are the expected benefits (e.g., testability, performance, maintainability)?
-      placeholder: |
-        Explain why this technical debt should be addressed or how it makes development easier.
-    validations:
-      required: true
-
-  - type: textarea
-    id: acceptance-criteria
-    attributes:
-      label: Acceptance Criteria
-      description: Define what "done" looks like for this refactoring.
-      placeholder: |
-        - [ ] Code is refactored according to the description
-        - [ ] No regression in existing functionality
-        - [ ] All tests pass
-    validations:
-      required: false
-
-  - type: textarea
-    id: dependencies
-    attributes:
-      label: Dependencies
-      description: List any tasks, issues, PRs, or external requirements this refactor depends on.
-      placeholder: |
-        - Blocked by #123
-    validations:
-      required: false
-
-  - type: markdown
-    attributes:
-      value: "<!-- protected:end -->"
-
-  - type: markdown
-    attributes:
-      value: "<!-- editable:start -->"
-
-  - type: textarea
-    id: additional-context
-    attributes:
-      label: Additional Context
-      description: Add any other relevant information, links, or notes.
-      placeholder: |
-        Related issues, PRs, documentation, design decisions, etc.
-    validations:
-      required: false
-
-  - type: markdown
-    attributes:
-      value: "<!-- editable:end -->"
-
   - type: dropdown
     id: scope
     attributes:
@@ -103,6 +35,79 @@ body:
         - security
     validations:
       required: true
+
+  - type: markdown
+    attributes:
+      value: "<!-- protected:start -->"
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe what needs to be refactored.
+      placeholder: |
+        Example:
+        Refactor the PaymentGateway interface to support multiple providers (Stripe, PayPal) instead of being hardcoded to Stripe.
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation / Benefits
+      description: Why are we refactoring this now? What are the expected benefits (e.g., testability, performance, maintainability)?
+      placeholder: |
+        Example:
+        Improves testability by allowing us to mock providers easily, and prepares the codebase for integrating PayPal next month.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Define what "done" looks like for this refactoring.
+      placeholder: |
+        Example:
+        - [ ] Code is refactored according to the description
+        - [ ] No regression in existing functionality
+        - [ ] All tests pass
+    validations:
+      required: false
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: List any tasks, issues, PRs, or external requirements this refactor depends on.
+      placeholder: |
+        Example:
+        - Blocked by #123
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: "<!-- protected:end -->"
+
+  - type: markdown
+    attributes:
+      value: "<!-- editable:start -->"
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Add any other relevant information, links, or notes.
+      placeholder: |
+        Example:
+        - Design doc: https://...
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: "<!-- editable:end -->"
 
   - type: markdown
     attributes:
