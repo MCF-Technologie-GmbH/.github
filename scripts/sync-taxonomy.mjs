@@ -363,7 +363,10 @@ async function sync() {
   const desiredTypeNames = new Set(desiredTypes.map((t) => t.name));
   for (const actual of initialTypes) {
     if (!desiredTypeNames.has(actual.name)) {
-      console.log(`  DRIFT: '${actual.name}' exists in GitHub but not in YAML`);
+      console.log(`  DRIFT: Issue type '${actual.name}' exists in GitHub but has no entry in taxonomy/issue-types.yml.`);
+      console.log(`    → Action required: either add '${actual.name}' to taxonomy/issue-types.yml (to manage it as code)`);
+      console.log(`      or disable it manually in GitHub:`);
+      console.log(`      Organization Settings → Issue types → '${actual.name}' → Disable / Delete`);
       summary.types.drift++;
     }
   }
@@ -407,7 +410,10 @@ async function sync() {
   const desiredFieldNames = new Set(desiredFields.map((f) => f.name));
   for (const actual of initialFields) {
     if (!desiredFieldNames.has(actual.name)) {
-      console.log(`  DRIFT: '${actual.name}' exists in GitHub but not in YAML`);
+      console.log(`  DRIFT: Issue field '${actual.name}' exists in GitHub but has no entry in taxonomy/issue-fields.yml.`);
+      console.log(`    → Action required: either add '${actual.name}' to taxonomy/issue-fields.yml (to manage it as code)`);
+      console.log(`      or delete it manually in GitHub:`);
+      console.log(`      Organization Settings → Issue fields → '${actual.name}' → Delete`);
       summary.fields.drift++;
     }
   }
@@ -439,11 +445,15 @@ async function sync() {
     const { hasDrift, missing, extra, actualNames, desiredNames } = diffPinnedFields(desiredFieldKeys, pinnedFields, fieldKeyToName);
 
     if (hasDrift) {
-      const actualStr = actualNames.join(", ") || "(none)";
-      const desiredStr = desiredNames.join(", ");
-      console.log(`  DRIFT: ${typeName}`);
-      console.log(`    Actual:  [${actualStr}]`);
-      console.log(`    Desired: [${desiredStr}]`);
+      console.log(`  DRIFT: Pinned fields for issue type '${typeName}' do not match taxonomy/issue-type-fields.yml.`);
+      console.log(`    → Manual action required in GitHub:`);
+      console.log(`      Organization Settings → Issue types → '${typeName}' → Manage pinned fields`);
+      if (missing.length > 0) {
+        console.log(`    → Fields to PIN (add to sidebar): ${missing.map((f) => `'${f}'`).join(", ")}`);
+      }
+      if (extra.length > 0) {
+        console.log(`    → Fields to UNPIN (remove from sidebar): ${extra.map((f) => `'${f}'`).join(", ")}`);
+      }
       summary.pinned.drift++;
       totalPinnedDrift++;
     } else {

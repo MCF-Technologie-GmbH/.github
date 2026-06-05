@@ -81,3 +81,38 @@ issue_fields:
   - key: project_id
     name: Project ID
     data_type: TEXT
+
+  - key: scope
+    name: Scope
+    data_type: SINGLE_SELECT
+    options:
+      - name: ui
+        color: GRAY
+      - name: api
+        color: GRAY
+      - name: backend
+        color: GRAY
+      - name: frontend
+        color: GRAY
+      - name: ci
+        color: GRAY
+      - name: gha
+        color: GRAY
+      - name: worker
+        color: GRAY
+      - name: deps
+        color: GRAY
+      - name: repo
+        color: GRAY
+      - name: tooling
+        color: GRAY
+      - name: infra
+        color: GRAY
+      - name: deploy
+        color: GRAY
+      - name: docs
+        color: GRAY
+      - name: config
+        color: GRAY
+      - name: security
+        color: GRAY

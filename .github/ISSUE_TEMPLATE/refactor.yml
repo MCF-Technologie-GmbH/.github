@@ -1,6 +1,6 @@
-name: Chore
-description: A concrete unit of work that needs to be done.
-type: Chore
+name: Refactor
+description: Code cleanup, restructuring, or technical debt reduction.
+type: Refactor
 projects: ["MCF-Technologie-GmbH/37"]
 
 body:
@@ -8,8 +8,8 @@ body:
     attributes:
       value: |
         > [!IMPORTANT]
-        > Use **Chore** for routine tasks, tooling updates, dependencies, CI/CD configuration, or repository maintenance.
-        > - **Do NOT** use Chore for bug fixes (use **Bug**), new features (use **Feature**), code restructuring/cleanup (use **Refactor**), or test additions/fixes (use **Test**).
+        > Use **Refactor** for code cleanup, restructuring, optimization, or technical debt reduction that does not change functional behavior.
+        > - **Do NOT** use Refactor for bug fixes (use **Bug**) or new features (use **Feature**).
         > Before submitting, please ensure you fill in all required sidebar fields (Priority, Scope, Effort, Target milestone/release).
 
   - type: markdown
@@ -20,11 +20,19 @@ body:
     id: description
     attributes:
       label: Description
-      description: Describe the chore in detail.
+      description: Describe what needs to be refactored.
       placeholder: |
-        What exactly needs to be done and why?
+        What is the current implementation and what are the plan and steps for refactoring it?
+    validations:
+      required: true
 
-        Include any relevant background, context, or constraints.
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation / Benefits
+      description: Why are we refactoring this now? What are the expected benefits (e.g., testability, performance, maintainability)?
+      placeholder: |
+        Explain why this technical debt should be addressed or how it makes development easier.
     validations:
       required: true
 
@@ -32,11 +40,11 @@ body:
     id: acceptance-criteria
     attributes:
       label: Acceptance Criteria
-      description: Define what "done" looks like for this chore.
+      description: Define what "done" looks like for this refactoring.
       placeholder: |
-        - [ ] Criteria 1
-        - [ ] Criteria 2
-        - [ ] Criteria 3
+        - [ ] Code is refactored according to the description
+        - [ ] No regression in existing functionality
+        - [ ] All tests pass
     validations:
       required: false
 
@@ -44,11 +52,9 @@ body:
     id: dependencies
     attributes:
       label: Dependencies
-      description: List any tasks, issues, PRs, or external requirements this chore depends on.
+      description: List any tasks, issues, PRs, or external requirements this refactor depends on.
       placeholder: |
         - Blocked by #123
-        - Requires access to ...
-        - Depends on team X completing ...
     validations:
       required: false
 
@@ -125,6 +131,6 @@ body:
       label: Issue Type
       description: Identifies which issue template was used. Do not change this value.
       options:
-        - Chore
+        - Refactor
     validations:
       required: true

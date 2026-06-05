@@ -1,6 +1,5 @@
 name: Documentation
 description: Create, update, or improve documentation.
-title: "[Docs]: "
 type: Documentation
 projects: ["MCF-Technologie-GmbH/37"]
 
@@ -11,6 +10,10 @@ body:
         > [!IMPORTANT]
         > This form automatically sets the issue type to **Documentation** and adds it to the **Softwareentwicklung** project board.
         > Before submitting, please ensure you fill in all required sidebar fields (Priority, Assignee, Target milestone/release).
+
+  - type: markdown
+    attributes:
+      value: "<!-- protected:start -->"
 
   - type: dropdown
     id: docs-type
@@ -75,6 +78,14 @@ body:
     validations:
       required: false
 
+  - type: markdown
+    attributes:
+      value: "<!-- protected:end -->"
+
+  - type: markdown
+    attributes:
+      value: "<!-- editable:start -->"
+
   - type: textarea
     id: additional-context
     attributes:
@@ -84,6 +95,34 @@ body:
         Related issues, PRs, source material, etc.
     validations:
       required: false
+
+  - type: markdown
+    attributes:
+      value: "<!-- editable:end -->"
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      description: Select the scope of this issue (the codebase area affected).
+      options:
+        - ui
+        - api
+        - backend
+        - frontend
+        - ci
+        - gha
+        - worker
+        - deps
+        - repo
+        - tooling
+        - infra
+        - deploy
+        - docs
+        - config
+        - security
+    validations:
+      required: true
 
   - type: dropdown
     id: template-type

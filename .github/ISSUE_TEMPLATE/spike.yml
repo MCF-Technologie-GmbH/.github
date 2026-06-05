@@ -1,6 +1,5 @@
 name: Spike
 description: A timeboxed technical investigation used to reduce uncertainty before implementation.
-title: "[Spike]: "
 type: Spike
 projects: ["MCF-Technologie-GmbH/37"]
 
@@ -11,6 +10,10 @@ body:
         > [!IMPORTANT]
         > This form automatically sets the issue type to **Spike** and adds it to the **Softwareentwicklung** project board.
         > Before submitting, please ensure you fill in all required sidebar fields (Priority, Assignee, Time box/estimate).
+
+  - type: markdown
+    attributes:
+      value: "<!-- protected:start -->"
 
   - type: textarea
     id: background
@@ -39,7 +42,7 @@ body:
       required: true
 
   - type: textarea
-    id: scope
+    id: investigation-scope
     attributes:
       label: Scope & Time Box
       description: Define the boundaries of this investigation and the maximum time to spend.
@@ -68,6 +71,14 @@ body:
     validations:
       required: true
 
+  - type: markdown
+    attributes:
+      value: "<!-- protected:end -->"
+
+  - type: markdown
+    attributes:
+      value: "<!-- editable:start -->"
+
   - type: textarea
     id: additional-context
     attributes:
@@ -77,6 +88,34 @@ body:
         Related issues, external documentation, constraints, known approaches, etc.
     validations:
       required: false
+
+  - type: markdown
+    attributes:
+      value: "<!-- editable:end -->"
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      description: Select the scope of this issue (the codebase area affected).
+      options:
+        - ui
+        - api
+        - backend
+        - frontend
+        - ci
+        - gha
+        - worker
+        - deps
+        - repo
+        - tooling
+        - infra
+        - deploy
+        - docs
+        - config
+        - security
+    validations:
+      required: true
 
   - type: dropdown
     id: template-type

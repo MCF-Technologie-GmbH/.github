@@ -12,26 +12,32 @@
 issue_types:
   - key: chore
     name: Chore
-    description: "Konkrete Arbeitsaufgabe ohne direkten Feature-Charakter"
+    description: "Routine task, tooling update, dependencies, CI/CD configuration, or repository maintenance that does not alter product behavior."
     color: YELLOW
     is_enabled: true
 
   - key: bug
     name: Bug
-    description: "Unerwartetes Fehlverhalten oder Problem"
+    description: "Unexpected error, defect, or incorrect behavior in the codebase."
     color: RED
     is_enabled: true
 
   - key: feature
     name: Feature
-    description: "Neue fachliche oder technische Funktionalität"
+    description: "New functional or technical capability, enhancement, or user-facing addition."
     color: BLUE
     is_enabled: true
 
-  - key: improvement
-    name: Improvement
-    description: "Verbesserung bestehender Funktionalität"
-    color: PINK
+  - key: refactor
+    name: Refactor
+    description: "Internal code restructuring, cleanup, or optimization that improves code quality without changing external behavior."
+    color: ORANGE
+    is_enabled: true
+
+  - key: test
+    name: Test
+    description: "Addition, improvement, or repair of unit, integration, end-to-end, or smoke tests."
+    color: GREEN
     is_enabled: true
 
   - key: spike
@@ -42,24 +48,12 @@ issue_types:
 
   - key: documentation
     name: Documentation
-    description: "Dokumentation, Anleitung, Spezifikation"
+    description: "Writing or modifying internal docs, guides, api specs, or release notes."
     color: PURPLE
-    is_enabled: true
-
-  - key: maintenance
-    name: Maintenance
-    description: "Pflege, Refactoring, technische Schulden"
-    color: ORANGE
     is_enabled: true
 
   - key: project
     name: Project
-    description: null
+    description: "High-level planning container used for epics, milestones, or project management."
     color: BLUE
-    is_enabled: true
-
-  - key: devops
-    name: DevOps
-    description: "CI/CD, deployment, runners, environments, tooling, build system"
-    color: GRAY
     is_enabled: true

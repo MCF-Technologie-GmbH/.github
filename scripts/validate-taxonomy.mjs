@@ -142,6 +142,76 @@ function validate() {
     }
   }
 
+  // --- Scopes list validation ---
+  try {
+    const scopesPath = resolve(TAXONOMY_DIR, "scopes.txt");
+    const scopesTxt = readFileSync(scopesPath, "utf-8")
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(line => line && !line.startsWith("#"));
+
+    const scopeField = fields.find(f => f.key === "scope");
+    if (!scopeField) {
+      errors.push(`Missing 'scope' field in taxonomy/issue-fields.yml`);
+    } else {
+      const fieldScopeNames = (scopeField.options || []).map(o => o.name);
+
+      // Compare both sets
+      for (const s of scopesTxt) {
+        if (!fieldScopeNames.includes(s)) {
+          errors.push(`Scope '${s}' in taxonomy/scopes.txt is missing from 'scope' field options in taxonomy/issue-fields.yml`);
+        }
+      }
+      for (const fName of fieldScopeNames) {
+        if (!scopesTxt.includes(fName)) {
+          errors.push(`Scope option '${fName}' in taxonomy/issue-fields.yml is missing from taxonomy/scopes.txt`);
+        }
+      }
+    }
+  } catch (err) {
+    errors.push(`Failed to read/validate taxonomy/scopes.txt: ${err.message}`);
+  }
+
+  // --- Required updates list validation ---
+  try {
+    const requiredUpdatesPath = resolve(TAXONOMY_DIR, "required-updates.txt");
+    const requiredUpdatesTxt = readFileSync(requiredUpdatesPath, "utf-8")
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(line => line && !line.startsWith("#"));
+
+    const workerPath = resolve(__dirname, "..", "cloudflare-worker", "worker.js");
+    const workerContent = readFileSync(workerPath, "utf-8");
+
+    // Extract KEYS from REQUIRES_WHITELIST in worker.js
+    const whitelistMatch = workerContent.match(/const REQUIRES_WHITELIST = \{([\s\S]*?)\};/);
+    if (!whitelistMatch) {
+      errors.push(`Could not find REQUIRES_WHITELIST block in cloudflare-worker/worker.js`);
+    } else {
+      const whitelistText = whitelistMatch[1];
+      const whitelistKeys = [];
+      const keyRegex = /"([^"]+)"\s*:/g;
+      let match;
+      while ((match = keyRegex.exec(whitelistText)) !== null) {
+        whitelistKeys.push(match[1]);
+      }
+
+      // Cross check lists
+      for (const item of requiredUpdatesTxt) {
+        if (!whitelistKeys.includes(item)) {
+          errors.push(`Required update option '${item}' in taxonomy/required-updates.txt is missing from REQUIRES_WHITELIST in cloudflare-worker/worker.js`);
+        }
+      }
+      for (const key of whitelistKeys) {
+        if (!requiredUpdatesTxt.includes(key)) {
+          errors.push(`Whitelist key '${key}' in cloudflare-worker/worker.js is missing from taxonomy/required-updates.txt`);
+        }
+      }
+    }
+  } catch (err) {
+    errors.push(`Failed to read/validate taxonomy/required-updates.txt: ${err.message}`);
+  }
+
   // --- Issue Type Fields mapping validation ---
   const mappedTypes = new Set();
 

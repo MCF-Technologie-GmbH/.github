@@ -1,0 +1,15 @@
+ui
+api
+backend
+frontend
+ci
+gha
+worker
+deps
+repo
+tooling
+infra
+deploy
+docs
+config
+security

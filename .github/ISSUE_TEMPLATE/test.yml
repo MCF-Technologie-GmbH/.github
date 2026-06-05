@@ -1,6 +1,6 @@
-name: Chore
-description: A concrete unit of work that needs to be done.
-type: Chore
+1name: Test
+description: Add, improve, or repair tests.
+type: Test
 projects: ["MCF-Technologie-GmbH/37"]
 
 body:
@@ -8,8 +8,8 @@ body:
     attributes:
       value: |
         > [!IMPORTANT]
-        > Use **Chore** for routine tasks, tooling updates, dependencies, CI/CD configuration, or repository maintenance.
-        > - **Do NOT** use Chore for bug fixes (use **Bug**), new features (use **Feature**), code restructuring/cleanup (use **Refactor**), or test additions/fixes (use **Test**).
+        > Use **Test** for adding, fixing, or improving tests (unit tests, integration tests, E2E tests, smoke tests).
+        > - **Do NOT** use Test for bug fixes (use **Bug**) or new features (use **Feature**).
         > Before submitting, please ensure you fill in all required sidebar fields (Priority, Scope, Effort, Target milestone/release).
 
   - type: markdown
@@ -17,14 +17,22 @@ body:
       value: "<!-- protected:start -->"
 
   - type: textarea
-    id: description
+    id: what-to-test
     attributes:
-      label: Description
-      description: Describe the chore in detail.
+      label: What Needs to Be Tested
+      description: Describe the target component, module, service, or flow that lacks testing or has failing tests.
       placeholder: |
-        What exactly needs to be done and why?
+        Which parts of the application need tests?
+    validations:
+      required: true
 
-        Include any relevant background, context, or constraints.
+  - type: textarea
+    id: test-approach
+    attributes:
+      label: Test Approach / Tools
+      description: What kind of test are we writing (e.g. Unit, Integration, E2E)? What framework, mock strategy, or test suite should be used?
+      placeholder: |
+        Describe the testing methodology or tools.
     validations:
       required: true
 
@@ -32,11 +40,11 @@ body:
     id: acceptance-criteria
     attributes:
       label: Acceptance Criteria
-      description: Define what "done" looks like for this chore.
+      description: Define what "done" looks like for this test task.
       placeholder: |
-        - [ ] Criteria 1
-        - [ ] Criteria 2
-        - [ ] Criteria 3
+        - [ ] Tests are written and passing
+        - [ ] Coverage for target code is increased to X%
+        - [ ] Tests run successfully in the CI pipeline
     validations:
       required: false
 
@@ -44,11 +52,9 @@ body:
     id: dependencies
     attributes:
       label: Dependencies
-      description: List any tasks, issues, PRs, or external requirements this chore depends on.
+      description: List any tasks, issues, PRs, or external requirements this test task depends on.
       placeholder: |
         - Blocked by #123
-        - Requires access to ...
-        - Depends on team X completing ...
     validations:
       required: false
 
@@ -125,6 +131,6 @@ body:
       label: Issue Type
       description: Identifies which issue template was used. Do not change this value.
       options:
-        - Chore
+        - Test
     validations:
       required: true

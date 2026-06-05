@@ -1,21 +1,18 @@
 # Issue Templates
 
-Eight GitHub issue form templates are defined here for use across all repositories in the MCF Technologie GmbH organization.
+Seven GitHub issue form templates are defined here for use across all repositories in the MCF Technologie GmbH organization.
 
 ## Template List
 
-| File | Template Name | Issue Type | Title Prefix |
-| ---- | ------------ | ---------- | ------------ |
-| `bug.yml` | Bug | `Bug` | `[Bug]:` |
-| `feature.yml` | Feature | `Feature` | `[Feature]:` |
-| `task.yml` | Task | `Task` | `[Task]:` |
-| `spike.yml` | Research / Spike | `Task` | `[Spike]:` |
-| `improvement.yml` | Improvement | `Improvement` | `[Improvement]:` |
-| `devops.yml` | DevOps | `DevOps` | `[DevOps]:` |
-| `documentation.yml` | Documentation | `Documentation` | `[Docs]:` |
-| `maintenance.yml` | Maintenance | `Maintenance` | `[Maintenance]:` |
-
-> **Note:** The Research/Spike template uses the `Task` issue type because GitHub does not have a dedicated Spike type.
+| File | Template Name | Issue Type | Commit Prefix | When to Use |
+| ---- | ------------ | ---------- | ------------- | ----------- |
+| `bug.yml` | Bug | `Bug` | `fix` | Unexpected error, defect, or incorrect behavior |
+| `feature.yml` | Feature | `Feature` | `feat` | New functional or technical capability |
+| `refactor.yml` | Refactor | `Refactor` | `refactor` | Internal code restructuring or debt reduction |
+| `test.yml` | Test | `Test` | `test` | Adding, improving, or repairing test suites |
+| `documentation.yml` | Documentation | `Documentation` | `docs` | Modifying docs, guides, or release notes |
+| `chore.yml` | Chore | `Chore` | `chore` | Routine tasks, dependency updates, CI config, repo maintenance |
+| `spike.yml` | Spike | `Spike` | `spike` | Timeboxed technical investigation |
 
 ## How Template Detection Works
 
@@ -29,7 +26,7 @@ When a new issue is submitted, the Cloudflare Worker reads the rendered body sec
 Bug
 ```
 
-It compares the value against the expected type from `TEMPLATE_TYPE_IDS` in `worker.js` and corrects the issue type if they do not match. This means:
+It compares the value against the organization issue types retrieved dynamically using GraphQL and corrects the issue type if they do not match. This means:
 
 - Users **cannot** change the issue type before submitting (single-option dropdown).
 - If a user changes the type after creation, the Worker **reverts** it using the `IssueTypeChangedEvent` timeline.
@@ -54,31 +51,4 @@ It compares the value against the expected type from `TEMPLATE_TYPE_IDS` in `wor
        required: true
    ```
 
-4. Add the new type to `TEMPLATE_TYPE_IDS` in `cloudflare-worker/worker.js`:
-
-   ```js
-   const TEMPLATE_TYPE_IDS = {
-     // ... existing entries ...
-     "YourTypeName": "IT_kwDOCAEFQs4...",  // get ID with the command below
-   };
-   ```
-
-5. Get the GraphQL node ID for the new type:
-
-   ```bash
-   gh api graphql \
-     -H "GraphQL-Features: issue_types" \
-     -f query='query {
-       organization(login: "MCF-Technologie-GmbH") {
-         issueTypes(first: 20) {
-           nodes { id name }
-         }
-       }
-     }'
-   ```
-
-6. Redeploy the worker: `cd cloudflare-worker && npx wrangler deploy`
-
-## Updating Existing Type IDs
-
-Issue type node IDs are stable and do not change unless the type is deleted and recreated. If IDs need to be refreshed, run the query above and update both `TEMPLATE_TYPE_IDS` and `PROJECT_ISSUE_TYPE_ID` in `cloudflare-worker/worker.js`.
+4. Since the Cloudflare Worker dynamically resolves all types and fields by name, no code changes or ID configuration are needed in the worker when adding a new template. Just ensure the issue type name exists in `taxonomy/issue-types.yml` and is synchronized to the organization.

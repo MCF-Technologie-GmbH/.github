@@ -31,34 +31,24 @@
 const ORGANIZATION = "MCF-Technologie-GmbH";
 const PROJECTS_REPO_FULL_NAME = `${ORGANIZATION}/projects`.toLowerCase();
 const RESERVED_PROJECT_ISSUE_TYPE = "Project";
-// Stable GraphQL node ID for the "Project" issue type in this org.
-// Run this to refresh: gh api graphql -H "GraphQL-Features: issue_types" \
-//   -f query='query { organization(login: "MCF-Technologie-GmbH") { issueTypes(first: 20) { nodes { id name } } } }'
-const PROJECT_ISSUE_TYPE_ID = "IT_kwDOCAEFQs4CBH8t";
 
 // GitHub App bot login. Update this if the app slug changes.
 const GITHUB_APP_BOT_LOGIN = "mcf-automation-bot[bot]";
 
 const GITHUB_API_VERSION = "2022-11-28";
-const GITHUB_GRAPHQL_FEATURES = "issue_types";
+const GITHUB_GRAPHQL_FEATURES = "issue_types, issue_fields";
 
 const ISSUE_ACTIONS_TO_VALIDATE = new Set(["opened", "reopened", "edited", "typed", "untyped"]);
 const ISSUE_TYPE_CHANGE_ACTIONS = new Set(["typed", "untyped", "edited"]);
 
-// Each issue template has a `type: dropdown` field with label "Issue Type" and a
-// single option equal to the type name. With only one option in the dropdown, GitHub's
-// form UI does not allow users to change the value. The submitted body renders as:
-//   ### Issue Type\n\nTypeName
-// Map from the type name (as it appears in the dropdown) to its GraphQL node ID.
-const TEMPLATE_TYPE_IDS = {
-  "Bug":           "IT_kwDOCAEFQs4BKtmJ",
-  "Feature":       "IT_kwDOCAEFQs4BKtmM",
-  "Chore":         "IT_kwDOCAEFQs4BKtmG",
-  "Improvement":   "IT_kwDOCAEFQs4BpYBi",
-  "Documentation": "IT_kwDOCAEFQs4CA6uB",
-  "Maintenance":   "IT_kwDOCAEFQs4CA6uF",
-  "DevOps":        "IT_kwDOCAEFQs4CBIei",
-  "Spike":         "IT_kwDOCAEFQs4CA6t8",
+const REQUIRES_WHITELIST = {
+  "Documentation": "requires/docs",
+  "Tests": "requires/tests",
+  "Release notes": "requires/release-note",
+  "Security review": "requires/security-review",
+  "Migration": "requires/migration",
+  "CI": "requires/ci",
+  "Config": "requires/config"
 };
 
 export default {
@@ -115,11 +105,11 @@ export default {
       return json({ ok: true, pong: true }, 200);
     }
 
-    if (event !== "issues") {
+    if (event !== "issues" && event !== "issue_comment") {
       return json({ ok: true, skipped: true, reason: `event=${event}` }, 200);
     }
 
-    // Prevent feedback loops caused by our own bot restoring an issue type.
+    // Prevent feedback loops caused by our own bot.
     if (payload.sender?.login === GITHUB_APP_BOT_LOGIN) {
       return json(
         {
@@ -131,55 +121,91 @@ export default {
       );
     }
 
-    const action = payload.action;
-
-    if (!ISSUE_ACTIONS_TO_VALIDATE.has(action)) {
-      return json(
-        {
-          ok: true,
-          skipped: true,
-          reason: `issue action=${action}`,
-        },
-        200
-      );
-    }
-
-    // "edited" without changes.type is just a title/body edit — skip it.
-    if (action === "edited" && !payload.changes?.type) {
-      return json(
-        {
-          ok: true,
-          skipped: true,
-          reason: "edited event without type change",
-        },
-        200
-      );
-    }
-
-    const issue = payload.issue;
     const repository = payload.repository;
     const installationId = payload.installation?.id;
 
-    if (!issue || !repository) {
-      return json({ error: "Invalid issues payload: missing issue or repository" }, 400);
-    }
-
-    if (!installationId) {
-      return json({ error: "Invalid issues payload: missing installation id" }, 400);
+    if (!repository || !installationId) {
+      return json({ error: "Invalid payload: missing repository or installation id" }, 400);
     }
 
     const owner = repository.owner?.login;
     const repo = repository.name;
     const repoFullName = normalizeRepo(repository.full_name || `${owner}/${repo}`);
-    const issueNumber = issue.number;
+    const issue = payload.issue;
 
-    if (!owner || !repo || !issueNumber) {
-      return json({ error: "Invalid issues payload: missing repo or issue number" }, 400);
+    if (!owner || !repo || !issue) {
+      return json({ error: "Invalid payload: missing owner, repo, or issue details" }, 400);
     }
+
+    const issueNumber = issue.number;
 
     try {
       const token = await createInstallationAccessToken(env, installationId);
       const gh = new GitHubClient(token);
+
+      // Fetch organization issue types and fields dynamically
+      const orgIssueTypes = await gh.getOrgIssueTypes(ORGANIZATION);
+      const typeMap = new Map(orgIssueTypes.map((t) => [t.name, t.id]));
+
+      const orgIssueFields = await gh.getOrgIssueFields(ORGANIZATION);
+      const scopeField = orgIssueFields.find((f) => f.name === "Scope");
+
+      // Handle Comment Command Event
+      if (event === "issue_comment") {
+        if (payload.action !== "created") {
+          return json(
+            {
+              ok: true,
+              skipped: true,
+              reason: `comment action=${payload.action}`,
+            },
+            200
+          );
+        }
+
+        const result = await handleIssueCommentEvent({
+          gh,
+          owner,
+          repo,
+          repoFullName,
+          issueNumber,
+          comment: payload.comment,
+          scopeField,
+        });
+
+        return json({ ok: true, ...result }, 200);
+      }
+
+      // Handle Issues Event
+      const action = payload.action;
+
+      if (!ISSUE_ACTIONS_TO_VALIDATE.has(action)) {
+        return json(
+          {
+            ok: true,
+            skipped: true,
+            reason: `issue action=${action}`,
+          },
+          200
+        );
+      }
+
+      // "edited" without changes in type, body, or title — skip it.
+      if (
+        action === "edited" &&
+        !payload.changes?.type &&
+        !payload.changes?.body &&
+        !payload.changes?.title
+      ) {
+        return json(
+          {
+            ok: true,
+            skipped: true,
+            reason: "edited event without type/body/title change",
+          },
+          200
+        );
+      }
 
       const currentIssue = await gh.getIssue(owner, repo, issueNumber);
       const currentType = currentIssue.issueType?.name || "none";
@@ -194,6 +220,8 @@ export default {
         currentIssue,
         currentType,
         changes: payload.changes,
+        typeMap,
+        scopeField,
       });
 
       return json(
@@ -210,6 +238,119 @@ export default {
   },
 };
 
+async function handleIssueCommentEvent({
+  gh,
+  owner,
+  repo,
+  repoFullName,
+  issueNumber,
+  comment,
+  scopeField,
+}) {
+  const commentBody = comment.body || "";
+  const lines = commentBody.split(/\r?\n/);
+  const commands = [];
+  const validNames = Object.keys(REQUIRES_WHITELIST);
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("/")) continue;
+
+    const match = trimmed.match(/^\/(require|unrequire|resolve|unresolve|check|uncheck)\s+(.+)$/i);
+    if (!match) continue;
+
+    const commandName = match[1].toLowerCase();
+    const itemNameRaw = match[2].trim();
+
+    const matchedName = validNames.find((v) => v.toLowerCase() === itemNameRaw.toLowerCase());
+
+    if (matchedName) {
+      commands.push({ command: commandName, item: matchedName, line: trimmed });
+    } else {
+      console.log(`Command ignored — invalid item: ${itemNameRaw}`);
+    }
+  }
+
+  if (commands.length === 0) {
+    return { processed: false, reason: "no valid commands found" };
+  }
+
+  const currentIssue = await gh.getIssue(owner, repo, issueNumber);
+  let issueBody = currentIssue.body || "";
+
+  let { checklist, startIndex, endIndex } = parseChecklist(issueBody);
+
+  if (startIndex === -1) {
+    issueBody += "\n\n<!-- managed:start -->\n## Required updates\n<!-- managed:end -->\n";
+    const reParsed = parseChecklist(issueBody);
+    checklist = reParsed.checklist;
+    startIndex = reParsed.startIndex;
+    endIndex = reParsed.endIndex;
+  }
+
+  for (const cmd of commands) {
+    const itemIdx = checklist.findIndex((item) => item.name === cmd.item);
+
+    if (cmd.command === "require") {
+      if (itemIdx === -1) {
+        checklist.push({ name: cmd.item, checked: false });
+      }
+    } else if (cmd.command === "unrequire") {
+      if (itemIdx !== -1) {
+        checklist.splice(itemIdx, 1);
+      }
+    } else if (cmd.command === "resolve" || cmd.command === "check") {
+      if (itemIdx !== -1) {
+        checklist[itemIdx].checked = true;
+      } else {
+        checklist.push({ name: cmd.item, checked: true });
+      }
+    } else if (cmd.command === "unresolve" || cmd.command === "uncheck") {
+      if (itemIdx !== -1) {
+        checklist[itemIdx].checked = false;
+      } else {
+        checklist.push({ name: cmd.item, checked: false });
+      }
+    }
+  }
+
+  let checklistText = "\n";
+  for (const item of checklist) {
+    checklistText += `- [${item.checked ? "x" : " "}] ${item.name}\n`;
+  }
+
+  const updatedBody = issueBody.slice(0, startIndex) + checklistText + issueBody.slice(endIndex);
+
+  await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, updatedBody);
+
+  const currentLabels = currentIssue.labels?.nodes?.map((l) => l.name) ?? [];
+  const currentRequiresLabels = currentLabels.filter((name) => name.startsWith("requires/"));
+  const desiredRequiresLabels = getRequiresLabelsForChecklist(checklist);
+
+  const labelsToAdd = desiredRequiresLabels.filter((l) => !currentRequiresLabels.includes(l));
+  const labelsToRemove = currentRequiresLabels.filter((l) => !desiredRequiresLabels.includes(l));
+
+  if (labelsToAdd.length > 0) {
+    await gh.addLabels(owner, repo, issueNumber, labelsToAdd);
+  }
+
+  for (const l of labelsToRemove) {
+    await gh.removeLabel(owner, repo, issueNumber, l);
+  }
+
+  try {
+    await gh.createCommentReaction(owner, repo, comment.id, "rocket");
+    await gh.deleteComment(owner, repo, comment.id);
+  } catch (err) {
+    console.error(`Failed to manage comment/reaction: ${err.message}`);
+  }
+
+  return {
+    processed: true,
+    commandsProcessed: commands.length,
+  };
+}
+
 async function enforceIssueTypePolicy({
   gh,
   owner,
@@ -220,10 +361,11 @@ async function enforceIssueTypePolicy({
   currentIssue,
   currentType,
   changes,
+  typeMap,
+  scopeField,
 }) {
   const isProjectsRepo = repoFullName === PROJECTS_REPO_FULL_NAME;
   const isProjectType = currentType === RESERVED_PROJECT_ISSUE_TYPE;
-  // Type changes arrive as "typed"/"untyped" OR as "edited" with changes.type
   const isTypeChange = ISSUE_TYPE_CHANGE_ACTIONS.has(action) &&
     (action !== "edited" || changes?.type != null);
 
@@ -237,6 +379,7 @@ async function enforceIssueTypePolicy({
       currentIssue,
       currentType,
       isProjectType,
+      typeMap,
     });
   }
 
@@ -266,26 +409,101 @@ async function enforceIssueTypePolicy({
     });
   }
 
-  // On creation, verify the type matches what the template declares.
+  let issueBody = currentIssue.body || "";
+  let updatedBody = issueBody;
+  let hasBodyChanges = false;
+  let resolvedType = currentType;
+
   if (action === "opened" || action === "reopened") {
-    return enforceTemplateTypeOnCreation({
-      gh,
-      owner,
-      repo,
-      repoFullName,
-      issueNumber,
-      currentIssue,
-      currentType,
-    });
+    const template = detectTemplateFromIssue(issueBody, typeMap);
+    if (template && currentType !== template.expectedType) {
+      await gh.updateIssueType(currentIssue.id, template.expectedTypeId);
+      resolvedType = template.expectedType;
+
+      const comment = [
+        `The issue type was automatically corrected to \`${template.expectedType}\`.`,
+        "",
+        `This issue was created using the **${template.expectedType}** template.`,
+        "",
+        "Issue types are determined by the template and cannot be changed.",
+      ].join("\n");
+
+      await gh.createComment(owner, repo, issueNumber, comment);
+    }
+
+    let cleaned = cleanChecklistOnCreation(issueBody);
+    cleaned = removeIssueTypeSection(cleaned);
+    if (cleaned !== issueBody) {
+      updatedBody = cleaned;
+      hasBodyChanges = true;
+    }
+  }
+
+  if (action === "edited" && changes?.body) {
+    const oldProtected = extractSection(changes.body.from, "protected");
+    const newProtected = extractSection(issueBody, "protected");
+
+    let finalBody = issueBody;
+    if (oldProtected && newProtected && oldProtected !== newProtected) {
+      finalBody = replaceSection(finalBody, "protected", oldProtected);
+    }
+
+    const healed = healChecklist(finalBody, changes.body.from);
+    if (healed !== issueBody) {
+      updatedBody = healed;
+      hasBodyChanges = true;
+    }
+  }
+
+  if (hasBodyChanges) {
+    await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, updatedBody);
+    issueBody = updatedBody;
+  }
+
+  const { checklist } = parseChecklist(issueBody);
+  const currentLabels = currentIssue.labels?.nodes?.map((l) => l.name) ?? [];
+  const currentRequiresLabels = currentLabels.filter((name) => name.startsWith("requires/"));
+  const desiredRequiresLabels = getRequiresLabelsForChecklist(checklist);
+
+  const labelsToAdd = desiredRequiresLabels.filter((l) => !currentRequiresLabels.includes(l));
+  const labelsToRemove = currentRequiresLabels.filter((l) => !desiredRequiresLabels.includes(l));
+
+  if (labelsToAdd.length > 0) {
+    await gh.addLabels(owner, repo, issueNumber, labelsToAdd);
+  }
+
+  for (const l of labelsToRemove) {
+    await gh.removeLabel(owner, repo, issueNumber, l);
+  }
+
+  const scopeValue = detectScopeFromBody(issueBody);
+  if (scopeValue && scopeField) {
+    const scopeOption = scopeField.options?.find(
+      (opt) => opt.name.toLowerCase() === scopeValue.toLowerCase()
+    );
+    if (scopeOption) {
+      await gh.updateIssueFieldValue(currentIssue.id, scopeField.id, {
+        singleSelectOptionId: scopeOption.id,
+      });
+      console.log(`Updated Scope Issue Field to: ${scopeOption.name}`);
+    }
+  }
+
+  const formattedTitle = formatTitle(currentIssue.title, resolvedType, scopeValue);
+  if (formattedTitle !== currentIssue.title) {
+    await gh.updateIssueTitleAndBody(owner, repo, issueNumber, formattedTitle, undefined);
+    console.log(`Re-formatted issue title to: ${formattedTitle}`);
   }
 
   return {
     enforced: false,
-    reason: "implementation repo issue type is valid",
+    reason: "issue processed, scope and requires checklist synced",
     action,
     repo: repoFullName,
     issue: issueNumber,
-    currentType,
+    currentType: resolvedType,
+    scope: scopeValue,
+    title: formattedTitle,
   };
 }
 
@@ -298,6 +516,7 @@ async function enforceProjectsRepositoryPolicy({
   currentIssue,
   currentType,
   isProjectType,
+  typeMap,
 }) {
   if (isProjectType) {
     return {
@@ -309,8 +528,12 @@ async function enforceProjectsRepositoryPolicy({
     };
   }
 
-  // Wrong type — correct it using the hardcoded PROJECT_ISSUE_TYPE_ID constant.
-  await gh.updateIssueType(currentIssue.id, PROJECT_ISSUE_TYPE_ID);
+  const projectTypeId = typeMap.get(RESERVED_PROJECT_ISSUE_TYPE);
+  if (!projectTypeId) {
+    throw new Error(`Reserved issue type '${RESERVED_PROJECT_ISSUE_TYPE}' not found in organization types.`);
+  }
+
+  await gh.updateIssueType(currentIssue.id, projectTypeId);
 
   const comment = [
     `The issue type was automatically set to \`${RESERVED_PROJECT_ISSUE_TYPE}\`.`,
@@ -344,7 +567,7 @@ async function closeReservedProjectTypeInImplementationRepo({
     "",
     `Current issue type: \`${currentType}\``,
     "",
-    "Use a repository-specific issue type such as Bug, Feature, Improvement, Chore, Documentation, Test, DevOps, Maintenance, or Research.",
+    "Use a repository-specific issue type such as Bug, Feature, Refactor, Test, Documentation, Chore, or Spike.",
   ].join("\n");
 
   await gh.createComment(owner, repo, issueNumber, comment);
@@ -361,74 +584,187 @@ async function closeReservedProjectTypeInImplementationRepo({
   };
 }
 
-function detectTemplateFromIssue(body) {
+function detectTemplateFromIssue(body, typeMap) {
   if (!body) return null;
   const match = body.match(/^### Issue Type\r?\n\r?\n([^\r\n]+)/m);
   if (!match) return null;
   const expectedType = match[1].trim();
-  const expectedTypeId = TEMPLATE_TYPE_IDS[expectedType];
+  const expectedTypeId = typeMap.get(expectedType);
   if (!expectedTypeId) return null;
   return { expectedType, expectedTypeId };
 }
 
-async function enforceTemplateTypeOnCreation({
-  gh,
-  owner,
-  repo,
-  repoFullName,
-  issueNumber,
-  currentIssue,
-  currentType,
-}) {
-  const template = detectTemplateFromIssue(currentIssue.body);
+function removeIssueTypeSection(body) {
+  if (!body) return "";
+  // Match "### Issue Type", its value, and any trailing whitespace/newlines
+  return body.replace(/^### Issue Type\r?\n\r?\n[^\r\n]+(\r?\n)*/m, "");
+}
 
-  if (!template) {
-    return {
-      enforced: false,
-      reason: "no template detected — type accepted as-is",
-      action: "opened",
-      repo: repoFullName,
-      issue: issueNumber,
-      currentType,
-    };
-  }
+function detectScopeFromBody(body) {
+  if (!body) return null;
+  const match = body.match(/^### Scope\r?\n\r?\n([^\r\n]+)/m);
+  if (!match) return null;
+  return match[1].trim().toLowerCase();
+}
 
-  if (currentType === template.expectedType) {
-    return {
-      enforced: false,
-      reason: "issue type matches template",
-      action: "opened",
-      repo: repoFullName,
-      issue: issueNumber,
-      currentType,
-      template: template.expectedType,
-    };
-  }
-
-  // Type doesn't match template — correct it.
-  await gh.updateIssueType(currentIssue.id, template.expectedTypeId);
-
-  const comment = [
-    `The issue type was automatically corrected to \`${template.expectedType}\`.`,
-    "",
-    `This issue was created using the **${template.expectedType}** template.`,
-    "",
-    "Issue types are determined by the template and cannot be changed.",
-  ].join("\n");
-
-  await gh.createComment(owner, repo, issueNumber, comment);
-
-  return {
-    enforced: true,
-    operation: "corrected_to_template_type",
-    reason: "issue type did not match template",
-    action: "opened",
-    repo: repoFullName,
-    issue: issueNumber,
-    currentType,
-    correctedTo: template.expectedType,
-    template: template.expectedType,
+function formatTitle(currentTitle, issueType, scope) {
+  const typePrefixMap = {
+    "Bug": "fix",
+    "Feature": "feat",
+    "Refactor": "refactor",
+    "Test": "test",
+    "Documentation": "docs",
+    "Chore": "chore",
+    "Spike": "spike",
   };
+
+  const commitType = typePrefixMap[issueType];
+  if (!commitType) return currentTitle;
+
+  const targetPrefix = scope ? `${commitType}(${scope}): ` : `${commitType}: `;
+
+  const cleanTitle = currentTitle
+    .replace(/^[a-zA-Z0-9_-]+(?:\([^)]*\))?\s*:\s*/, "")
+    .replace(/^\[[a-zA-Z0-9_-]+\]\s*:\s*/, "")
+    .trim();
+
+  return targetPrefix + cleanTitle;
+}
+
+function extractSection(body, name) {
+  if (!body) return null;
+  const regex = new RegExp(`<!-- ${name}:start -->([\\s\\S]*?)<!-- ${name}:end -->`);
+  const match = body.match(regex);
+  return match ? match[1] : null;
+}
+
+function replaceSection(body, name, newContent) {
+  if (!body) return "";
+  const regex = new RegExp(`<!-- ${name}:start -->([\\s\\S]*?)<!-- ${name}:end -->`);
+  return body.replace(regex, `<!-- ${name}:start -->${newContent}<!-- ${name}:end -->`);
+}
+
+function parseChecklist(body) {
+  if (!body) return { checklist: [], startIndex: -1, endIndex: -1 };
+
+  // First try to parse inside the <!-- managed:start --> and <!-- managed:end --> block
+  const regex = /<!-- managed:start -->([\s\S]*?)<!-- managed:end -->/;
+  const match = body.match(regex);
+  
+  if (match) {
+    const checklistText = match[1];
+    const startIndex = match.index + "<!-- managed:start -->".length;
+    const endIndex = match.index + match[0].length - "<!-- managed:end -->".length;
+
+    const checklist = [];
+    const itemRegex = /-\s*\[([ xX])\]\s*([^\r\n]+)/g;
+    let itemMatch;
+    while ((itemMatch = itemRegex.exec(checklistText)) !== null) {
+      const checked = itemMatch[1].toLowerCase() === "x";
+      const name = itemMatch[2].trim();
+      checklist.push({ checked, name, rawLine: itemMatch[0] });
+    }
+
+    return { checklist, startIndex, endIndex, heading: "## Required updates" };
+  }
+
+  // Fallback to old heading-based parsing for backward compatibility
+  const headingMatch = body.match(/(?:\r?\n|^)(#+\s*Required updates)\r?\n/i);
+  if (!headingMatch) return { checklist: [], startIndex: -1, endIndex: -1 };
+
+  const heading = headingMatch[1];
+  const headingIndex = body.indexOf(heading);
+  const startIndex = headingIndex + heading.length;
+
+  const remainingText = body.slice(startIndex);
+  const nextSectionMatch = remainingText.match(/(?:\r?\n|^)(#+\s+[^\r\n]+)/);
+  const checklistSectionLength = nextSectionMatch ? nextSectionMatch.index : remainingText.length;
+  const checklistText = remainingText.slice(0, checklistSectionLength);
+
+  const checklist = [];
+  const itemRegex = /-\s*\[([ xX])\]\s*([^\r\n]+)/g;
+  let itemMatch;
+  while ((itemMatch = itemRegex.exec(checklistText)) !== null) {
+    const checked = itemMatch[1].toLowerCase() === "x";
+    const name = itemMatch[2].trim();
+    checklist.push({ checked, name, rawLine: itemMatch[0] });
+  }
+
+  const endIndex = startIndex + checklistSectionLength;
+  return { checklist, startIndex, endIndex, heading };
+}
+
+function healChecklist(newBody, oldBody) {
+  const { checklist: newChecklist, startIndex, endIndex } = parseChecklist(newBody);
+  if (startIndex === -1) return newBody;
+
+  const { checklist: oldChecklist } = parseChecklist(oldBody);
+  const validNames = Object.keys(REQUIRES_WHITELIST);
+
+  const healedChecklist = [];
+  const processedNames = new Set();
+
+  for (const item of newChecklist) {
+    const matchedName = validNames.find((v) => v.toLowerCase() === item.name.toLowerCase());
+    if (matchedName) {
+      if (!processedNames.has(matchedName)) {
+        healedChecklist.push({ name: matchedName, checked: item.checked });
+        processedNames.add(matchedName);
+      }
+    }
+  }
+
+  for (const item of oldChecklist) {
+    const matchedName = validNames.find((v) => v.toLowerCase() === item.name.toLowerCase());
+    if (matchedName && !processedNames.has(matchedName)) {
+      healedChecklist.push({ name: matchedName, checked: item.checked });
+      processedNames.add(matchedName);
+    }
+  }
+
+  let checklistText = "\n";
+  for (const item of healedChecklist) {
+    checklistText += `- [${item.checked ? "x" : " "}] ${item.name}\n`;
+  }
+
+  return newBody.slice(0, startIndex) + checklistText + newBody.slice(endIndex);
+}
+
+function cleanChecklistOnCreation(body) {
+  const { checklist, startIndex, endIndex } = parseChecklist(body);
+  if (startIndex === -1) return body;
+
+  const validNames = Object.keys(REQUIRES_WHITELIST);
+  const healedChecklist = [];
+  const processedNames = new Set();
+
+  for (const item of checklist) {
+    const matchedName = validNames.find((v) => v.toLowerCase() === item.name.toLowerCase());
+    // Only include items that were checked in the template form (which GitHub outputs as checked / 'x' / true)
+    if (matchedName && item.checked && !processedNames.has(matchedName)) {
+      // These become pending requirements (checked: false / [ ]) in the final issue body
+      healedChecklist.push({ name: matchedName, checked: false });
+      processedNames.add(matchedName);
+    }
+  }
+
+  let checklistText = "\n";
+  for (const item of healedChecklist) {
+    checklistText += `- [${item.checked ? "x" : " "}] ${item.name}\n`;
+  }
+
+  return body.slice(0, startIndex) + checklistText + body.slice(endIndex);
+}
+
+function getRequiresLabelsForChecklist(checklist) {
+  const desiredLabels = [];
+  for (const item of checklist) {
+    if (!item.checked) {
+      const label = REQUIRES_WHITELIST[item.name];
+      if (label) desiredLabels.push(label);
+    }
+  }
+  return desiredLabels;
 }
 
 async function revertIssueTypeChangeInImplementationRepo({
@@ -442,22 +778,16 @@ async function revertIssueTypeChangeInImplementationRepo({
   currentType,
   isProjectType,
 }) {
-  // Query the issue timeline for the first type change event.
-  // Its prevIssueType is the type at creation — the one we must enforce.
   const originalType = await gh.getOriginalIssueType(owner, repo, issueNumber);
 
   if (!originalType) {
-    // No prior type change event found. This means either:
-    // - The webhook raced ahead of the timeline (very unlikely), or
-    // - The current type was set at creation (first assignment).
-    // Close if Project type; otherwise accept it as-is.
     if (isProjectType) {
       const comment = [
         `This issue was automatically closed because the \`${RESERVED_PROJECT_ISSUE_TYPE}\` issue type is reserved for \`${ORGANIZATION}/projects\`.`,
         "",
         `Current issue type: \`${currentType}\``,
         "",
-        "Use a repository-specific issue type such as Bug, Feature, Improvement, Chore, Documentation, Test, DevOps, Maintenance, or Research.",
+        "Use a repository-specific issue type such as Bug, Feature, Refactor, Test, Documentation, Chore, or Spike.",
       ].join("\n");
 
       await gh.createComment(owner, repo, issueNumber, comment);
@@ -588,6 +918,11 @@ class GitHubClient {
               id
               name
             }
+            labels(first: 20) {
+              nodes {
+                name
+              }
+            }
           }
         }
       }`,
@@ -662,6 +997,113 @@ class GitHubClient {
         state: "closed",
         state_reason: stateReason,
       }
+    );
+  }
+
+  async getOrgIssueTypes(orgName) {
+    const data = await this.graphql(
+      `query($orgName: String!) {
+        organization(login: $orgName) {
+          issueTypes(first: 50) {
+            nodes {
+              id
+              name
+            }
+          }
+        }
+      }`,
+      { orgName }
+    );
+    return data.organization?.issueTypes?.nodes ?? [];
+  }
+
+  async getOrgIssueFields(orgName) {
+    const data = await this.graphql(
+      `query($orgName: String!) {
+        organization(login: $orgName) {
+          issueFields(first: 50) {
+            nodes {
+              ... on IssueFieldSingleSelect {
+                id
+                name
+                options {
+                  id
+                  name
+                }
+              }
+              ... on IssueFieldText { id name }
+              ... on IssueFieldNumber { id name }
+              ... on IssueFieldDate { id name }
+            }
+          }
+        }
+      }`,
+      { orgName }
+    );
+    return data.organization?.issueFields?.nodes ?? [];
+  }
+
+  async updateIssueFieldValue(issueId, fieldId, valueInput) {
+    return this.graphql(
+      `mutation($issueId: ID!, $issueField: IssueFieldCreateOrUpdateInput!) {
+        updateIssueFieldValue(input: {
+          issueId: $issueId
+          issueField: $issueField
+        }) {
+          issue {
+            id
+          }
+        }
+      }`,
+      {
+        issueId,
+        issueField: {
+          fieldId,
+          ...valueInput,
+        },
+      }
+    );
+  }
+
+  async updateIssueTitleAndBody(owner, repo, issueNumber, title, body) {
+    const update = {};
+    if (title !== undefined) update.title = title;
+    if (body !== undefined) update.body = body;
+    return this.rest(
+      "PATCH",
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issueNumber}`,
+      update
+    );
+  }
+
+  async deleteComment(owner, repo, commentId) {
+    return this.rest(
+      "DELETE",
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/comments/${commentId}`
+    );
+  }
+
+  async createCommentReaction(owner, repo, commentId, content) {
+    return this.rest(
+      "POST",
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/comments/${commentId}/reactions`,
+      { content }
+    );
+  }
+
+  async addLabels(owner, repo, issueNumber, labels) {
+    if (!labels.length) return;
+    return this.rest(
+      "POST",
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issueNumber}/labels`,
+      { labels }
+    );
+  }
+
+  async removeLabel(owner, repo, issueNumber, labelName) {
+    return this.rest(
+      "DELETE",
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issueNumber}/labels/${encodeURIComponent(labelName)}`
     );
   }
 }
