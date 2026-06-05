@@ -111,8 +111,22 @@ export class GitHubClient {
               nodes {
                 ... on IssueFieldSingleSelectValue {
                   field {
-                    id
-                    name
+                    ... on IssueFieldSingleSelect {
+                      id
+                      name
+                    }
+                    ... on IssueFieldText {
+                      id
+                      name
+                    }
+                    ... on IssueFieldNumber {
+                      id
+                      name
+                    }
+                    ... on IssueFieldDate {
+                      id
+                      name
+                    }
                   }
                   name
                 }
