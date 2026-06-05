@@ -1,6 +1,7 @@
 name = "github-automation-bot"
 main = "src/index.js"
 compatibility_date = "2025-01-01"
+keep_vars = true
 
 # ── Secrets (set via CLI, never hardcode here) ────────────────────────────────
 # npx wrangler secret put GITHUB_WEBHOOK_SECRET   # webhook secret from GitHub App settings
