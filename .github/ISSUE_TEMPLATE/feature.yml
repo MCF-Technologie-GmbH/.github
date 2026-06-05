@@ -35,6 +35,36 @@ body:
     validations:
       required: true
 
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: Select the priority of this issue.
+      options:
+        - Not Set
+        - P0
+        - P1
+        - P2
+        - P3
+    validations:
+      required: true
+
+  - type: dropdown
+    id: effort
+    attributes:
+      label: Effort
+      description: Select the effort estimate for this issue.
+      options:
+        - Not Set
+        - E1
+        - E2
+        - E3
+        - E5
+        - E8
+        - E13
+    validations:
+      required: true
+
   - type: markdown
     attributes:
       value: "<!-- protected:start -->"

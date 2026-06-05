@@ -14,6 +14,9 @@ issue_fields:
     name: Priority
     data_type: SINGLE_SELECT
     options:
+      - name: Not Set
+        color: GRAY
+        description: "Not set / Unassigned"
       - name: P0
         color: PINK
         description: "Urgent / Critical -\nBlockiert Lieferung, Produktion, Abnahme oder ein wichtiges Kundenprojekt"
@@ -39,6 +42,9 @@ issue_fields:
     name: Effort
     data_type: SINGLE_SELECT
     options:
+      - name: Not Set
+        color: GRAY
+        description: "Not set / Unassigned"
       - name: E13
         color: PINK
         description: "sehr große/unklare Aufgabe\nsollte meistens zerlegt werden"

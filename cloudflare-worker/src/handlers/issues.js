@@ -47,6 +47,8 @@ export async function enforceIssueTypePolicy({
   changes,
   typeMap,
   scopeField,
+  priorityField,
+  effortField,
 }) {
   const isProjectsRepo = repoFullName === PROJECTS_REPO_FULL_NAME;
   const isProjectType = currentType === RESERVED_PROJECT_ISSUE_TYPE;
@@ -121,6 +123,16 @@ export async function enforceIssueTypePolicy({
     scopeValue = extractScopeFromTitle(currentIssue.title);
   }
 
+  // Detect priority and effort from the raw body
+  let priorityValue = detectPriorityFromBody(issueBody);
+  let effortValue = detectEffortFromBody(issueBody);
+
+  // Default priority and effort to "Not Set" on creation if not specified
+  if (action === "opened" || action === "reopened") {
+    if (!priorityValue) priorityValue = "Not Set";
+    if (!effortValue) effortValue = "Not Set";
+  }
+
   // 5. Handling issue creation: Extract configuration fields and clean templates.
   if (action === "opened" || action === "reopened") {
     // Correct issue type if it doesn't match the form template used.
@@ -140,10 +152,12 @@ export async function enforceIssueTypePolicy({
       await gh.createComment(owner, repo, issueNumber, comment);
     }
 
-    // Sanitize body: remove helper blocks (Issue Type, Scope) and clean checklist.
+    // Sanitize body: remove helper blocks (Issue Type, Scope, Priority, Effort) and clean checklist.
     let cleaned = cleanChecklistOnCreation(issueBody);
     cleaned = removeIssueTypeSection(cleaned);
     cleaned = removeScopeSection(cleaned);
+    cleaned = removePrioritySection(cleaned);
+    cleaned = removeEffortSection(cleaned);
 
     // Inject protected/editable HTML comments programmatically.
     cleaned = injectZoningComments(cleaned);
@@ -173,6 +187,8 @@ export async function enforceIssueTypePolicy({
     let healed = healChecklist(finalBody, changes.body.from);
     healed = removeIssueTypeSection(healed);
     healed = removeScopeSection(healed);
+    healed = removePrioritySection(healed);
+    healed = removeEffortSection(healed);
 
     if (healed !== issueBody) {
       updatedBody = healed;
@@ -214,6 +230,32 @@ export async function enforceIssueTypePolicy({
         singleSelectOptionId: scopeOption.id,
       });
       console.log(`Updated Scope Issue Field to: ${scopeOption.name}`);
+    }
+  }
+
+  // Sync Priority single-select sidebar field.
+  if (priorityValue && priorityField) {
+    const priorityOption = priorityField.options?.find(
+      (opt) => opt.name.toLowerCase() === priorityValue.toLowerCase()
+    );
+    if (priorityOption) {
+      await gh.updateIssueFieldValue(currentIssue.id, priorityField.id, {
+        singleSelectOptionId: priorityOption.id,
+      });
+      console.log(`Updated Priority Issue Field to: ${priorityOption.name}`);
+    }
+  }
+
+  // Sync Effort single-select sidebar field.
+  if (effortValue && effortField) {
+    const effortOption = effortField.options?.find(
+      (opt) => opt.name.toLowerCase() === effortValue.toLowerCase()
+    );
+    if (effortOption) {
+      await gh.updateIssueFieldValue(currentIssue.id, effortField.id, {
+        singleSelectOptionId: effortOption.id,
+      });
+      console.log(`Updated Effort Issue Field to: ${effortOption.name}`);
     }
   }
 
@@ -347,6 +389,40 @@ function removeIssueTypeSection(body) {
 function removeScopeSection(body) {
   if (!body) return "";
   return body.replace(/^### Scope\r?\n\r?\n[^\r\n]+(\r?\n)*/m, "");
+}
+
+/**
+ * Detects Priority value from the temporary "### Priority" section in the markdown body.
+ */
+function detectPriorityFromBody(body) {
+  if (!body) return null;
+  const match = body.match(/^### Priority\r?\n\r?\n([^\r\n]+)/m);
+  return match ? match[1].trim() : null;
+}
+
+/**
+ * Detects Effort value from the temporary "### Effort" section in the markdown body.
+ */
+function detectEffortFromBody(body) {
+  if (!body) return null;
+  const match = body.match(/^### Effort\r?\n\r?\n([^\r\n]+)/m);
+  return match ? match[1].trim() : null;
+}
+
+/**
+ * Removes the temporary "### Priority" section from the markdown body.
+ */
+function removePrioritySection(body) {
+  if (!body) return "";
+  return body.replace(/^### Priority\r?\n\r?\n[^\r\n]+(\r?\n)*/m, "");
+}
+
+/**
+ * Removes the temporary "### Effort" section from the markdown body.
+ */
+function removeEffortSection(body) {
+  if (!body) return "";
+  return body.replace(/^### Effort\r?\n\r?\n[^\r\n]+(\r?\n)*/m, "");
 }
 
 /**
