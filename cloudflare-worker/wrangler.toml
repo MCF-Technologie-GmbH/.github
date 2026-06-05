@@ -1,5 +1,5 @@
 name = "github-automation-bot"
-main = "worker.js"
+main = "src/index.js"
 compatibility_date = "2025-01-01"
 
 # ── Secrets (set via CLI, never hardcode here) ────────────────────────────────
