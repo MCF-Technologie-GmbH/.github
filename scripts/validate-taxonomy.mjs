@@ -155,16 +155,14 @@ function validate() {
       errors.push(`Missing 'scope' field in taxonomy/issue-fields.yml`);
     } else {
       const fieldScopeNames = (scopeField.options || []).map(o => o.name);
-      // Filter out 'Not Set' option which is automatically managed by generate-taxonomy.mjs
-      const fieldScopeNamesFiltered = fieldScopeNames.filter(name => name !== "Not Set");
 
       // Compare both sets
       for (const s of scopesTxt) {
-        if (!fieldScopeNamesFiltered.includes(s)) {
+        if (!fieldScopeNames.includes(s)) {
           errors.push(`Scope '${s}' in taxonomy/scopes.txt is missing from 'scope' field options in taxonomy/issue-fields.yml`);
         }
       }
-      for (const fName of fieldScopeNamesFiltered) {
+      for (const fName of fieldScopeNames) {
         if (!scopesTxt.includes(fName)) {
           errors.push(`Scope option '${fName}' in taxonomy/issue-fields.yml is missing from taxonomy/scopes.txt`);
         }

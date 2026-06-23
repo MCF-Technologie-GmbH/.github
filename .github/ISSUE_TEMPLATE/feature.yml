@@ -41,7 +41,6 @@ body:
       label: Priority
       description: Select the priority of this issue.
       options:
-        - Not Set
         - P0
         - P1
         - P2
@@ -55,7 +54,6 @@ body:
       label: Effort
       description: Select the effort estimate for this issue.
       options:
-        - Not Set
         - E1
         - E2
         - E3

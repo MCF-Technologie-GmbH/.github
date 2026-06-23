@@ -14,8 +14,6 @@ issue_fields:
     name: Priority
     data_type: SINGLE_SELECT
     options:
-      - name: Not Set
-        color: GRAY
       - name: P0
         color: RED
       - name: P1
@@ -29,8 +27,6 @@ issue_fields:
     name: Effort
     data_type: SINGLE_SELECT
     options:
-      - name: Not Set
-        color: GRAY
       - name: E1
         color: GREEN
       - name: E2
@@ -56,8 +52,6 @@ issue_fields:
     name: Scope
     data_type: SINGLE_SELECT
     options:
-      - name: Not Set
-        color: GRAY
       - name: ui
         color: GRAY
       - name: api

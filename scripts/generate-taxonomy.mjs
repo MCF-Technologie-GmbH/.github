@@ -51,10 +51,7 @@ try {
   if (issueFieldsNode) {
     const scopeFieldNode = issueFieldsNode.items.find(f => f.get("key") === "scope");
     if (scopeFieldNode) {
-      const scopeOptions = [
-        { name: "Not Set", color: "GRAY" },
-        ...scopes.map(name => ({ name, color: "GRAY" }))
-      ];
+      const scopeOptions = scopes.map(name => ({ name, color: "GRAY" }));
       scopeFieldNode.set("options", scopeOptions);
     }
 

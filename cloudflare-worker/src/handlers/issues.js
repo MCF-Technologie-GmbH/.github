@@ -125,34 +125,17 @@ export async function enforceIssueTypePolicy({
   const currentSidebarEffort = getCurrentSingleSelectIssueFieldValue(currentIssue, "Effort");
 
   // Detect scope from raw body (form submission) or fall back to sidebar / title
-  let scopeValue = detectScopeFromBody(issueBody);
-  if (scopeValue) {
-    const cleanScope = scopeValue.trim().toLowerCase();
-    if (cleanScope === "_no response_" || cleanScope === "none" || cleanScope === "not set" || cleanScope === "not_set") {
-      scopeValue = "Not Set";
-    }
-  }
+  let scopeValue = normalizeOptionalIssueFieldValue(detectScopeFromBody(issueBody));
 
   if (action === "edited" && currentSidebarScope) {
     // During edits, the sidebar field value is the source of truth for the title prefix
     scopeValue = currentSidebarScope;
-  } else if (!scopeValue || scopeValue === "Not Set") {
+  } else if (!scopeValue) {
     scopeValue = scopeValue || currentSidebarScope || extractScopeFromTitle(currentIssue.title);
   }
 
-  // Default scope to "Not Set" on creation if not specified
-  if (action === "opened" || action === "reopened") {
-    if (!scopeValue) scopeValue = "Not Set";
-  }
-
   // Detect priority and effort from the raw body
-  let priorityValue = detectPriorityFromBody(issueBody);
-  if (priorityValue) {
-    const cleanPriority = priorityValue.trim().toLowerCase();
-    if (cleanPriority === "_no response_" || cleanPriority === "none" || cleanPriority === "not set" || cleanPriority === "not_set") {
-      priorityValue = "Not Set";
-    }
-  }
+  let priorityValue = normalizeOptionalIssueFieldValue(detectPriorityFromBody(issueBody));
 
   if (action === "edited" && currentSidebarPriority) {
     priorityValue = currentSidebarPriority;
@@ -160,24 +143,12 @@ export async function enforceIssueTypePolicy({
     priorityValue = currentSidebarPriority;
   }
 
-  let effortValue = detectEffortFromBody(issueBody);
-  if (effortValue) {
-    const cleanEffort = effortValue.trim().toLowerCase();
-    if (cleanEffort === "_no response_" || cleanEffort === "none" || cleanEffort === "not set" || cleanEffort === "not_set") {
-      effortValue = "Not Set";
-    }
-  }
+  let effortValue = normalizeOptionalIssueFieldValue(detectEffortFromBody(issueBody));
 
   if (action === "edited" && currentSidebarEffort) {
     effortValue = currentSidebarEffort;
   } else if (!effortValue) {
     effortValue = currentSidebarEffort;
-  }
-
-  // Default priority and effort to "Not Set" on creation if not specified
-  if (action === "opened" || action === "reopened") {
-    if (!priorityValue) priorityValue = "Not Set";
-    if (!effortValue) effortValue = "Not Set";
   }
 
   // 5. Handling issue creation: Extract configuration fields and clean templates.
@@ -444,6 +415,18 @@ function getCurrentSingleSelectIssueFieldValue(issue, fieldName) {
     (fv) => fv.field?.name === fieldName
   );
   return fieldValueNode?.name;
+}
+
+function normalizeOptionalIssueFieldValue(value) {
+  if (!value) return null;
+
+  const cleanValue = value.trim();
+  const normalized = cleanValue.toLowerCase();
+  if (normalized === "_no response_" || normalized === "none" || normalized === "not set" || normalized === "not_set") {
+    return null;
+  }
+
+  return cleanValue;
 }
 
 async function syncSingleSelectIssueField(gh, issueId, field, value, debugState) {
