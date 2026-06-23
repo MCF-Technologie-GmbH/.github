@@ -1,67 +1,13 @@
 name: Documentation
 description: Create, update, or improve documentation.
 type: Documentation
-projects: [ "MCF-Technologie-GmbH/37" ]
-
 body:
   - type: markdown
     attributes:
       value: |
         > [!IMPORTANT]
-        > This form automatically sets the issue type to **Documentation** and adds it to the **Softwareentwicklung** project board.
-        > Before submitting, please ensure you fill in all required sidebar fields (Priority, Assignee, Target milestone/release).
-
-  - type: dropdown
-    id: scope
-    attributes:
-      label: Scope
-      description: Select the scope of this issue (the codebase area affected).
-      options:
-        - ui
-        - api
-        - backend
-        - frontend
-        - ci
-        - gha
-        - worker
-        - deps
-        - repo
-        - tooling
-        - infra
-        - deploy
-        - docs
-        - config
-        - security
-    validations:
-      required: false
-
-  - type: dropdown
-    id: priority
-    attributes:
-      label: Priority
-      description: Select the priority of this issue.
-      options:
-        - P0
-        - P1
-        - P2
-        - P3
-    validations:
-      required: false
-
-  - type: dropdown
-    id: effort
-    attributes:
-      label: Effort
-      description: Select the effort estimate for this issue.
-      options:
-        - E1
-        - E2
-        - E3
-        - E5
-        - E8
-        - E13
-    validations:
-      required: false
+        > This form automatically sets the issue type to **Documentation**.
+        > Before submitting, please set the relevant Issue Fields: Priority, Scope, Effort, Start date, and Target date. Depending on the GitHub view, these fields may appear in the issue sidebar or at the bottom of the create-issue popup.
 
   - type: markdown
     attributes:

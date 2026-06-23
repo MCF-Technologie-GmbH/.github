@@ -14,8 +14,8 @@ A Cloudflare Worker that receives GitHub App webhooks (`issues` and `issue_comme
   - **On creation:** the Worker detects which template was used (via the `### Issue Type` section in the body) and corrects the type if it does not match.
   - **After creation:** any type change is detected and reverted back to the original type using the `IssueTypeChangedEvent` timeline history.
 - **Scope Field Syncing & Immutability:**
-  - **On creation:** the Worker parses the `### Scope` section from the body, updates the organization-level `Scope` Issue Field via GraphQL, formats the title with the scope, and cleans the body.
-  - **On edits:** the Worker extracts the scope from the title `type(scope): description` and keeps the sidebar in sync. If the user edits the title to change the scope tag, the Worker automatically reverts it back to the original scope value.
+  - **On creation:** the Worker reads the organization-level `Scope` Issue Field from GitHub metadata when it is set. Depending on the GitHub view, users may set Issue Fields in the issue sidebar or at the bottom of the create-issue popup.
+  - **On edits:** the Worker extracts the scope from the title `type(scope): description` and keeps the Issue Field in sync. If the user edits the title to change the scope tag, the Worker automatically reverts it back to the original scope value.
 - **Title Auto-Formatting:**
   - The Worker automatically updates the issue title to match the Conventional Commit format: `type(scope): description`.
   - For example, if a Bug template is used with scope `ui` and title `correct modal validation`, the Worker rewrites the title to `fix(ui): correct modal validation`.

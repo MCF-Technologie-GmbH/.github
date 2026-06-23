@@ -20,13 +20,13 @@ The organization's metadata (Issue Types and Issue Fields) is managed declarativ
 - **`issue-types.yml`**: Defines names, descriptions, and colors for all available types.
 - **`issue-fields.yml`**: Defines custom fields (`Scope`, `Priority`, `Effort`, etc.) and their data types.
 - **`issue-type-fields.yml`**: Maps which fields should be pinned (visible in the sidebar) for each issue type.
-- **`scopes.txt`**: Single source of truth for the codebase scopes (areas affected). Shared across all templates.
+- **`scopes.txt`**: Single source of truth for the codebase scopes (areas affected).
 
 ### Synchronization Flow
 
 1. **Change:** A developer modifies a YAML file or `scopes.txt` in a Pull Request.
 2. **Validate:** GitHub Actions runs [`validate-taxonomy.mjs`](scripts/validate-taxonomy.mjs) to ensure data integrity and reference consistency.
-3. **Generate:** The script [`generate-taxonomy.mjs`](scripts/generate-taxonomy.mjs) compiles the options from `scopes.txt` and `required-updates.txt` directly into `issue-fields.yml` and all issue templates.
+3. **Generate:** The script [`generate-taxonomy.mjs`](scripts/generate-taxonomy.mjs) compiles scopes into `issue-fields.yml` and required-update options into the issue templates.
 4. **Dry Run:** On PRs, the sync script can be run in `DRY_RUN=true` mode to report what changes would be applied.
 5. **Apply:** Once merged to `main`, GitHub Actions runs [`sync-taxonomy.mjs`](scripts/sync-taxonomy.mjs) using the GraphQL API to reconcile the organization's state.
 
@@ -37,7 +37,7 @@ The organization's metadata (Issue Types and Issue Fields) is managed declarativ
 
 ## Standard Issue Templates
 
-Seven templates are available when creating issues across any repository in the organization. Each template automatically sets the correct Issue Type on creation and adds the issue to the *Softwareentwicklung* project board.
+Seven templates are available when creating issues across any repository in the organization. Each template automatically sets the correct Issue Type on creation. Project assignment is handled explicitly outside the templates.
 
 | Template | Issue Type | Commit Prefix | When to use |
 | -------- | ---------- | ------------- | ----------- |
@@ -56,11 +56,11 @@ Seven templates are available when creating issues across any repository in the 
 We enforce a strict **Type + Scope + Requires** semantic model using a Cloudflare Worker:
 
 ### 1. Title Auto-Prefixing (Conventional Commits)
-Developers write normal titles when creating issues. The Worker automatically reads the issue type and selected `Scope`, and rewrites the title to: `type(scope): description`.
+Developers write normal titles when creating issues. The Worker automatically reads the issue type and selected `Scope` Issue Field, and rewrites the title to: `type(scope): description`.
 *Example: Creating a Bug issue with scope `ui` and title `fix login error` gets automatically renamed to `fix(ui): fix login error`.*
 
 ### 2. Scope Field Syncing & Immutability
-The selected `Scope` is parsed from the body on creation and synced directly to the organization-level **`Scope`** single-select Issue Field. The Scope is **immutable** after creation; subsequent edits to the scope tag in the title are automatically reverted to the original, and the sidebar is kept in sync using the title's scope as the source of truth.
+The selected `Scope` lives in the organization-level **`Scope`** single-select Issue Field. Depending on the GitHub view, Issue Fields may appear in the issue sidebar or at the bottom of the create-issue popup. The Scope is **immutable** after creation; subsequent edits to the scope tag in the title are automatically reverted to the original, and the Issue Field is kept in sync using the title's scope as the source of truth.
 
 ### 3. Required Updates Checklist
 Issues contain a **Required updates** checklist in their description body (Documentation, Tests, Release notes, Security review, etc.).

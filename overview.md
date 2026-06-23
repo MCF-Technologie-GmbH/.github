@@ -209,27 +209,25 @@ Every template follows this structure:
 name: Bug                                    # Display name in the "New issue" chooser
 description: Report a confirmed or suspected bug.
 type: Bug                                    # Sets the GitHub Issue Type on creation
-projects: ["MCF-Technologie-GmbH/37"]       # Auto-adds to the Softwareentwicklung project
 
 body:
   - type: markdown                           # Guidance callout
   - type: textarea (id: ...)                 # Template-specific fields (required/optional)
   - ...
-  - type: dropdown (id: scope)              # Scope dropdown (populated from scopes.txt)
   - type: checkboxes (id: required-updates) # Required updates checklist
   - type: dropdown (id: template-type)      # Hidden Issue Type identifier (single option)
 ```
 
 Key elements present in **every** template (except `spike.yml` and `documentation.yml` which exclude `required-updates`):
 
-1. **Scope dropdown** — Populated automatically by the `generate-taxonomy.mjs` script from `scopes.txt`.
+1. **Issue Field reminder** — A markdown callout reminds users to set Priority, Scope, Effort, Start date, and Target date. Depending on the GitHub view, those fields may appear in the issue sidebar or at the bottom of the create-issue popup.
 2. **Required updates checkboxes** — Populated automatically by the `generate-taxonomy.mjs` script from `required-updates.txt`.
 3. **Issue Type dropdown** — A single-option dropdown that locks the expected type into the rendered body (used by the Worker for type detection).
 
 ### 4.3 Template Configuration
 
 - **`config.yml`**: Contains `blank_issues_enabled: false`, forcing all issues to use a template.
-- **Project board**: All templates include `projects: ["MCF-Technologie-GmbH/37"]` to automatically add every issue to the *Softwareentwicklung* master project board.
+- **Project board**: Templates do not assign a default project. Issues are added to projects explicitly when needed.
 
 ---
 
@@ -328,12 +326,12 @@ If the title already has the correct prefix, no change is made. If the scope is 
 
 ### 5.6 Scope Field Syncing & Immutability
 
-The **Scope** is a critical metadata field. To enforce compliance, the Worker ensures the Scope is **immutable** after creation and stays synchronized between the issue title and the sidebar field:
+The **Scope** is a critical metadata field. To enforce compliance, the Worker ensures the Scope is **immutable** after creation and stays synchronized between the issue title and the Issue Field:
 
-1.  **Detección Inicial (On Creation):** The Worker parses the temporary `### Scope` block from the template's markdown body, updates the organization-level **Scope** single-select sidebar field, prefixes the title to `type(scope): description`, and deletes the `### Scope` block from the body.
-2.  **Sincronización en Ediciones (On Body/Sidebar Edits):** Since the `### Scope` block is removed from the body on creation, the Worker falls back to extracting the scope from the issue title (`type(scope): description`). It continuously overwrites the sidebar single-select field with the scope found in the title, preventing manual drift or unauthorized sidebar changes.
+1.  **Detección Inicial (On Creation):** The Worker reads the organization-level **Scope** single-select Issue Field when GitHub includes it in the issue metadata. Depending on the GitHub view, users set this field in the issue sidebar or at the bottom of the create-issue popup.
+2.  **Sincronización en Ediciones (On Body/Sidebar Edits):** The Worker falls back to extracting the scope from the issue title (`type(scope): description`). It continuously overwrites the single-select Issue Field with the scope found in the title, preventing manual drift or unauthorized field changes.
 3.  **Inmutabilidad del Scope en el Título (On Title Edits):** If a user attempts to edit the title to change the scope tag (e.g. changing `fix(ui): login` to `fix(api): login`), the Worker compares it to the previous title (`changes.title.from`). If the scope tags differ, the Worker automatically resets the title's scope prefix back to the original scope value (`ui`).
-4.  **Continuous Sanitization:** If a user attempts to re-inject `### Scope` or `### Issue Type` blocks into the body during an edit, the Worker automatically strips them off during webhook processing.
+4.  **Continuous Sanitization:** If a user attempts to re-inject legacy `### Scope` or `### Issue Type` blocks into the body during an edit, the Worker automatically strips them off during webhook processing.
 
 ### 5.7 Required Updates Checklist
 
@@ -482,7 +480,7 @@ node scripts/sync-taxonomy.mjs
 ### 6.3 generate-taxonomy.mjs
 
 **Purpose:** Acts as the compiler and central options injector. It:
-1. Reads `taxonomy/scopes.txt` and updates the `options:` block under the `id: scope` dropdown in all issue templates, as well as `taxonomy/issue-fields.yml`.
+1. Reads `taxonomy/scopes.txt` and updates the `Scope` options in `taxonomy/issue-fields.yml`.
 2. Reads `taxonomy/required-updates.txt` and updates the `options:` block under `id: required-updates` checkboxes in the issue templates using it.
 
 This ensures single sources of truth propagate automatically to templates and metadata files.
@@ -525,8 +523,8 @@ Developer edits taxonomy/ YAML or scopes.txt
 Developer opens new issue using a template
         │
         ├── GitHub sets Issue Type from template's `type:` field
-        ├── GitHub adds issue to Softwareentwicklung project (from `projects:`)
         ├── GitHub renders form fields into Markdown body
+        ├── GitHub may include Issue Field values selected in the sidebar or create-issue popup
         │
         ▼
   GitHub App webhook (issues.opened) ──▶ Cloudflare Worker
@@ -540,8 +538,8 @@ Developer opens new issue using a template
         │
         ├── 5. Check if Project type in non-projects repo → close issue
         │
-        ├── 6. Parse scope from body (### Scope section)
-        │      └── Update organization-level Scope Issue Field via GraphQL
+        ├── 6. Read scope from Issue Field metadata if present
+        │      └── Keep organization-level Scope Issue Field synchronized via GraphQL
         │
         ├── 7. Format title: type(scope): description
         │      └── Update issue title via REST API
@@ -651,5 +649,5 @@ npx wrangler secret put GITHUB_PRIVATE_KEY
 | **Pinned Fields are read-only** in the GraphQL API | The sync script reports drift with exact instructions; manual changes in the GitHub UI are required |
 | **Blank issues are disabled** (`config.yml`) | All issues must use a template. If a blank issue is somehow created, the Worker accepts it as-is (no `### Issue Type` section found) |
 | **`IssueTypeChangedEvent` may not appear immediately** in the timeline | Extremely rare race condition — the Worker may fail to revert a type change if the webhook fires faster than GitHub records the timeline event |
-| **Scope field sync depends on body parsing** | If a developer manually removes the `### Scope` section from the body, the field will not be updated |
+| **Scope field sync depends on GitHub Issue Field metadata** | Users must set Scope in the sidebar or at the bottom of the create-issue popup for title formatting to include a scope |
 | **Comment commands are case-insensitive** for item matching | Items are matched against `REQUIRES_WHITELIST` using case-insensitive comparison |
