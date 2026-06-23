@@ -25,7 +25,7 @@ body:
     attributes:
       value: |
         > [!NOTE]
-        > Friendly reminder: set Priority, Scope, Effort, Start date, and Target date when they are known. Depending on the GitHub view, these fields may appear in the issue sidebar or at the bottom of the create-issue popup. If you leave them empty now, you can fill them in later.
+        > Friendly reminder: set any relevant Issue Fields when they are needed. Depending on the GitHub view, these fields may appear in the issue sidebar or at the bottom of the create-issue popup. If a field does not apply yet, you can leave it empty and fill it in later.
 
   - type: markdown
     attributes:
