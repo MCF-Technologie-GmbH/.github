@@ -202,9 +202,10 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
   const issueNumber = extractIssueNumberFromBranch(branchName);
 
   let state = null;
+  let issue = null;
   if (issueNumber) {
     try {
-      const issue = await gh.getIssue(owner, repo, issueNumber);
+      issue = await gh.getIssue(owner, repo, issueNumber);
       state = parseAutomationState(issue.body || "");
     } catch (err) {
       console.error(`Failed to read issue #${issueNumber} for branch authorization: ${err.message}`);
@@ -216,6 +217,41 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
 
   if (isAutomationBot && isReservedBranch) {
     return { processed: true, allowed: true, reason: "branch created by automation bot with matching reservation" };
+  }
+
+  if (issue && isIssueLinkedBranch(issue, branchName)) {
+    const isFromDev = await branchMatchesBase(gh, owner, repo, branchName, BASE_BRANCH);
+    if (isFromDev && canRecordLinkedBranch(state, branchName)) {
+      const issueType = issue.issueType?.name || state?.issue_type || "issue";
+      const body = ensureAutomationState(issue.body || "", issueType);
+      const updatedState = {
+        issue_type: parseAutomationState(body)?.issue_type || state?.issue_type || "issue",
+        branch: {
+          name: branchName,
+          base: BASE_BRANCH,
+          created: true,
+          linked: true,
+          error: null,
+          pr: state?.branch?.pr ?? null,
+        },
+      };
+
+      await gh.updateIssueTitleAndBody(
+        owner,
+        repo,
+        issueNumber,
+        undefined,
+        replaceAutomationState(body, updatedState)
+      );
+
+      return {
+        processed: true,
+        allowed: true,
+        branch: branchName,
+        issue: issueNumber,
+        reason: "branch is linked to issue and based on dev",
+      };
+    }
   }
 
   await gh.deleteReference(owner, repo, `heads/${branchName}`);
@@ -238,6 +274,23 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
   }
 
   return { processed: true, allowed: false, deleted: true, branch: branchName, issue: issueNumber };
+}
+
+function isIssueLinkedBranch(issue, branchName) {
+  const nodes = issue.linkedBranches?.nodes || [];
+  return nodes.some((node) => node?.ref?.name === branchName);
+}
+
+function canRecordLinkedBranch(state, branchName) {
+  return !state?.branch?.name || state.branch.name === branchName;
+}
+
+async function branchMatchesBase(gh, owner, repo, branchName, baseBranch) {
+  const [branchRef, baseRef] = await Promise.all([
+    gh.getReference(owner, repo, `heads/${branchName}`),
+    gh.getReference(owner, repo, `heads/${baseBranch}`),
+  ]);
+  return branchRef?.object?.sha === baseRef?.object?.sha;
 }
 
 /**

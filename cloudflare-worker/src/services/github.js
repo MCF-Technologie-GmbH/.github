@@ -107,6 +107,18 @@ export class GitHubClient {
               id
               name
             }
+            linkedBranches(first: 20) {
+              nodes {
+                id
+                ref {
+                  name
+                  prefix
+                  target {
+                    oid
+                  }
+                }
+              }
+            }
             labels(first: 20) {
               nodes {
                 name

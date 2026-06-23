@@ -150,6 +150,105 @@ test("handleCreateEvent deletes sidebar-style issue branches", async () => {
   assert.deepEqual(deleted, ["heads/123-add-login"]);
 });
 
+test("handleCreateEvent records a sidebar-linked branch based on dev", async () => {
+  const body = ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Feature");
+  let updatedBody = null;
+  const deleted = [];
+  const gh = {
+    async getIssue() {
+      return {
+        body,
+        issueType: { name: "Feature" },
+        linkedBranches: {
+          nodes: [
+            {
+              ref: {
+                name: "feature/123-add-login",
+                prefix: "refs/heads/",
+                target: { oid: "sha-dev" },
+              },
+            },
+          ],
+        },
+      };
+    },
+    async getReference(_owner, _repo, ref) {
+      if (ref === "heads/feature/123-add-login") return { object: { sha: "sha-dev" } };
+      if (ref === "heads/dev") return { object: { sha: "sha-dev" } };
+      throw new Error(`unexpected ref ${ref}`);
+    },
+    async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
+      updatedBody = nextBody;
+    },
+    async deleteReference(_owner, _repo, ref) {
+      deleted.push(ref);
+    },
+    async createComment() {},
+  };
+
+  const result = await handleCreateEvent({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    payload: {
+      ref_type: "branch",
+      ref: "feature/123-add-login",
+      sender: { login: "mark" },
+    },
+  });
+
+  assert.equal(result.allowed, true);
+  assert.deepEqual(deleted, []);
+  assert.match(updatedBody, /"name": "feature\/123-add-login"/);
+  assert.match(updatedBody, /"base": "dev"/);
+  assert.match(updatedBody, /"linked": true/);
+});
+
+test("handleCreateEvent deletes linked branches that are not based on dev", async () => {
+  const deleted = [];
+  const gh = {
+    async getIssue() {
+      return {
+        body: "",
+        linkedBranches: {
+          nodes: [
+            {
+              ref: {
+                name: "feature/123-add-login",
+                prefix: "refs/heads/",
+                target: { oid: "sha-main" },
+              },
+            },
+          ],
+        },
+      };
+    },
+    async getReference(_owner, _repo, ref) {
+      if (ref === "heads/feature/123-add-login") return { object: { sha: "sha-main" } };
+      if (ref === "heads/dev") return { object: { sha: "sha-dev" } };
+      throw new Error(`unexpected ref ${ref}`);
+    },
+    async deleteReference(_owner, _repo, ref) {
+      deleted.push(ref);
+    },
+    async createComment() {},
+  };
+
+  const result = await handleCreateEvent({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    payload: {
+      ref_type: "branch",
+      ref: "feature/123-add-login",
+      sender: { login: "mark" },
+    },
+  });
+
+  assert.equal(result.deleted, true);
+  assert.deepEqual(deleted, ["heads/feature/123-add-login"]);
+});
+
 test("handleCreateEvent deletes any branch without an authorization", async () => {
   const deleted = [];
   let issueWasRead = false;
