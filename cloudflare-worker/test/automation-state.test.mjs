@@ -62,6 +62,8 @@ test("buildIssueBranchName uses issue type key, issue number, and title slug", (
 
 test("extractIssueNumberFromBranch accepts managed names only", () => {
   assert.equal(extractIssueNumberFromBranch("feature/123-add-login"), 123);
+  assert.equal(extractIssueNumberFromBranch("123-add-login"), 123);
+  assert.equal(extractIssueNumberFromBranch("mark/123-add-login"), 123);
   assert.equal(extractIssueNumberFromBranch("random"), null);
 });
 

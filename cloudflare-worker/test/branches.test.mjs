@@ -96,6 +96,9 @@ test("handleCreateEvent deletes manual issue-shaped branches", async () => {
   const deleted = [];
   const comments = [];
   const gh = {
+    async getIssue() {
+      return { body: "" };
+    },
     async deleteReference(_owner, _repo, ref) {
       deleted.push(ref);
     },
@@ -118,6 +121,74 @@ test("handleCreateEvent deletes manual issue-shaped branches", async () => {
   assert.equal(result.deleted, true);
   assert.deepEqual(deleted, ["heads/feature/123-add-login"]);
   assert.equal(comments[0].issueNumber, 123);
+});
+
+test("handleCreateEvent deletes sidebar-style issue branches", async () => {
+  const deleted = [];
+  const gh = {
+    async getIssue() {
+      return { body: "" };
+    },
+    async deleteReference(_owner, _repo, ref) {
+      deleted.push(ref);
+    },
+    async createComment() {},
+  };
+
+  const result = await handleCreateEvent({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    payload: {
+      ref_type: "branch",
+      ref: "123-add-login",
+      sender: { login: "mark" },
+    },
+  });
+
+  assert.equal(result.deleted, true);
+  assert.deepEqual(deleted, ["heads/123-add-login"]);
+});
+
+test("handleCreateEvent allows bot-created branches only with matching reservation", async () => {
+  const body = replaceAutomationState(
+    ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Feature"),
+    {
+      issue_type: "feature",
+      branch: {
+        name: "feature/123-add-login",
+        base: "dev",
+        created: false,
+        linked: false,
+        error: null,
+        pr: null,
+      },
+    }
+  );
+  const deleted = [];
+  const gh = {
+    async getIssue() {
+      return { body };
+    },
+    async deleteReference(_owner, _repo, ref) {
+      deleted.push(ref);
+    },
+    async createComment() {},
+  };
+
+  const result = await handleCreateEvent({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    payload: {
+      ref_type: "branch",
+      ref: "feature/123-add-login",
+      sender: { login: "mcf-automation-bot[bot]" },
+    },
+  });
+
+  assert.equal(result.allowed, true);
+  assert.deepEqual(deleted, []);
 });
 
 test("handlePullRequestEvent records valid PR number", async () => {

@@ -204,8 +204,19 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
     return { processed: false, reason: "branch name is not issue-managed" };
   }
 
-  if (payload.sender?.login === GITHUB_APP_BOT_LOGIN) {
-    return { processed: true, allowed: true, reason: "branch created by automation bot" };
+  let state = null;
+  try {
+    const issue = await gh.getIssue(owner, repo, issueNumber);
+    state = parseAutomationState(issue.body || "");
+  } catch (err) {
+    console.error(`Failed to read issue #${issueNumber} for branch authorization: ${err.message}`);
+  }
+
+  const isReservedBranch = state?.branch?.name === branchName;
+  const isAutomationBot = payload.sender?.login === GITHUB_APP_BOT_LOGIN;
+
+  if (isAutomationBot && isReservedBranch) {
+    return { processed: true, allowed: true, reason: "branch created by automation bot with matching reservation" };
   }
 
   await gh.deleteReference(owner, repo, `heads/${branchName}`);

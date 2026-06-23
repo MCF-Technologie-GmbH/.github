@@ -46,7 +46,7 @@ export function buildIssueBranchName({ issueType, issueNumber, title }) {
  * @returns {number|null}
  */
 export function extractIssueNumberFromBranch(branchName) {
-  const match = String(branchName || "").match(/^[a-z][a-z0-9_-]*\/([1-9]\d*)-[a-z0-9][a-z0-9-]*$/);
+  const match = String(branchName || "").match(/(?:^|\/)([1-9]\d*)-[a-z0-9][a-z0-9-]*(?:$|\/)/);
   return match ? Number(match[1]) : null;
 }
 
