@@ -150,6 +150,37 @@ test("handleCreateEvent deletes sidebar-style issue branches", async () => {
   assert.deepEqual(deleted, ["heads/123-add-login"]);
 });
 
+test("handleCreateEvent deletes any branch without an authorization", async () => {
+  const deleted = [];
+  let issueWasRead = false;
+  const gh = {
+    async getIssue() {
+      issueWasRead = true;
+      return { body: "" };
+    },
+    async deleteReference(_owner, _repo, ref) {
+      deleted.push(ref);
+    },
+    async createComment() {},
+  };
+
+  const result = await handleCreateEvent({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    payload: {
+      ref_type: "branch",
+      ref: "random-experiment",
+      sender: { login: "mark" },
+    },
+  });
+
+  assert.equal(result.deleted, true);
+  assert.equal(result.issue, null);
+  assert.equal(issueWasRead, false);
+  assert.deepEqual(deleted, ["heads/random-experiment"]);
+});
+
 test("handleCreateEvent allows bot-created branches only with matching reservation", async () => {
   const body = replaceAutomationState(
     ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Feature"),
@@ -189,6 +220,47 @@ test("handleCreateEvent allows bot-created branches only with matching reservati
 
   assert.equal(result.allowed, true);
   assert.deepEqual(deleted, []);
+});
+
+test("handleCreateEvent rejects bot-created branches reserved from a non-dev base", async () => {
+  const body = replaceAutomationState(
+    ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Feature"),
+    {
+      issue_type: "feature",
+      branch: {
+        name: "feature/123-add-login",
+        base: "main",
+        created: false,
+        linked: false,
+        error: null,
+        pr: null,
+      },
+    }
+  );
+  const deleted = [];
+  const gh = {
+    async getIssue() {
+      return { body };
+    },
+    async deleteReference(_owner, _repo, ref) {
+      deleted.push(ref);
+    },
+    async createComment() {},
+  };
+
+  const result = await handleCreateEvent({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    payload: {
+      ref_type: "branch",
+      ref: "feature/123-add-login",
+      sender: { login: "mcf-automation-bot[bot]" },
+    },
+  });
+
+  assert.equal(result.deleted, true);
+  assert.deepEqual(deleted, ["heads/feature/123-add-login"]);
 });
 
 test("handlePullRequestEvent records valid PR number", async () => {

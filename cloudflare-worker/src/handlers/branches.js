@@ -188,7 +188,7 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
 }
 
 /**
- * Enforces that issue-shaped branches are created only by the automation bot.
+ * Enforces that branches are created only by the automation bot through /branch.
  *
  * @param {object} params
  * @returns {Promise<object>}
@@ -200,19 +200,18 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
 
   const branchName = payload.ref;
   const issueNumber = extractIssueNumberFromBranch(branchName);
-  if (!issueNumber) {
-    return { processed: false, reason: "branch name is not issue-managed" };
-  }
 
   let state = null;
-  try {
-    const issue = await gh.getIssue(owner, repo, issueNumber);
-    state = parseAutomationState(issue.body || "");
-  } catch (err) {
-    console.error(`Failed to read issue #${issueNumber} for branch authorization: ${err.message}`);
+  if (issueNumber) {
+    try {
+      const issue = await gh.getIssue(owner, repo, issueNumber);
+      state = parseAutomationState(issue.body || "");
+    } catch (err) {
+      console.error(`Failed to read issue #${issueNumber} for branch authorization: ${err.message}`);
+    }
   }
 
-  const isReservedBranch = state?.branch?.name === branchName;
+  const isReservedBranch = state?.branch?.name === branchName && state.branch.base === BASE_BRANCH;
   const isAutomationBot = payload.sender?.login === GITHUB_APP_BOT_LOGIN;
 
   if (isAutomationBot && isReservedBranch) {
@@ -221,19 +220,21 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
 
   await gh.deleteReference(owner, repo, `heads/${branchName}`);
 
-  try {
-    await gh.createComment(
-      owner,
-      repo,
-      issueNumber,
-      [
-        `Deleted unauthorized branch \`${branchName}\`.`,
-        "",
-        "Issue branches must be created with `/branch` so they can be linked and recorded by automation.",
-      ].join("\n")
-    );
-  } catch (err) {
-    console.error(`Failed to comment after deleting unauthorized branch: ${err.message}`);
+  if (issueNumber) {
+    try {
+      await gh.createComment(
+        owner,
+        repo,
+        issueNumber,
+        [
+          `Deleted unauthorized branch \`${branchName}\`.`,
+          "",
+          "Branches must be created with `/branch` so they can be linked and recorded by automation.",
+        ].join("\n")
+      );
+    } catch (err) {
+      console.error(`Failed to comment after deleting unauthorized branch: ${err.message}`);
+    }
   }
 
   return { processed: true, allowed: false, deleted: true, branch: branchName, issue: issueNumber };
