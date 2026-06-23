@@ -1,15 +1,7 @@
 name: Chore
-description: A concrete unit of work that needs to be done.
+description: Routine task, tooling update, dependency work, CI/CD configuration, or repository maintenance.
 type: Chore
 body:
-  - type: markdown
-    attributes:
-      value: |
-        > [!IMPORTANT]
-        > This form automatically sets the issue type to **Chore**.
-        > Use **Chore** for routine tasks, tooling updates, dependencies, CI/CD configuration, or repository maintenance.
-        > - **Do NOT** use Chore for bug fixes (use **Bug**), new features (use **Feature**), code restructuring/cleanup (use **Refactor**), or test additions/fixes (use **Test**).
-
   - type: dropdown
     id: template-type
     attributes:
@@ -25,7 +17,7 @@ body:
     attributes:
       value: |
         > [!NOTE]
-        > Friendly reminder: set any relevant Issue Fields when they are needed. Depending on the GitHub view, these fields may appear in the issue sidebar or at the bottom of the create-issue popup. If a field does not apply yet, you can leave it empty and fill it in later.
+        > Set any relevant **Issue Fields** when they are needed. Depending on the GitHub view, these fields may appear in the **issue sidebar** or at the **bottom of the create-issue popup**. If a field does not apply yet, you can leave it empty and fill it in later.
 
   - type: markdown
     attributes:

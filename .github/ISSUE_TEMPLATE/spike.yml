@@ -1,14 +1,7 @@
 name: Spike
-description: A timeboxed technical investigation used to reduce uncertainty
-  before implementation.
+description: Timeboxed technical investigation to reduce uncertainty before implementation.
 type: Spike
 body:
-  - type: markdown
-    attributes:
-      value: |
-        > [!IMPORTANT]
-        > This form automatically sets the issue type to **Spike**.
-
   - type: dropdown
     id: template-type
     attributes:
@@ -24,7 +17,7 @@ body:
     attributes:
       value: |
         > [!NOTE]
-        > Friendly reminder: set any relevant Issue Fields when they are needed. Depending on the GitHub view, these fields may appear in the issue sidebar or at the bottom of the create-issue popup. If a field does not apply yet, you can leave it empty and fill it in later.
+        > Set any relevant **Issue Fields** when they are needed. Depending on the GitHub view, these fields may appear in the **issue sidebar** or at the **bottom of the create-issue popup**. If a field does not apply yet, you can leave it empty and fill it in later.
 
   - type: markdown
     attributes:

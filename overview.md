@@ -211,8 +211,8 @@ description: Report a confirmed or suspected bug.
 type: Bug                                    # Sets the GitHub Issue Type on creation
 
 body:
-  - type: markdown                           # Guidance callout
   - type: dropdown (id: template-type)      # Issue Type metadata (single option)
+  - type: markdown                           # Optional template-specific guidance
   - type: markdown                           # Issue Field reminder
   - type: textarea (id: ...)                 # Template-specific fields (required/optional)
   - ...
@@ -223,7 +223,7 @@ Key elements present in **every** template (except `spike.yml` and `documentatio
 
 1. **Issue Type dropdown** — A single-option dropdown kept as creation metadata so the Worker can confirm which template was used. GitHub does not allow changing it in the form because there is only one option.
 2. **Required updates checkboxes** — Populated automatically by the `generate-taxonomy.mjs` script from `required-updates.txt`.
-3. **Issue Field reminder** — A markdown callout reminds users to set any relevant Issue Fields when needed. Depending on the GitHub view, those fields may appear in the issue sidebar or at the bottom of the create-issue popup, and they can be filled in later.
+3. **Issue Field reminder** — A markdown callout reminds users to set any relevant **Issue Fields** when needed. Depending on the GitHub view, those fields may appear in the **issue sidebar** or at the **bottom of the create-issue popup**, and they can be filled in later.
 
 ### 4.3 Template Configuration
 

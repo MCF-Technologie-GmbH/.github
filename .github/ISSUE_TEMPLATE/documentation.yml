@@ -1,13 +1,7 @@
 name: Documentation
-description: Create, update, or improve documentation.
+description: Writing or modifying docs, guides, API specs, release notes, or operational documentation.
 type: Documentation
 body:
-  - type: markdown
-    attributes:
-      value: |
-        > [!IMPORTANT]
-        > This form automatically sets the issue type to **Documentation**.
-
   - type: dropdown
     id: template-type
     attributes:
@@ -23,7 +17,7 @@ body:
     attributes:
       value: |
         > [!NOTE]
-        > Friendly reminder: set any relevant Issue Fields when they are needed. Depending on the GitHub view, these fields may appear in the issue sidebar or at the bottom of the create-issue popup. If a field does not apply yet, you can leave it empty and fill it in later.
+        > Set any relevant **Issue Fields** when they are needed. Depending on the GitHub view, these fields may appear in the **issue sidebar** or at the **bottom of the create-issue popup**. If a field does not apply yet, you can leave it empty and fill it in later.
 
   - type: markdown
     attributes:

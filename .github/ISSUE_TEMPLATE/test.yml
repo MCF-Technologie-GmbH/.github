@@ -1,15 +1,7 @@
 name: Test
-description: Add, improve, or repair tests.
+description: Addition, improvement, or repair of unit, integration, end-to-end, or smoke tests.
 type: Test
 body:
-  - type: markdown
-    attributes:
-      value: |
-        > [!IMPORTANT]
-        > This form automatically sets the issue type to **Test**.
-        > Use **Test** for adding, fixing, or improving tests (unit tests, integration tests, E2E tests, smoke tests).
-        > - **Do NOT** use Test for bug fixes (use **Bug**) or new features (use **Feature**).
-
   - type: dropdown
     id: template-type
     attributes:
@@ -25,7 +17,7 @@ body:
     attributes:
       value: |
         > [!NOTE]
-        > Friendly reminder: set any relevant Issue Fields when they are needed. Depending on the GitHub view, these fields may appear in the issue sidebar or at the bottom of the create-issue popup. If a field does not apply yet, you can leave it empty and fill it in later.
+        > Set any relevant **Issue Fields** when they are needed. Depending on the GitHub view, these fields may appear in the **issue sidebar** or at the **bottom of the create-issue popup**. If a field does not apply yet, you can leave it empty and fill it in later.
 
   - type: markdown
     attributes:

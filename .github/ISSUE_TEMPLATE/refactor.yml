@@ -1,15 +1,7 @@
 name: Refactor
-description: Code cleanup, restructuring, or technical debt reduction.
+description: Internal code restructuring, cleanup, or optimization without changing external behavior.
 type: Refactor
 body:
-  - type: markdown
-    attributes:
-      value: |
-        > [!IMPORTANT]
-        > This form automatically sets the issue type to **Refactor**.
-        > Use **Refactor** for code cleanup, restructuring, optimization, or technical debt reduction that does not change functional behavior.
-        > - **Do NOT** use Refactor for bug fixes (use **Bug**) or new features (use **Feature**).
-
   - type: dropdown
     id: template-type
     attributes:
@@ -25,7 +17,7 @@ body:
     attributes:
       value: |
         > [!NOTE]
-        > Friendly reminder: set any relevant Issue Fields when they are needed. Depending on the GitHub view, these fields may appear in the issue sidebar or at the bottom of the create-issue popup. If a field does not apply yet, you can leave it empty and fill it in later.
+        > Set any relevant **Issue Fields** when they are needed. Depending on the GitHub view, these fields may appear in the **issue sidebar** or at the **bottom of the create-issue popup**. If a field does not apply yet, you can leave it empty and fill it in later.
 
   - type: markdown
     attributes:
