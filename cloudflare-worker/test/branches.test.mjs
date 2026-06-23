@@ -31,7 +31,7 @@ test("handleBranchCommand reserves and records a linked branch", async () => {
       return { object: { sha: "abc123" } };
     },
     async createLinkedBranch(input) {
-      assert.equal(input.branchName, "feature/123-add-login");
+      assert.equal(input.branchName, "feat/123-add-login");
       return {};
     },
     async createComment(_owner, _repo, _issueNumber, body) {
@@ -113,13 +113,13 @@ test("handleCreateEvent deletes manual issue-shaped branches", async () => {
     repo: "app",
     payload: {
       ref_type: "branch",
-      ref: "feature/123-add-login",
+      ref: "feat/123-add-login",
       sender: { login: "mark" },
     },
   });
 
   assert.equal(result.deleted, true);
-  assert.deepEqual(deleted, ["heads/feature/123-add-login"]);
+  assert.deepEqual(deleted, ["heads/feat/123-add-login"]);
   assert.equal(comments[0].issueNumber, 123);
 });
 
@@ -164,7 +164,7 @@ test("handleCreateEvent records a sidebar-linked branch based on dev", async () 
           nodes: [
             {
               ref: {
-                name: "feature/123-add-login",
+                name: "feat/123-add-login",
                 prefix: "refs/heads/",
                 target: { oid: "sha-dev" },
               },
@@ -174,7 +174,7 @@ test("handleCreateEvent records a sidebar-linked branch based on dev", async () 
       };
     },
     async getReference(_owner, _repo, ref) {
-      if (ref === "heads/feature/123-add-login") return { object: { sha: "sha-dev" } };
+      if (ref === "heads/feat/123-add-login") return { object: { sha: "sha-dev" } };
       if (ref === "heads/dev") return { object: { sha: "sha-dev" } };
       throw new Error(`unexpected ref ${ref}`);
     },
@@ -193,14 +193,14 @@ test("handleCreateEvent records a sidebar-linked branch based on dev", async () 
     repo: "app",
     payload: {
       ref_type: "branch",
-      ref: "feature/123-add-login",
+      ref: "feat/123-add-login",
       sender: { login: "mark" },
     },
   });
 
   assert.equal(result.allowed, true);
   assert.deepEqual(deleted, []);
-  assert.match(updatedBody, /"name": "feature\/123-add-login"/);
+  assert.match(updatedBody, /"name": "feat\/123-add-login"/);
   assert.match(updatedBody, /"base": "dev"/);
   assert.match(updatedBody, /"linked": true/);
 });
@@ -216,7 +216,7 @@ test("handleCreateEvent deletes linked branches that are not based on dev", asyn
           nodes: [
             {
               ref: {
-                name: "feature/123-add-login",
+                name: "feat/123-add-login",
                 prefix: "refs/heads/",
                 target: { oid: "sha-main" },
               },
@@ -226,7 +226,7 @@ test("handleCreateEvent deletes linked branches that are not based on dev", asyn
       };
     },
     async getReference(_owner, _repo, ref) {
-      if (ref === "heads/feature/123-add-login") return { object: { sha: "sha-main" } };
+      if (ref === "heads/feat/123-add-login") return { object: { sha: "sha-main" } };
       if (ref === "heads/dev") return { object: { sha: "sha-dev" } };
       throw new Error(`unexpected ref ${ref}`);
     },
@@ -242,13 +242,13 @@ test("handleCreateEvent deletes linked branches that are not based on dev", asyn
     repo: "app",
     payload: {
       ref_type: "branch",
-      ref: "feature/123-add-login",
+      ref: "feat/123-add-login",
       sender: { login: "mark" },
     },
   });
 
   assert.equal(result.deleted, true);
-  assert.deepEqual(deleted, ["heads/feature/123-add-login"]);
+  assert.deepEqual(deleted, ["heads/feat/123-add-login"]);
 });
 
 test("handleCreateEvent deletes sidebar-linked branches with the wrong semantic name", async () => {
@@ -335,7 +335,7 @@ test("handleCreateEvent allows bot-created branches only with matching reservati
     {
       issue_type: "feature",
       branch: {
-        name: "feature/123-add-login",
+        name: "feat/123-add-login",
         base: "dev",
         created: false,
         linked: false,
@@ -361,7 +361,7 @@ test("handleCreateEvent allows bot-created branches only with matching reservati
     repo: "app",
     payload: {
       ref_type: "branch",
-      ref: "feature/123-add-login",
+      ref: "feat/123-add-login",
       sender: { login: "mcf-automation-bot[bot]" },
     },
   });
@@ -376,7 +376,7 @@ test("handleCreateEvent rejects bot-created branches reserved from a non-dev bas
     {
       issue_type: "feature",
       branch: {
-        name: "feature/123-add-login",
+        name: "feat/123-add-login",
         base: "main",
         created: false,
         linked: false,
@@ -402,13 +402,13 @@ test("handleCreateEvent rejects bot-created branches reserved from a non-dev bas
     repo: "app",
     payload: {
       ref_type: "branch",
-      ref: "feature/123-add-login",
+      ref: "feat/123-add-login",
       sender: { login: "mcf-automation-bot[bot]" },
     },
   });
 
   assert.equal(result.deleted, true);
-  assert.deepEqual(deleted, ["heads/feature/123-add-login"]);
+  assert.deepEqual(deleted, ["heads/feat/123-add-login"]);
 });
 
 test("handlePullRequestEvent records valid PR number", async () => {
@@ -417,7 +417,7 @@ test("handlePullRequestEvent records valid PR number", async () => {
     {
       issue_type: "feature",
       branch: {
-        name: "feature/123-add-login",
+        name: "feat/123-add-login",
         base: "dev",
         created: true,
         linked: true,
@@ -448,7 +448,7 @@ test("handlePullRequestEvent records valid PR number", async () => {
       pull_request: {
         number: 456,
         body: "Refs #123",
-        head: { ref: "feature/123-add-login" },
+        head: { ref: "feat/123-add-login" },
         base: { ref: "dev" },
       },
     },

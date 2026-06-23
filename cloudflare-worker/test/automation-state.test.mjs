@@ -20,7 +20,7 @@ test("ensureAutomationState inserts hidden JSON inside protected block", () => {
   const updated = ensureAutomationState(body, "Feature");
   const state = parseAutomationState(updated);
 
-  assert.equal(state.issue_type, "feature");
+  assert.equal(state.issue_type, "feat");
   assert.equal(state.branch, null);
   assert.match(updated, /<!-- protected:start -->\n<!-- automation-state:start/);
 });
@@ -30,7 +30,7 @@ test("replaceAutomationState updates branch metadata", () => {
   const updated = replaceAutomationState(body, {
     issue_type: "bug",
     branch: {
-      name: "bug/42-fix-login",
+      name: "fix/42-fix-login",
       base: "dev",
       created: true,
       linked: true,
@@ -40,7 +40,7 @@ test("replaceAutomationState updates branch metadata", () => {
   });
 
   assert.deepEqual(parseAutomationState(updated).branch, {
-    name: "bug/42-fix-login",
+    name: "fix/42-fix-login",
     base: "dev",
     created: true,
     linked: true,
@@ -56,12 +56,12 @@ test("buildIssueBranchName uses issue type key, issue number, and title slug", (
       issueNumber: 123,
       title: "feat(ui): Add login flow!",
     }),
-    "feature/123-add-login-flow"
+    "feat/123-add-login-flow"
   );
 });
 
 test("extractIssueNumberFromBranch accepts managed names only", () => {
-  assert.equal(extractIssueNumberFromBranch("feature/123-add-login"), 123);
+  assert.equal(extractIssueNumberFromBranch("feat/123-add-login"), 123);
   assert.equal(extractIssueNumberFromBranch("123-add-login"), 123);
   assert.equal(extractIssueNumberFromBranch("mark/123-add-login"), 123);
   assert.equal(extractIssueNumberFromBranch("random"), null);

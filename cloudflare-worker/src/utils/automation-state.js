@@ -1,11 +1,11 @@
 const STATE_START = "<!-- automation-state:start";
 const STATE_END = "automation-state:end -->";
 
-const ISSUE_TYPE_KEYS = {
-  Bug: "bug",
+const ISSUE_TYPE_BRANCH_PREFIXES = {
+  Bug: "fix",
   Chore: "chore",
-  Documentation: "documentation",
-  Feature: "feature",
+  Documentation: "docs",
+  Feature: "feat",
   Refactor: "refactor",
   Spike: "spike",
   Test: "test",
@@ -18,7 +18,7 @@ const ISSUE_TYPE_KEYS = {
  * @returns {string}
  */
 export function issueTypeKey(issueType) {
-  return ISSUE_TYPE_KEYS[issueType] || slugify(issueType || "issue");
+  return ISSUE_TYPE_BRANCH_PREFIXES[issueType] || slugify(issueType || "issue");
 }
 
 /**
