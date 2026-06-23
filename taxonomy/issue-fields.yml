@@ -44,30 +44,6 @@ issue_fields:
       - name: E13
         color: RED
 
-  - key: customer
-    name: Customer
-    data_type: SINGLE_SELECT
-    options:
-      - name: Luetze
-        color: GRAY
-        description: null
-      - name: Harman
-        color: GRAY
-        description: null
-      - name: Audi
-        color: GRAY
-        description: null
-      - name: Samson
-        color: GRAY
-        description: null
-      - name: B.Braun
-        color: GRAY
-        description: null
-
-  - key: project_id
-    name: Project ID
-    data_type: TEXT
-
   - key: scope
     name: Scope
     data_type: SINGLE_SELECT

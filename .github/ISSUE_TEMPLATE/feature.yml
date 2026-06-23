@@ -9,7 +9,7 @@ body:
       value: |
         > [!IMPORTANT]
         > This form automatically sets the issue type to **Feature** and adds it to the **Softwareentwicklung** project board.
-        > Before submitting, please ensure you fill in all required sidebar fields (Priority, Customer, Target milestone/release).
+        > Before submitting, please ensure you fill in all required sidebar fields (Priority, Target milestone/release).
 
   - type: dropdown
     id: scope
