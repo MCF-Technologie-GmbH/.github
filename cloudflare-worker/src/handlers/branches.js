@@ -37,6 +37,12 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
     await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, issueBody);
   }
 
+  if (state?.branch?.name && await isStaleBranchState(gh, owner, repo, currentIssue, state.branch.name)) {
+    state = { ...state, branch: null };
+    issueBody = replaceAutomationState(issueBody, state);
+    await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, issueBody);
+  }
+
   if (state?.branch?.name && state.branch.name !== branchName) {
     await gh.createComment(
       owner,
@@ -285,6 +291,20 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
 function isIssueLinkedBranch(issue, branchName) {
   const nodes = issue.linkedBranches?.nodes || [];
   return nodes.some((node) => node?.ref?.name === branchName);
+}
+
+async function isStaleBranchState(gh, owner, repo, issue, branchName) {
+  if (isIssueLinkedBranch(issue, branchName)) return false;
+
+  try {
+    await gh.getReference(owner, repo, `heads/${branchName}`);
+    return false;
+  } catch (err) {
+    if (String(err?.message || "").includes("HTTP 404")) {
+      return true;
+    }
+    throw err;
+  }
 }
 
 function canRecordLinkedBranch(state, branchName) {
