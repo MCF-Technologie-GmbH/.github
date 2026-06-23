@@ -11,31 +11,45 @@
 issue_type_fields:
   - issue_type: chore
     pinned_fields:
+      - priority
       - scope
+      - effort
 
   - issue_type: bug
     pinned_fields:
+      - priority
       - scope
+      - effort
 
   - issue_type: feature
     pinned_fields:
+      - priority
       - scope
+      - effort
 
   - issue_type: refactor
     pinned_fields:
+      - priority
       - scope
+      - effort
 
   - issue_type: test
     pinned_fields:
+      - priority
       - scope
+      - effort
 
   - issue_type: spike
     pinned_fields:
+      - priority
       - scope
+      - effort
 
   - issue_type: documentation
     pinned_fields:
+      - priority
       - scope
+      - effort
 
   - issue_type: project
     pinned_fields:

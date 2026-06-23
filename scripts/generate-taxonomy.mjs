@@ -46,6 +46,8 @@ try {
   const fieldsDoc = parseDocument(fieldsYaml);
 
   const issueFieldsNode = fieldsDoc.get("issue_fields");
+  let priorityOptions = [];
+  let effortOptions = [];
   if (issueFieldsNode) {
     const scopeFieldNode = issueFieldsNode.items.find(f => f.get("key") === "scope");
     if (scopeFieldNode) {
@@ -54,6 +56,16 @@ try {
         ...scopes.map(name => ({ name, color: "GRAY" }))
       ];
       scopeFieldNode.set("options", scopeOptions);
+    }
+
+    const priorityFieldNode = issueFieldsNode.items.find(f => f.get("key") === "priority");
+    if (priorityFieldNode) {
+      priorityOptions = priorityFieldNode.get("options")?.items?.map(opt => opt.get("name")) || [];
+    }
+
+    const effortFieldNode = issueFieldsNode.items.find(f => f.get("key") === "effort");
+    if (effortFieldNode) {
+      effortOptions = effortFieldNode.get("options")?.items?.map(opt => opt.get("name")) || [];
     }
   }
   writeFileSync(fieldsPath, fieldsDoc.toString(), "utf-8");
@@ -76,7 +88,18 @@ try {
         scopeInput.setIn(["attributes", "options"], scopes);
       }
 
-      // 4.2 Sync checklist items in checkboxes 'required-updates'
+      // 4.2 Sync priority and effort dropdowns from their issue field options
+      const priorityInput = bodyNode.items.find(item => item.get("id") === "priority");
+      if (priorityInput && priorityOptions.length > 0) {
+        priorityInput.setIn(["attributes", "options"], priorityOptions);
+      }
+
+      const effortInput = bodyNode.items.find(item => item.get("id") === "effort");
+      if (effortInput && effortOptions.length > 0) {
+        effortInput.setIn(["attributes", "options"], effortOptions);
+      }
+
+      // 4.3 Sync checklist items in checkboxes 'required-updates'
       const requiredUpdatesInput = bodyNode.items.find(item => item.get("id") === "required-updates");
       if (requiredUpdatesInput) {
         const formattedCheckboxes = requiredUpdates.map(label => ({ label }));

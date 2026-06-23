@@ -10,6 +10,40 @@
 # Supported color values: GRAY, BLUE, GREEN, YELLOW, ORANGE, RED, PINK, PURPLE
 
 issue_fields:
+  - key: priority
+    name: Priority
+    data_type: SINGLE_SELECT
+    options:
+      - name: Not Set
+        color: GRAY
+      - name: P0
+        color: RED
+      - name: P1
+        color: ORANGE
+      - name: P2
+        color: YELLOW
+      - name: P3
+        color: GREEN
+
+  - key: effort
+    name: Effort
+    data_type: SINGLE_SELECT
+    options:
+      - name: Not Set
+        color: GRAY
+      - name: E1
+        color: GREEN
+      - name: E2
+        color: GREEN
+      - name: E3
+        color: BLUE
+      - name: E5
+        color: YELLOW
+      - name: E8
+        color: ORANGE
+      - name: E13
+        color: RED
+
   - key: customer
     name: Customer
     data_type: SINGLE_SELECT

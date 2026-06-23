@@ -114,12 +114,8 @@ export default {
 
       const orgIssueFields = await gh.getOrgIssueFields(ORGANIZATION);
       const scopeField = orgIssueFields.find((f) => f.name === "Scope");
-
-      const projectData = await gh.getProjectFieldsAndId(ORGANIZATION, 37);
-      const projectFields = projectData?.fields?.nodes || [];
-      const priorityField = projectFields.find((f) => f.name === "Priority");
-      const effortField = projectFields.find((f) => f.name === "Effort");
-      const projectId = projectData?.id;
+      const priorityField = orgIssueFields.find((f) => f.name === "Priority");
+      const effortField = orgIssueFields.find((f) => f.name === "Effort");
 
       // 5. Handle Comment Slash Command Webhook Event
       if (event === "issue_comment") {
@@ -178,7 +174,6 @@ export default {
         changes: payload.changes,
         typeMap,
         scopeField,
-        projectId,
         priorityField,
         effortField,
       });
