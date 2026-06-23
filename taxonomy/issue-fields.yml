@@ -44,6 +44,14 @@ issue_fields:
       - name: E13
         color: RED
 
+  - key: start_date
+    name: Start date
+    data_type: DATE
+
+  - key: target_date
+    name: Target date
+    data_type: DATE
+
   - key: scope
     name: Scope
     data_type: SINGLE_SELECT

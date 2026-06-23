@@ -122,12 +122,14 @@ Eight issue types are defined:
 
 **File:** [`taxonomy/issue-fields.yml`](taxonomy/issue-fields.yml)
 
-Three organization-level custom fields are defined:
+Five organization-level custom fields are defined:
 
 | Key | Name | Data Type | Notes |
 | :--- | :--- | :--- | :--- |
 | `priority` | Priority | SINGLE_SELECT | P0 (Critical) → P3 (Low) |
 | `effort` | Effort | SINGLE_SELECT | E1 (Mini) → E13 (Very large / needs splitting) |
+| `start_date` | Start date | DATE | — |
+| `target_date` | Target date | DATE | — |
 | `scope` | Scope | SINGLE_SELECT | Codebase area (must match `scopes.txt`) |
 
 ### 3.3 Pinned Fields per Type
@@ -138,8 +140,8 @@ Defines which fields appear in the **sidebar** for each issue type. These are ca
 
 | Issue Type | Pinned Fields |
 | :--- | :--- |
-| Chore, Bug, Feature, Refactor, Test, Spike, Documentation | `priority`, `scope`, `effort` |
-| Project | — |
+| Chore, Bug, Feature, Refactor, Test, Spike, Documentation | `priority`, `scope`, `effort`, `start_date`, `target_date` |
+| Project | `start_date`, `target_date` |
 
 > [!NOTE]
 > The GraphQL API exposes pinned fields as **read-only**. The sync script reports drift but cannot programmatically update pinned field assignments. Manual changes must be made in:
