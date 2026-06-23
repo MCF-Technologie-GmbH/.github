@@ -6,6 +6,7 @@
   "description": "Taxonomy management for MCF Technologie GmbH GitHub organization",
   "scripts": {
     "generate": "node scripts/generate-taxonomy.mjs",
+    "test": "node --test",
     "validate": "node scripts/validate-taxonomy.mjs",
     "sync": "node scripts/sync-taxonomy.mjs",
     "sync:dry": "DRY_RUN=true node scripts/sync-taxonomy.mjs"

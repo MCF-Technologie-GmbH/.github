@@ -17,6 +17,7 @@ import {
   cleanChecklistOnCreation,
   getRequiresLabelsForChecklist
 } from "../utils/checklist.js";
+import { ensureAutomationState } from "../utils/automation-state.js";
 
 /**
  * Enforces organizational policies on GitHub Issues when they are opened, edited, or reopened.
@@ -179,6 +180,7 @@ export async function enforceIssueTypePolicy({
 
     // Inject protected/editable HTML comments programmatically.
     cleaned = injectZoningComments(cleaned);
+    cleaned = ensureAutomationState(cleaned, resolvedType);
 
     if (cleaned !== issueBody) {
       updatedBody = cleaned;
@@ -207,6 +209,7 @@ export async function enforceIssueTypePolicy({
     healed = removeScopeSection(healed);
     healed = removePrioritySection(healed);
     healed = removeEffortSection(healed);
+    healed = ensureAutomationState(healed, resolvedType);
 
     if (healed !== issueBody) {
       updatedBody = healed;

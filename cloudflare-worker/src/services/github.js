@@ -92,12 +92,17 @@ export class GitHubClient {
     const data = await this.graphql(
       `query($owner: String!, $repo: String!, $issueNumber: Int!) {
         repository(owner: $owner, name: $repo) {
+          id
           issue(number: $issueNumber) {
             id
             number
             title
             body
             state
+            repository {
+              id
+              nameWithOwner
+            }
             issueType {
               id
               name
@@ -245,6 +250,70 @@ export class GitHubClient {
       "POST",
       `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issueNumber}/comments`,
       { body }
+    );
+  }
+
+  /**
+   * Attempts to create a GitHub linked branch for an issue.
+   * This intentionally does not fall back to a raw git ref because the policy
+   * requires branches to be linked through GitHub's issue development model.
+   *
+   * @param {object} params
+   * @param {string} params.issueId - GraphQL Node ID of the issue.
+   * @param {string} params.repositoryId - GraphQL Node ID of the repository.
+   * @param {string} params.branchName - Branch name without refs/heads/.
+   * @param {string} params.baseOid - Base commit SHA.
+   * @returns {Promise<object>} GraphQL mutation result.
+   */
+  async createLinkedBranch({ issueId, repositoryId, branchName, baseOid }) {
+    if (!issueId || !repositoryId || !branchName || !baseOid) {
+      throw new Error("Missing linked branch inputs: issueId, repositoryId, branchName, and baseOid are required.");
+    }
+
+    return this.graphql(
+      `mutation($input: CreateLinkedBranchInput!) {
+        createLinkedBranch(input: $input) {
+          clientMutationId
+        }
+      }`,
+      {
+        input: {
+          issueId,
+          repositoryId,
+          name: branchName,
+          oid: baseOid,
+        },
+      }
+    );
+  }
+
+  /**
+   * Gets a git reference.
+   *
+   * @param {string} owner - Repository owner login.
+   * @param {string} repo - Repository name.
+   * @param {string} ref - Ref path such as heads/dev.
+   * @returns {Promise<object>} Git reference payload.
+   */
+  async getReference(owner, repo, ref) {
+    return this.rest(
+      "GET",
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/ref/${encodeRefPath(ref)}`
+    );
+  }
+
+  /**
+   * Deletes a git reference.
+   *
+   * @param {string} owner - Repository owner login.
+   * @param {string} repo - Repository name.
+   * @param {string} ref - Ref path such as heads/feature/123-work.
+   * @returns {Promise<null>}
+   */
+  async deleteReference(owner, repo, ref) {
+    return this.rest(
+      "DELETE",
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/refs/${encodeRefPath(ref)}`
     );
   }
 
@@ -529,6 +598,10 @@ export class GitHubClient {
     );
     return data.organization?.projectV2 ?? null;
   }
+}
+
+function encodeRefPath(ref) {
+  return String(ref || "").split("/").map(encodeURIComponent).join("/");
 }
 
 /**

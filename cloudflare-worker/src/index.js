@@ -7,7 +7,10 @@ import { verifyGitHubSignature } from "./utils/crypto.js";
 import { normalizeRepo } from "./utils/text.js";
 import { GitHubClient, createInstallationAccessToken } from "./services/github.js";
 import { handleIssueCommentEvent } from "./handlers/comments.js";
+import { handleCreateEvent, handlePullRequestEvent } from "./handlers/branches.js";
 import { enforceIssueTypePolicy } from "./handlers/issues.js";
+
+const SUPPORTED_EVENTS = new Set(["issues", "issue_comment", "create", "pull_request"]);
 
 export default {
   /**
@@ -69,12 +72,14 @@ export default {
       return json({ ok: true, pong: true }, 200);
     }
 
-    if (event !== "issues" && event !== "issue_comment") {
+    if (!SUPPORTED_EVENTS.has(event)) {
       return json({ ok: true, skipped: true, reason: `event=${event}` }, 200);
     }
 
-    // Prevent feedback loops caused by our own bot.
-    if (payload.sender?.login === GITHUB_APP_BOT_LOGIN) {
+    // Prevent feedback loops caused by our own bot for body/comment events.
+    // Branch create events need their own handling because bot-created branches
+    // are the only allowed creation path.
+    if ((event === "issues" || event === "issue_comment") && payload.sender?.login === GITHUB_APP_BOT_LOGIN) {
       return json(
         {
           ok: true,
@@ -95,17 +100,31 @@ export default {
     const owner = repository.owner?.login;
     const repo = repository.name;
     const repoFullName = normalizeRepo(repository.full_name || `${owner}/${repo}`);
-    const issue = payload.issue;
 
-    if (!owner || !repo || !issue) {
-      return json({ error: "Invalid payload: missing owner, repo, or issue details" }, 400);
+    if (!owner || !repo) {
+      return json({ error: "Invalid payload: missing owner or repo" }, 400);
     }
-
-    const issueNumber = issue.number;
 
     try {
       const token = await createInstallationAccessToken(env, installationId);
       const gh = new GitHubClient(token);
+
+      if (event === "create") {
+        const result = await handleCreateEvent({ gh, owner, repo, payload });
+        return json({ ok: true, ...result }, 200);
+      }
+
+      if (event === "pull_request") {
+        const result = await handlePullRequestEvent({ gh, owner, repo, payload });
+        return json({ ok: true, ...result }, 200);
+      }
+
+      const issue = payload.issue;
+      if (!issue) {
+        return json({ error: "Invalid payload: missing issue details" }, 400);
+      }
+
+      const issueNumber = issue.number;
 
       // 4. Resolve metadata (Issue Types and Fields) dynamically via GitHub GraphQL API.
       // This prevents relying on hardcoded Node IDs.
@@ -186,7 +205,7 @@ export default {
         200
       );
     } catch (err) {
-      console.error(`Processing failed for ${repository.full_name}#${issueNumber}`, err);
+      console.error(`Processing failed for ${repository.full_name}`, err);
       return json({ error: "Processing failed", detail: err.message }, 500);
     }
   },

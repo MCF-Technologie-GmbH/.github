@@ -1,5 +1,6 @@
 import { REQUIRES_WHITELIST } from "../config.js";
 import { parseChecklist, getRequiresLabelsForChecklist } from "../utils/checklist.js";
+import { handleBranchCommand } from "./branches.js";
 
 /**
  * Parses and executes slash commands (/require, /unrequire, /resolve, etc.) found in comments.
@@ -26,6 +27,14 @@ export async function handleIssueCommentEvent({
 }) {
   const commentBody = comment.body || "";
   const lines = commentBody.split(/\r?\n/);
+  const hasBranchCommand = lines.some((line) => line.trim().toLowerCase() === "/branch");
+
+  if (hasBranchCommand) {
+    const result = await handleBranchCommand({ gh, owner, repo, issueNumber, comment });
+    await cleanupCommandComment(gh, owner, repo, comment);
+    return result;
+  }
+
   const commands = [];
   const validNames = Object.keys(REQUIRES_WHITELIST);
 
@@ -124,15 +133,19 @@ export async function handleIssueCommentEvent({
   }
 
   // 7. Cleanup: add a rocket reaction to the user command comment and delete it
+  await cleanupCommandComment(gh, owner, repo, comment);
+
+  return {
+    processed: true,
+    commandsProcessed: commands.length,
+  };
+}
+
+async function cleanupCommandComment(gh, owner, repo, comment) {
   try {
     await gh.createCommentReaction(owner, repo, comment.id, "rocket");
     await gh.deleteComment(owner, repo, comment.id);
   } catch (err) {
     console.error(`Failed to manage comment/reaction: ${err.message}`);
   }
-
-  return {
-    processed: true,
-    commandsProcessed: commands.length,
-  };
 }
