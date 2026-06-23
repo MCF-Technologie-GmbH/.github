@@ -158,6 +158,7 @@ test("handleCreateEvent records a sidebar-linked branch based on dev", async () 
     async getIssue() {
       return {
         body,
+        title: "Add login",
         issueType: { name: "Feature" },
         linkedBranches: {
           nodes: [
@@ -210,6 +211,7 @@ test("handleCreateEvent deletes linked branches that are not based on dev", asyn
     async getIssue() {
       return {
         body: "",
+        title: "Add login",
         linkedBranches: {
           nodes: [
             {
@@ -247,6 +249,53 @@ test("handleCreateEvent deletes linked branches that are not based on dev", asyn
 
   assert.equal(result.deleted, true);
   assert.deepEqual(deleted, ["heads/feature/123-add-login"]);
+});
+
+test("handleCreateEvent deletes sidebar-linked branches with the wrong semantic name", async () => {
+  const deleted = [];
+  const gh = {
+    async getIssue() {
+      return {
+        body: "",
+        title: "Add login",
+        issueType: { name: "Feature" },
+        linkedBranches: {
+          nodes: [
+            {
+              ref: {
+                name: "wrong/123-add-login",
+                prefix: "refs/heads/",
+                target: { oid: "sha-dev" },
+              },
+            },
+          ],
+        },
+      };
+    },
+    async getReference(_owner, _repo, ref) {
+      if (ref === "heads/wrong/123-add-login") return { object: { sha: "sha-dev" } };
+      if (ref === "heads/dev") return { object: { sha: "sha-dev" } };
+      throw new Error(`unexpected ref ${ref}`);
+    },
+    async deleteReference(_owner, _repo, ref) {
+      deleted.push(ref);
+    },
+    async createComment() {},
+  };
+
+  const result = await handleCreateEvent({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    payload: {
+      ref_type: "branch",
+      ref: "wrong/123-add-login",
+      sender: { login: "mark" },
+    },
+  });
+
+  assert.equal(result.deleted, true);
+  assert.deepEqual(deleted, ["heads/wrong/123-add-login"]);
 });
 
 test("handleCreateEvent deletes any branch without an authorization", async () => {

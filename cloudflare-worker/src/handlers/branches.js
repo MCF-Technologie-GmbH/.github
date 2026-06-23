@@ -221,8 +221,14 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
 
   if (issue && isIssueLinkedBranch(issue, branchName)) {
     const isFromDev = await branchMatchesBase(gh, owner, repo, branchName, BASE_BRANCH);
-    if (isFromDev && canRecordLinkedBranch(state, branchName)) {
-      const issueType = issue.issueType?.name || state?.issue_type || "issue";
+    const issueType = issue.issueType?.name || state?.issue_type || "issue";
+    const expectedBranchName = buildIssueBranchName({
+      issueType,
+      issueNumber,
+      title: issue.title,
+    });
+
+    if (isFromDev && branchName === expectedBranchName && canRecordLinkedBranch(state, branchName)) {
       const body = ensureAutomationState(issue.body || "", issueType);
       const updatedState = {
         issue_type: parseAutomationState(body)?.issue_type || state?.issue_type || "issue",
