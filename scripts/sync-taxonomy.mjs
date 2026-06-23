@@ -217,15 +217,16 @@ async function updateIssueField(id, desired, actual) {
   }
 
   if (["SINGLE_SELECT", "MULTI_SELECT"].includes(desired.data_type) && desired.options) {
-    input.options = desired.options.map((opt, idx) => {
-      const optInput = {
+    const actualOptionNames = new Set((actual.options || []).map((opt) => opt.name));
+    const optionsToCreate = desired.options.filter((opt) => !actualOptionNames.has(opt.name));
+    if (optionsToCreate.length > 0) {
+      input.options = optionsToCreate.map((opt, idx) => ({
         name: opt.name,
         color: opt.color || "GRAY",
         description: opt.description || null,
-        priority: idx,
-      };
-      return optInput;
-    });
+        priority: actualOptionNames.size + idx,
+      }));
+    }
   }
 
   console.log("updateIssueField input:", JSON.stringify(input, null, 2));
@@ -286,6 +287,32 @@ function diffIssueField(desired, actual) {
   }
 
   return changes;
+}
+
+function getUnsupportedIssueFieldOptionChanges(desired, actual) {
+  if (!["SINGLE_SELECT", "MULTI_SELECT"].includes(desired.data_type) || !desired.options || !actual.options) {
+    return { removed: [], changed: [] };
+  }
+
+  const desiredOptionNames = new Set(desired.options.map((opt) => opt.name));
+  const removed = actual.options
+    .filter((opt) => !desiredOptionNames.has(opt.name))
+    .map((opt) => opt.name);
+
+  const changed = [];
+  for (const desiredOption of desired.options) {
+    const actualOption = actual.options.find((opt) => opt.name === desiredOption.name);
+    if (!actualOption) continue;
+
+    if (desiredOption.color && desiredOption.color !== actualOption.color) {
+      changed.push(`${desiredOption.name} color`);
+    }
+    if ((desiredOption.description || null) !== (actualOption.description || null)) {
+      changed.push(`${desiredOption.name} description`);
+    }
+  }
+
+  return { removed, changed };
 }
 
 function diffPinnedFields(desiredFieldKeys, actualPinnedFields, fieldKeyToName) {
@@ -400,6 +427,25 @@ async function sync() {
     } else {
       const changes = diffIssueField(desired, actual);
       if (changes.length > 0) {
+        const unsupportedOptionChanges = getUnsupportedIssueFieldOptionChanges(desired, actual);
+        const hasUnsupportedOptionChanges =
+          unsupportedOptionChanges.removed.length > 0 || unsupportedOptionChanges.changed.length > 0;
+
+        if (hasUnsupportedOptionChanges) {
+          console.log(`  DRIFT: ${desired.name}`);
+          for (const c of changes) console.log(`    ${c}`);
+          console.log("    → Manual action required in GitHub:");
+          console.log(`      Organization Settings → Issue fields → '${desired.name}' → Edit options`);
+          if (unsupportedOptionChanges.removed.length > 0) {
+            console.log(`    → Options to DELETE: ${unsupportedOptionChanges.removed.map((opt) => `'${opt}'`).join(", ")}`);
+          }
+          if (unsupportedOptionChanges.changed.length > 0) {
+            console.log(`    → Option properties to UPDATE: ${unsupportedOptionChanges.changed.join(", ")}`);
+          }
+          summary.fields.drift++;
+          continue;
+        }
+
         console.log(`  UPDATE: ${desired.name}`);
         for (const c of changes) console.log(`    ${c}`);
         if (!DRY_RUN) {
