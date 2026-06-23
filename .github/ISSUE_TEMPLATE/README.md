@@ -16,7 +16,7 @@ Seven GitHub issue form templates are defined here for use across all repositori
 
 ## How Template Detection Works
 
-Each template contains a `type: dropdown` field with label **Issue Type** and a **single option** equal to the type name (e.g., `Bug`). Because there is only one option in the dropdown, GitHub's form UI does not allow users to change it.
+Each template contains a `type: dropdown` field with label **Issue Type** and a **single option** equal to the type name (e.g., `Bug`). This is the only option for that template and is kept as creation metadata so the automation can confirm the issue type.
 
 When a new issue is submitted, the Cloudflare Worker reads the rendered body section:
 
@@ -44,7 +44,7 @@ It compares the value against the organization issue types retrieved dynamically
      id: template-type
      attributes:
        label: Issue Type
-       description: Identifies which issue template was used. Do not change this value.
+       description: This is the only option for this template. GitHub does not allow changing it here; it is kept as creation metadata for automation.
        options:
          - YourTypeName
      validations:

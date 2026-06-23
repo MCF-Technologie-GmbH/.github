@@ -6,9 +6,26 @@ body:
     attributes:
       value: |
         > [!IMPORTANT]
+        > This form automatically sets the issue type to **Chore**.
         > Use **Chore** for routine tasks, tooling updates, dependencies, CI/CD configuration, or repository maintenance.
         > - **Do NOT** use Chore for bug fixes (use **Bug**), new features (use **Feature**), code restructuring/cleanup (use **Refactor**), or test additions/fixes (use **Test**).
-        > Before submitting, please set the relevant Issue Fields: Priority, Scope, Effort, Start date, and Target date. Depending on the GitHub view, these fields may appear in the issue sidebar or at the bottom of the create-issue popup.
+
+  - type: dropdown
+    id: template-type
+    attributes:
+      label: Issue Type
+      description: This is the only option for this template. GitHub does not allow
+        changing it here; it is kept as creation metadata for automation.
+      options:
+        - Chore
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        > [!NOTE]
+        > Friendly reminder: set Priority, Scope, Effort, Start date, and Target date when they are known. Depending on the GitHub view, these fields may appear in the issue sidebar or at the bottom of the create-issue popup. If you leave them empty now, you can fill them in later.
 
   - type: markdown
     attributes:
@@ -95,13 +112,3 @@ body:
   - type: markdown
     attributes:
       value: "<!-- managed:end -->"
-
-  - type: dropdown
-    id: template-type
-    attributes:
-      label: Issue Type
-      description: Identifies which issue template was used. Do not change this value.
-      options:
-        - Chore
-    validations:
-      required: true
