@@ -37,7 +37,8 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
     await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, issueBody);
   }
 
-  if (state?.branch?.name && await isStaleBranchState(gh, owner, repo, currentIssue, state.branch.name)) {
+  if (state?.branch?.name && isStaleBranchState(currentIssue, state.branch.name)) {
+    await deleteBranchIfExists(gh, owner, repo, state.branch.name);
     state = { ...state, branch: null };
     issueBody = replaceAutomationState(issueBody, state);
     await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, issueBody);
@@ -293,16 +294,15 @@ function isIssueLinkedBranch(issue, branchName) {
   return nodes.some((node) => node?.ref?.name === branchName);
 }
 
-async function isStaleBranchState(gh, owner, repo, issue, branchName) {
-  if (isIssueLinkedBranch(issue, branchName)) return false;
+function isStaleBranchState(issue, branchName) {
+  return !isIssueLinkedBranch(issue, branchName);
+}
 
+async function deleteBranchIfExists(gh, owner, repo, branchName) {
   try {
-    await gh.getReference(owner, repo, `heads/${branchName}`);
-    return false;
+    await gh.deleteReference(owner, repo, `heads/${branchName}`);
   } catch (err) {
-    if (String(err?.message || "").includes("HTTP 404")) {
-      return true;
-    }
+    if (String(err?.message || "").includes("HTTP 404")) return;
     throw err;
   }
 }

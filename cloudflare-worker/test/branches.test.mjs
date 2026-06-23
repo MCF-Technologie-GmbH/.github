@@ -125,6 +125,7 @@ test("handleBranchCommand clears stale branch metadata before creating the expec
       latestBody = nextBody;
       updates.push(nextBody);
     },
+    async deleteReference() {},
     async getReference(_owner, _repo, ref) {
       if (ref === "heads/bug/50-test-bug-issue") {
         throw new Error("REST GET /git/ref/heads/bug/50-test-bug-issue -> HTTP 404: Not Found");
@@ -149,6 +150,65 @@ test("handleBranchCommand clears stale branch metadata before creating the expec
   assert.equal(result.created, true);
   assert.match(updates.at(-1), /"name": "fix\/50-test-bug-issue"/);
   assert.doesNotMatch(updates.at(-1), /bug\/50-test-bug-issue/);
+});
+
+test("handleBranchCommand deletes an unlinked stale branch ref before recreating it", async () => {
+  const body = replaceAutomationState(
+    ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug"),
+    {
+      issue_type: "fix",
+      branch: {
+        name: "fix/50-test-bug-issue",
+        base: "dev",
+        created: true,
+        linked: true,
+        error: null,
+        pr: null,
+      },
+    }
+  );
+  let latestBody = body;
+  const deleted = [];
+
+  const gh = {
+    async getIssue() {
+      return {
+        id: "ISSUE_id",
+        title: "fix: test-bug-issue",
+        body: latestBody,
+        repository: { id: "REPO_id" },
+        issueType: { name: "Bug" },
+        linkedBranches: { nodes: [] },
+      };
+    },
+    async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
+      latestBody = nextBody;
+    },
+    async deleteReference(_owner, _repo, ref) {
+      deleted.push(ref);
+    },
+    async getReference() {
+      return { object: { sha: "abc123" } };
+    },
+    async createLinkedBranch(input) {
+      assert.equal(input.branchName, "fix/50-test-bug-issue");
+      return {};
+    },
+    async createComment() {},
+  };
+
+  const result = await handleBranchCommand({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    issueNumber: 50,
+    comment: { id: 1 },
+  });
+
+  assert.equal(result.created, true);
+  assert.deepEqual(deleted, ["heads/fix/50-test-bug-issue"]);
+  assert.match(latestBody, /"name": "fix\/50-test-bug-issue"/);
+  assert.match(latestBody, /"linked": true/);
 });
 
 test("handleCreateEvent deletes manual issue-shaped branches", async () => {

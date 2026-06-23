@@ -132,7 +132,7 @@ export async function handleIssueCommentEvent({
     await gh.removeLabel(owner, repo, issueNumber, l);
   }
 
-  // 7. Cleanup: add a rocket reaction to the user command comment and delete it
+  // 7. Cleanup: delete the command comment to keep the timeline content clean.
   await cleanupCommandComment(gh, owner, repo, comment);
 
   return {
@@ -143,9 +143,8 @@ export async function handleIssueCommentEvent({
 
 async function cleanupCommandComment(gh, owner, repo, comment) {
   try {
-    await gh.createCommentReaction(owner, repo, comment.id, "rocket");
     await gh.deleteComment(owner, repo, comment.id);
   } catch (err) {
-    console.error(`Failed to manage comment/reaction: ${err.message}`);
+    console.error(`Failed to delete command comment: ${err.message}`);
   }
 }
