@@ -6,6 +6,7 @@ import {
 import { verifyGitHubSignature } from "./utils/crypto.js";
 import { normalizeRepo } from "./utils/text.js";
 import { GitHubClient, createInstallationAccessToken } from "./services/github.js";
+import { withCommandLog } from "./utils/comment-log.js";
 import { handleIssueCommentEvent } from "./handlers/comments.js";
 import { handleCreateEvent, handlePullRequestEvent } from "./handlers/branches.js";
 import { enforceIssueTypePolicy } from "./handlers/issues.js";
@@ -107,7 +108,7 @@ export default {
 
     try {
       const token = await createInstallationAccessToken(env, installationId);
-      const gh = new GitHubClient(token);
+      const gh = withCommandLog(new GitHubClient(token));
 
       if (event === "create") {
         const result = await handleCreateEvent({ gh, owner, repo, payload });

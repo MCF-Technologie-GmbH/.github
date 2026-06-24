@@ -266,9 +266,9 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
       [
         "Nothing to repair: the recorded branch no longer exists.",
         "",
-        "Resetting linked branch metadata.",
+        "Resetting linked branch metadata so `/branch create` can be used again.",
         "",
-        `Branch: \`${branchName}\``,
+        `Removed metadata for: \`${branchName}\``,
       ].join("\n")
     );
 
@@ -297,6 +297,13 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
       branchName,
       baseOid: branchOid,
     });
+
+    const repairedIssue = await gh.getIssue(owner, repo, issueNumber);
+    if (!isIssueLinkedBranch(repairedIssue, branchName)) {
+      throw new Error("GitHub created the branch ref but did not report it as a linked branch for this issue.");
+    }
+
+    await deleteReferenceIfExists(gh, owner, repo, `heads/${temporaryBranchName}`);
   } catch (err) {
     const failedState = {
       ...state,
@@ -324,7 +331,7 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
         `Branch: \`${branchName}\``,
         `Temporary branch: \`${temporaryBranchName}\``,
         "",
-        "If the temporary branch was created, the existing commits were preserved there.",
+        "If the temporary branch still exists, the existing commits were preserved there.",
         "",
         "```text",
         failedState.branch.error,
@@ -356,10 +363,9 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
     repo,
     issueNumber,
     [
-      "Repaired linked branch relationship.",
+      "Relinked branch successfully.",
       "",
-      `Preserved existing unlinked branch as: \`${temporaryBranchName}\``,
-      `Recreated linked branch: \`${branchName}\``,
+      `Branch: \`${branchName}\``,
     ].join("\n")
   );
 
@@ -399,6 +405,10 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
 
   const isReservedBranch = state?.branch?.name === branchName && state.branch.base === BASE_BRANCH;
   const isAutomationBot = payload.sender?.login === GITHUB_APP_BOT_LOGIN;
+
+  if (isAutomationBot && isTemporaryRepairBranch(branchName)) {
+    return { processed: true, allowed: true, reason: "temporary repair branch created by automation bot" };
+  }
 
   if (isAutomationBot && isReservedBranch) {
     return { processed: true, allowed: true, reason: "branch created by automation bot with matching reservation" };
@@ -474,6 +484,15 @@ function isIssueLinkedBranch(issue, branchName) {
 
 function isStaleBranchState(issue, branchName) {
   return !isIssueLinkedBranch(issue, branchName);
+}
+
+async function deleteReferenceIfExists(gh, owner, repo, ref) {
+  try {
+    await gh.deleteReference(owner, repo, ref);
+  } catch (err) {
+    if (String(err?.message || "").includes("HTTP 404")) return;
+    throw err;
+  }
 }
 
 function canRecordLinkedBranch(state, branchName) {
@@ -569,4 +588,8 @@ function buildTemporaryBranchName(branchName) {
   const safeName = branchName.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "branch";
   const timestamp = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
   return `temp/${safeName}-${timestamp}`;
+}
+
+function isTemporaryRepairBranch(branchName) {
+  return /^temp\/[A-Za-z0-9._-]+-\d{14}$/.test(String(branchName || ""));
 }

@@ -266,6 +266,21 @@ export class GitHubClient {
   }
 
   /**
+   * Lists recent comments on an issue.
+   *
+   * @param {string} owner - Repository owner login.
+   * @param {string} repo - Repository name.
+   * @param {number} issueNumber - GitHub Issue number.
+   * @returns {Promise<Array<object>>} Issue comments.
+   */
+  async listIssueComments(owner, repo, issueNumber) {
+    return this.rest(
+      "GET",
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issueNumber}/comments?per_page=100`
+    );
+  }
+
+  /**
    * Attempts to create a GitHub linked branch for an issue.
    * This intentionally does not fall back to a raw git ref because the policy
    * requires branches to be linked through GitHub's issue development model.

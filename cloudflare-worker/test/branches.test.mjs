@@ -256,6 +256,7 @@ test("handleBranchRepairCommand resets metadata when the recorded branch no long
   assert.equal(result.reset, true);
   assert.match(latestBody, /"branch": null/);
   assert.match(comments.at(-1), /Nothing to repair: the recorded branch no longer exists/);
+  assert.match(comments.at(-1), /Removed metadata for: `fix\/50-test-bug-issue`/);
 });
 
 test("handleBranchRepairCommand preserves an existing recorded branch and recreates it as linked", async () => {
@@ -278,16 +279,22 @@ test("handleBranchRepairCommand preserves an existing recorded branch and recrea
   const linkedBranches = [];
   const createdRefs = [];
   const deletedRefs = [];
+  let issueReads = 0;
 
   const gh = {
     async getIssue() {
+      issueReads += 1;
       return {
         id: "ISSUE_id",
         title: "fix: test-bug-issue",
         body: latestBody,
         repository: { id: "REPO_id" },
         issueType: { name: "Bug" },
-        linkedBranches: { nodes: [] },
+        linkedBranches: {
+          nodes: issueReads > 1
+            ? [{ ref: { name: "fix/50-test-bug-issue" } }]
+            : [],
+        },
       };
     },
     async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
@@ -325,7 +332,10 @@ test("handleBranchRepairCommand preserves an existing recorded branch and recrea
     ref: `refs/heads/${result.temporaryBranch}`,
     sha: "branch-sha",
   }]);
-  assert.deepEqual(deletedRefs, ["heads/fix/50-test-bug-issue"]);
+  assert.deepEqual(deletedRefs, [
+    "heads/fix/50-test-bug-issue",
+    `heads/${result.temporaryBranch}`,
+  ]);
   assert.deepEqual(linkedBranches, [{
     issueId: "ISSUE_id",
     repositoryId: "REPO_id",
@@ -334,8 +344,69 @@ test("handleBranchRepairCommand preserves an existing recorded branch and recrea
   }]);
   assert.match(latestBody, /"linked": true/);
   assert.match(latestBody, /"error": null/);
-  assert.match(comments.at(-1), /Repaired linked branch relationship/);
-  assert.match(comments.at(-1), /Preserved existing unlinked branch as/);
+  assert.match(comments.at(-1), /Relinked branch successfully/);
+  assert.doesNotMatch(comments.at(-1), /temporary/i);
+});
+
+test("handleBranchRepairCommand fails if GitHub does not report the recreated branch as linked", async () => {
+  const body = replaceAutomationState(
+    ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug"),
+    {
+      issue_type: "fix",
+      branch: {
+        name: "fix/50-test-bug-issue",
+        base: "dev",
+        created: true,
+        linked: false,
+        error: null,
+        pr: null,
+      },
+    }
+  );
+  let latestBody = body;
+  const comments = [];
+  const deletedRefs = [];
+
+  const gh = {
+    async getIssue() {
+      return {
+        id: "ISSUE_id",
+        title: "fix: test-bug-issue",
+        body: latestBody,
+        repository: { id: "REPO_id" },
+        issueType: { name: "Bug" },
+        linkedBranches: { nodes: [] },
+      };
+    },
+    async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
+      latestBody = nextBody;
+    },
+    async getReference() {
+      return { object: { sha: "branch-sha" } };
+    },
+    async createReference() {},
+    async deleteReference(_owner, _repo, ref) {
+      deletedRefs.push(ref);
+    },
+    async createLinkedBranch() {},
+    async createComment(_owner, _repo, _issueNumber, commentBody) {
+      comments.push(commentBody);
+    },
+  };
+
+  const result = await handleBranchRepairCommand({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    issueNumber: 50,
+  });
+
+  assert.equal(result.repaired, false);
+  assert.equal(result.reason, "linked branch repair failed");
+  assert.deepEqual(deletedRefs, ["heads/fix/50-test-bug-issue"]);
+  assert.match(latestBody, /"linked": false/);
+  assert.match(latestBody, /did not report it as a linked branch/);
+  assert.match(comments.at(-1), /I could not repair the linked branch relationship/);
 });
 
 test("handleCreateEvent deletes manual issue-shaped branches", async () => {
@@ -614,6 +685,54 @@ test("handleCreateEvent allows bot-created branches only with matching reservati
 
   assert.equal(result.allowed, true);
   assert.deepEqual(deleted, []);
+});
+
+test("handleCreateEvent allows bot-created temporary repair branches", async () => {
+  const deleted = [];
+  const gh = {
+    async deleteReference(_owner, _repo, ref) {
+      deleted.push(ref);
+    },
+    async createComment() {},
+  };
+
+  const result = await handleCreateEvent({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    payload: {
+      ref_type: "branch",
+      ref: "temp/fix-50-test-bug-issue-20260624081137",
+      sender: { login: "mcf-automation-bot[bot]" },
+    },
+  });
+
+  assert.equal(result.allowed, true);
+  assert.deepEqual(deleted, []);
+});
+
+test("handleCreateEvent deletes user-created temporary repair branches", async () => {
+  const deleted = [];
+  const gh = {
+    async deleteReference(_owner, _repo, ref) {
+      deleted.push(ref);
+    },
+    async createComment() {},
+  };
+
+  const result = await handleCreateEvent({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    payload: {
+      ref_type: "branch",
+      ref: "temp/fix-50-test-bug-issue-20260624081137",
+      sender: { login: "mark" },
+    },
+  });
+
+  assert.equal(result.deleted, true);
+  assert.deepEqual(deleted, ["heads/temp/fix-50-test-bug-issue-20260624081137"]);
 });
 
 test("handleCreateEvent rejects bot-created branches reserved from a non-dev base", async () => {
