@@ -423,7 +423,37 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
       title: issue.title,
     });
 
-    if (isFromDev && branchName === expectedBranchName && canRecordLinkedBranch(state, branchName)) {
+    if (isFromDev && branchName === expectedBranchName && state?.branch?.name) {
+      await gh.deleteReference(owner, repo, `heads/${branchName}`);
+      await createBranchEventComment(
+        gh,
+        owner,
+        repo,
+        issueNumber,
+        payload,
+        "/branch manual",
+        [
+          `Deleted manually linked branch \`${branchName}\`.`,
+          "",
+          "This issue already has recorded branch metadata:",
+          "",
+          `\`${state.branch.name}\``,
+          "",
+          "Run `/branch repair` before creating or linking a branch manually.",
+        ].join("\n")
+      );
+
+      return {
+        processed: true,
+        allowed: false,
+        deleted: true,
+        branch: branchName,
+        issue: issueNumber,
+        reason: "issue branch metadata needs repair before manual link",
+      };
+    }
+
+    if (isFromDev && branchName === expectedBranchName) {
       const body = ensureAutomationState(issue.body || "", issueType);
       const updatedState = {
         issue_type: parseAutomationState(body)?.issue_type || state?.issue_type || "issue",
@@ -445,6 +475,23 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
         replaceAutomationState(body, updatedState)
       );
 
+      await createBranchEventComment(
+        gh,
+        owner,
+        repo,
+        issueNumber,
+        payload,
+        "/branch manual",
+        [
+          "Branch linked and recorded successfully.",
+          "",
+          `Branch: \`${branchName}\``,
+          `Base: \`${BASE_BRANCH}\``,
+          "",
+          "Created from GitHub's sidebar and accepted by automation.",
+        ].join("\n")
+      );
+
       return {
         processed: true,
         allowed: true,
@@ -459,14 +506,17 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
 
   if (issueNumber) {
     try {
-      await gh.createComment(
+      await createBranchEventComment(
+        gh,
         owner,
         repo,
         issueNumber,
+        payload,
+        "/branch manual",
         [
-          `Deleted unauthorized branch \`${branchName}\`.`,
+          `Deleted branch \`${branchName}\` because it was not accepted by automation.`,
           "",
-          "Branches must be created with `/branch create` so they can be linked and recorded by automation.",
+          "Prefer `/branch create` for managed issue branches, or use the GitHub sidebar only when the generated branch name matches the issue convention and no branch is already recorded.",
         ].join("\n")
       );
     } catch (err) {
@@ -486,6 +536,16 @@ function isStaleBranchState(issue, branchName) {
   return !isIssueLinkedBranch(issue, branchName);
 }
 
+async function createBranchEventComment(gh, owner, repo, issueNumber, payload, command, body) {
+  if (typeof gh.setCommandLogMetadata === "function") {
+    gh.setCommandLogMetadata(owner, repo, issueNumber, {
+      actor: payload.sender?.login,
+      command,
+    });
+  }
+  await gh.createComment(owner, repo, issueNumber, body);
+}
+
 async function deleteReferenceIfExists(gh, owner, repo, ref) {
   try {
     await gh.deleteReference(owner, repo, ref);
@@ -493,10 +553,6 @@ async function deleteReferenceIfExists(gh, owner, repo, ref) {
     if (String(err?.message || "").includes("HTTP 404")) return;
     throw err;
   }
-}
-
-function canRecordLinkedBranch(state, branchName) {
-  return !state?.branch?.name || state.branch.name === branchName;
 }
 
 async function branchMatchesBase(gh, owner, repo, branchName, baseBranch) {
