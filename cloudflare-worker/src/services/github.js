@@ -328,6 +328,29 @@ export class GitHubClient {
   }
 
   /**
+   * Deletes a GitHub linked branch relationship from an issue.
+   *
+   * @param {string} linkedBranchId - GraphQL Node ID of the LinkedBranch.
+   * @returns {Promise<object>} GraphQL mutation result.
+   */
+  async deleteLinkedBranch(linkedBranchId) {
+    if (!linkedBranchId) {
+      throw new Error("Missing linkedBranchId.");
+    }
+
+    return this.graphql(
+      `mutation($input: DeleteLinkedBranchInput!) {
+        deleteLinkedBranch(input: $input) {
+          clientMutationId
+        }
+      }`,
+      {
+        input: { linkedBranchId },
+      }
+    );
+  }
+
+  /**
    * Gets a git reference.
    *
    * @param {string} owner - Repository owner login.

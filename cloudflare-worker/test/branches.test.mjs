@@ -216,15 +216,22 @@ test("handleBranchCommand ignores stale linked branch reservations with null ref
   const body = ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug");
   const comments = [];
   let latestBody = body;
+  const deletedLinkedBranches = [];
+  let issueReads = 0;
   const gh = {
     async getIssue() {
+      issueReads += 1;
       return {
         id: "ISSUE_id",
         title: "fix: test-bug-issue",
         body: latestBody,
         repository: { id: "REPO_id" },
         issueType: { name: "Bug" },
-        linkedBranches: { nodes: [{ ref: null }, { ref: null }] },
+        linkedBranches: {
+          nodes: issueReads === 1
+            ? [{ id: "LB_1", ref: null }, { id: "LB_2", ref: null }]
+            : [],
+        },
       };
     },
     async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
@@ -241,6 +248,9 @@ test("handleBranchCommand ignores stale linked branch reservations with null ref
       assert.equal(input.branchName, "fix/50-test-bug-issue");
       return {};
     },
+    async deleteLinkedBranch(linkedBranchId) {
+      deletedLinkedBranches.push(linkedBranchId);
+    },
     async createComment(_owner, _repo, _issueNumber, body) {
       comments.push(body);
     },
@@ -255,6 +265,7 @@ test("handleBranchCommand ignores stale linked branch reservations with null ref
   });
 
   assert.equal(result.created, true);
+  assert.deepEqual(deletedLinkedBranches, ["LB_1", "LB_2"]);
   assert.match(comments.at(-1), /Created linked branch/);
 });
 
@@ -370,15 +381,20 @@ test("handleBranchRepairCommand blocks ghost linked branches without resetting m
 test("handleBranchRepairCommand ignores stale linked branch reservations when metadata is empty", async () => {
   const body = ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug");
   const comments = [];
+  const deletedLinkedBranches = [];
+  let issueReads = 0;
   const gh = {
     async getIssue() {
+      issueReads += 1;
       return {
         id: "ISSUE_id",
         title: "fix: test-bug-issue",
         body,
         repository: { id: "REPO_id" },
         issueType: { name: "Bug" },
-        linkedBranches: { nodes: [{ ref: null }] },
+        linkedBranches: {
+          nodes: issueReads === 1 ? [{ id: "LB_1", ref: null }] : [],
+        },
       };
     },
     async updateIssueTitleAndBody() {},
@@ -387,6 +403,9 @@ test("handleBranchRepairCommand ignores stale linked branch reservations when me
         throw new Error("REST GET /git/ref/heads/fix/50-test-bug-issue -> HTTP 404: Not Found");
       }
       throw new Error(`unexpected ref ${ref}`);
+    },
+    async deleteLinkedBranch(linkedBranchId) {
+      deletedLinkedBranches.push(linkedBranchId);
     },
     async createComment(_owner, _repo, _issueNumber, body) {
       comments.push(body);
@@ -402,6 +421,7 @@ test("handleBranchRepairCommand ignores stale linked branch reservations when me
 
   assert.equal(result.repaired, false);
   assert.equal(result.reason, "no branch metadata");
+  assert.deepEqual(deletedLinkedBranches, ["LB_1"]);
   assert.match(comments.at(-1), /does not have recorded branch metadata/);
 });
 

@@ -22,7 +22,7 @@ const BASE_BRANCH = "dev";
  * @returns {Promise<object>}
  */
 export async function handleBranchCommand({ gh, owner, repo, issueNumber, comment }) {
-  const currentIssue = await gh.getIssue(owner, repo, issueNumber);
+  let currentIssue = await gh.getIssue(owner, repo, issueNumber);
   const issueType = currentIssue.issueType?.name || "issue";
   const branchName = buildIssueBranchName({
     issueType,
@@ -36,6 +36,8 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
   if (issueBody !== (currentIssue.body || "")) {
     await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, issueBody);
   }
+
+  currentIssue = await cleanupStaleLinkedBranchRecords({ gh, owner, repo, issueNumber, issue: currentIssue });
 
   const branchStatus = await inspectIssueBranchState({
     gh,
@@ -230,7 +232,7 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
  * @returns {Promise<object>}
  */
 export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }) {
-  const currentIssue = await gh.getIssue(owner, repo, issueNumber);
+  let currentIssue = await gh.getIssue(owner, repo, issueNumber);
   const issueType = currentIssue.issueType?.name || "issue";
   let issueBody = ensureAutomationState(currentIssue.body || "", issueType);
   let state = parseAutomationState(issueBody);
@@ -244,6 +246,8 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
   if (issueBody !== (currentIssue.body || "")) {
     await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, issueBody);
   }
+
+  currentIssue = await cleanupStaleLinkedBranchRecords({ gh, owner, repo, issueNumber, issue: currentIssue });
 
   let branchStatus = await inspectIssueBranchState({
     gh,
@@ -465,6 +469,7 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
   if (issueNumber) {
     try {
       issue = await gh.getIssue(owner, repo, issueNumber);
+      issue = await cleanupStaleLinkedBranchRecords({ gh, owner, repo, issueNumber, issue });
       state = parseAutomationState(issue.body || "");
     } catch (err) {
       console.error(`Failed to read issue #${issueNumber} for branch authorization: ${err.message}`);
@@ -629,6 +634,19 @@ function isStaleBranchState(issue, branchName) {
   return !isIssueLinkedBranch(issue, branchName);
 }
 
+async function cleanupStaleLinkedBranchRecords({ gh, owner, repo, issueNumber, issue }) {
+  const staleRecords = (issue.linkedBranches?.nodes || []).filter((node) => node?.id && !node.ref);
+  if (!staleRecords.length || typeof gh.deleteLinkedBranch !== "function") {
+    return issue;
+  }
+
+  for (const record of staleRecords) {
+    await gh.deleteLinkedBranch(record.id);
+  }
+
+  return gh.getIssue(owner, repo, issueNumber);
+}
+
 async function inspectIssueBranchState({ gh, owner, repo, issue, expectedBranchName, state, checkExpectedRefOnly = false }) {
   const linkedNames = linkedBranchNames(issue);
   const staleLinkedRecordCount = staleLinkedBranchRecordCount(issue);
@@ -780,7 +798,8 @@ export async function handlePullRequestEvent({ gh, owner, repo, payload }) {
     return { processed: false, reason: "PR branch is not issue-managed" };
   }
 
-  const issue = await gh.getIssue(owner, repo, issueNumber);
+  let issue = await gh.getIssue(owner, repo, issueNumber);
+  issue = await cleanupStaleLinkedBranchRecords({ gh, owner, repo, issueNumber, issue });
   const state = parseAutomationState(issue.body || "");
   const branchStatus = await inspectIssueBranchState({
     gh,
