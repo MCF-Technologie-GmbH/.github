@@ -94,20 +94,12 @@ export function replaceAutomationState(body, state) {
   const normalized = normalizeAutomationState(state, state?.issue_type);
   const block = formatAutomationStateBlock(normalized);
   const text = String(body || "");
-  const regex = automationStateRegex();
+  const bodyWithoutState = text
+    .replace(wrappedAutomationStateRegex(), "")
+    .replace(automationStateRegex(), "")
+    .trim();
 
-  if (regex.test(text)) {
-    return text.replace(regex, block);
-  }
-
-  const protectedStart = "<!-- protected:start -->";
-  const protectedIndex = text.indexOf(protectedStart);
-  if (protectedIndex !== -1) {
-    const insertAt = protectedIndex + protectedStart.length;
-    return `${text.slice(0, insertAt)}\n${block}\n${text.slice(insertAt).replace(/^\n/, "")}`;
-  }
-
-  return `${block}\n\n${text}`.trim();
+  return `${bodyWithoutState}\n\n${block}`.trim();
 }
 
 /**
@@ -166,9 +158,17 @@ function extractAutomationStateJson(body) {
 }
 
 function formatAutomationStateBlock(state) {
-  return `${STATE_START}\n${JSON.stringify(state, null, 2)}\n${STATE_END}`;
+  return [
+    "<!-- protected:start -->",
+    `${STATE_START}\n${JSON.stringify(state, null, 2)}\n${STATE_END}`,
+    "<!-- protected:end -->",
+  ].join("\n");
 }
 
 function automationStateRegex() {
   return /<!-- automation-state:start\s*([\s\S]*?)\s*automation-state:end -->/;
+}
+
+function wrappedAutomationStateRegex() {
+  return /\s*<!-- protected:start -->\s*<!-- automation-state:start\s*[\s\S]*?\s*automation-state:end -->\s*<!-- protected:end -->\s*/;
 }

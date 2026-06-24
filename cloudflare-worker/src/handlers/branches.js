@@ -11,7 +11,7 @@ import {
 const BASE_BRANCH = "dev";
 
 /**
- * Handles the /branch issue comment command.
+ * Handles the /branch create issue comment command.
  *
  * @param {object} params
  * @param {GitHubClient} params.gh
@@ -96,7 +96,7 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
       owner,
       repo,
       issueNumber,
-      "The branch reservation changed while processing `/branch`. Please retry."
+      "The branch reservation changed while processing `/branch create`. Please retry."
     );
     return { processed: true, command: "branch", created: false, reason: "reservation changed" };
   }
@@ -176,7 +176,7 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
         `Branch: \`${branchName}\``,
         `Base: \`${BASE_BRANCH}\``,
         "",
-        "The same branch can be retried with `/branch` after the error is fixed.",
+        "The same branch can be retried with `/branch create` after the error is fixed.",
         "",
         "```text",
         failedState.branch.error,
@@ -195,7 +195,7 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
 }
 
 /**
- * Enforces that branches are created only by the automation bot through /branch.
+ * Enforces that branches are created only by the automation bot through /branch create.
  *
  * @param {object} params
  * @returns {Promise<object>}
@@ -278,7 +278,7 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
         [
           `Deleted unauthorized branch \`${branchName}\`.`,
           "",
-          "Branches must be created with `/branch` so they can be linked and recorded by automation.",
+          "Branches must be created with `/branch create` so they can be linked and recorded by automation.",
         ].join("\n")
       );
     } catch (err) {

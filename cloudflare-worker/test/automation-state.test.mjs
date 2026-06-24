@@ -9,7 +9,7 @@ import {
   replaceAutomationState,
 } from "../src/utils/automation-state.js";
 
-test("ensureAutomationState inserts hidden JSON inside protected block", () => {
+test("ensureAutomationState inserts hidden JSON in a protected block at the bottom", () => {
   const body = [
     "<!-- protected:start -->",
     "### Problem",
@@ -22,7 +22,8 @@ test("ensureAutomationState inserts hidden JSON inside protected block", () => {
 
   assert.equal(state.issue_type, "feat");
   assert.equal(state.branch, null);
-  assert.match(updated, /<!-- protected:start -->\n<!-- automation-state:start/);
+  assert.match(updated, /<!-- protected:end -->\n\n<!-- protected:start -->\n<!-- automation-state:start/);
+  assert.match(updated, /automation-state:end -->\n<!-- protected:end -->$/);
 });
 
 test("replaceAutomationState updates branch metadata", () => {

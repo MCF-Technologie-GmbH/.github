@@ -27,7 +27,7 @@ export async function handleIssueCommentEvent({
 }) {
   const commentBody = comment.body || "";
   const lines = commentBody.split(/\r?\n/);
-  const hasBranchCommand = lines.some((line) => line.trim().toLowerCase() === "/branch");
+  const hasBranchCommand = lines.some((line) => line.trim().toLowerCase() === "/branch create");
 
   if (hasBranchCommand) {
     const result = await handleBranchCommand({ gh, owner, repo, issueNumber, comment });
