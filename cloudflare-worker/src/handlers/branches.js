@@ -37,6 +37,22 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
     await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, issueBody);
   }
 
+  const branchStatus = await inspectIssueBranchState({
+    gh,
+    owner,
+    repo,
+    issue: currentIssue,
+    issueNumber,
+    expectedBranchName: branchName,
+    state,
+    checkExpectedRefOnly: true,
+  });
+  const blockingMessage = branchStateBlockingMessage(branchStatus);
+  if (blockingMessage) {
+    await gh.createComment(owner, repo, issueNumber, blockingMessage);
+    return { processed: true, command: "branch", created: false, reason: branchStatus.reason };
+  }
+
   if (state?.branch?.name && state.branch.name !== branchName) {
     await gh.createComment(
       owner,
@@ -234,7 +250,38 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
     return { processed: true, command: "branch repair", repaired: false, reason: "no branch metadata" };
   }
 
-  if (isIssueLinkedBranch(currentIssue, branchName)) {
+  const branchStatus = await inspectIssueBranchState({
+    gh,
+    owner,
+    repo,
+    issue: currentIssue,
+    issueNumber,
+    expectedBranchName: branchName,
+    state,
+  });
+  const blockingMessage = branchStateBlockingMessage(branchStatus);
+  if (blockingMessage) {
+    const failedState = {
+      ...state,
+      branch: {
+        ...state.branch,
+        created: branchStatus.metadataRef.exists,
+        linked: branchStatus.metadataLinked,
+        error: branchStatus.message,
+      },
+    };
+    await gh.updateIssueTitleAndBody(
+      owner,
+      repo,
+      issueNumber,
+      undefined,
+      replaceAutomationState(issueBody, failedState)
+    );
+    await gh.createComment(owner, repo, issueNumber, blockingMessage);
+    return { processed: true, command: "branch repair", repaired: false, reason: branchStatus.reason };
+  }
+
+  if (branchStatus.metadataLinked && branchStatus.metadataRef.exists) {
     await gh.createComment(
       owner,
       repo,
@@ -422,6 +469,29 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
       issueNumber,
       title: issue.title,
     });
+    const branchStatus = await inspectIssueBranchState({
+      gh,
+      owner,
+      repo,
+      issue,
+      issueNumber,
+      expectedBranchName,
+      state,
+      skipRefs: [branchName],
+    });
+    const blockingMessage = branchStateBlockingMessage(branchStatus, { allowCurrentCreatedBranch: branchName });
+    if (blockingMessage) {
+      await gh.deleteReference(owner, repo, `heads/${branchName}`);
+      await createBranchEventComment(gh, owner, repo, issueNumber, payload, "/branch manual", blockingMessage);
+      return {
+        processed: true,
+        allowed: false,
+        deleted: true,
+        branch: branchName,
+        issue: issueNumber,
+        reason: branchStatus.reason,
+      };
+    }
 
     if (isFromDev && branchName === expectedBranchName && state?.branch?.name && state.branch.name !== branchName) {
       await gh.deleteReference(owner, repo, `heads/${branchName}`);
@@ -538,6 +608,104 @@ function isStaleBranchState(issue, branchName) {
   return !isIssueLinkedBranch(issue, branchName);
 }
 
+async function inspectIssueBranchState({ gh, owner, repo, issue, expectedBranchName, state, checkExpectedRefOnly = false }) {
+  const linkedNames = linkedBranchNames(issue);
+  const metadataName = state?.branch?.name || null;
+  const metadataLinked = metadataName ? linkedNames.includes(metadataName) : false;
+  const expectedLinked = expectedBranchName ? linkedNames.includes(expectedBranchName) : false;
+  const shouldCheckExpectedRef = checkExpectedRefOnly || expectedLinked || metadataName === expectedBranchName;
+  const refNames = [...new Set([
+    metadataName,
+    shouldCheckExpectedRef ? expectedBranchName : null,
+    ...linkedNames,
+  ].filter(Boolean))];
+  const refs = new Map();
+  for (const name of refNames) {
+    refs.set(name, await getBranchRefInfo(gh, owner, repo, name));
+  }
+
+  const unexpectedLinkedNames = linkedNames.filter((name) => name !== expectedBranchName);
+  const ghostLinkedNames = linkedNames.filter((name) => refs.get(name)?.exists === false);
+  const metadataRef = metadataName ? refs.get(metadataName) : { exists: false, sha: null };
+  const expectedRef = expectedBranchName && refs.has(expectedBranchName)
+    ? refs.get(expectedBranchName)
+    : { exists: false, sha: null };
+
+  const status = {
+    expectedBranchName,
+    metadataName,
+    metadataLinked,
+    metadataRef,
+    expectedLinked,
+    expectedRef,
+    linkedNames,
+    unexpectedLinkedNames,
+    ghostLinkedNames,
+    reason: null,
+    message: null,
+  };
+
+  if (linkedNames.length > 1) {
+    status.reason = "multiple linked branches";
+    status.message = "GitHub reports multiple linked branches for this issue.";
+  } else if (unexpectedLinkedNames.length > 0) {
+    status.reason = "unexpected linked branch";
+    status.message = `GitHub reports an unexpected linked branch: \`${unexpectedLinkedNames[0]}\`.`;
+  } else if (metadataName && metadataName !== expectedBranchName) {
+    status.reason = "metadata branch does not match expected branch";
+    status.message = `Recorded branch metadata points to \`${metadataName}\`, but the expected issue branch is \`${expectedBranchName}\`.`;
+  } else if (ghostLinkedNames.length > 0) {
+    status.reason = "linked branch missing git ref";
+    status.message = `GitHub still reports \`${ghostLinkedNames[0]}\` as linked, but the git ref no longer exists.`;
+  } else if (checkExpectedRefOnly && !metadataName && expectedRef.exists && !expectedLinked) {
+    status.reason = "unlinked git ref already exists";
+    status.message = `A git ref already exists for \`${expectedBranchName}\`, but GitHub does not report it as linked to this issue.`;
+  }
+
+  return status;
+}
+
+function branchStateBlockingMessage(status) {
+  if (!status?.reason) return null;
+  return [
+    "Branch state needs attention before automation can continue.",
+    "",
+    status.message,
+    "",
+    "Current state:",
+    `- Expected branch: \`${status.expectedBranchName || "none"}\``,
+    `- Recorded metadata: \`${status.metadataName || "none"}\``,
+    `- Linked branches: ${status.linkedNames.length ? status.linkedNames.map((name) => `\`${name}\``).join(", ") : "`none`"}`,
+    `- Expected git ref exists: \`${status.expectedRef.exists ? "yes" : "no"}\``,
+    "",
+    status.reason === "linked branch missing git ref"
+      ? "Remove the stale linked branch from the issue sidebar, then run `/branch repair` again."
+      : "Run `/branch repair` or clean up the conflicting branch/link before retrying.",
+  ].join("\n");
+}
+
+function linkedBranchNames(issue) {
+  return [...new Set((issue.linkedBranches?.nodes || [])
+    .map((node) => node?.ref?.name)
+    .filter(Boolean))];
+}
+
+async function getBranchRefInfo(gh, owner, repo, branchName) {
+  if (typeof gh.getReference !== "function") {
+    return { exists: null, sha: null };
+  }
+
+  try {
+    const ref = await gh.getReference(owner, repo, `heads/${branchName}`);
+    return { exists: true, sha: ref?.object?.sha || null };
+  } catch (err) {
+    if (String(err?.message || "").includes("HTTP 404")) {
+      return { exists: false, sha: null };
+    }
+    throw err;
+  }
+}
+
 async function createBranchEventComment(gh, owner, repo, issueNumber, payload, command, body) {
   if (typeof gh.setCommandLogMetadata === "function") {
     gh.setCommandLogMetadata(owner, repo, issueNumber, {
@@ -586,9 +754,30 @@ export async function handlePullRequestEvent({ gh, owner, repo, payload }) {
 
   const issue = await gh.getIssue(owner, repo, issueNumber);
   const state = parseAutomationState(issue.body || "");
+  const branchStatus = await inspectIssueBranchState({
+    gh,
+    owner,
+    repo,
+    issue,
+    issueNumber,
+    expectedBranchName: branchName,
+    state,
+  });
   const problems = [];
 
-  if (!state?.branch || state.branch.name !== branchName || state.branch.created !== true || state.branch.linked !== true) {
+  const blockingMessage = branchStateBlockingMessage(branchStatus);
+  if (blockingMessage) {
+    problems.push(branchStatus.message);
+  }
+
+  if (
+    !state?.branch ||
+    state.branch.name !== branchName ||
+    state.branch.created !== true ||
+    state.branch.linked !== true ||
+    !branchStatus.metadataLinked ||
+    !branchStatus.metadataRef.exists
+  ) {
     problems.push("the source branch is not registered as an authorized linked branch for this issue");
   }
 

@@ -266,6 +266,19 @@ export class GitHubClient {
   }
 
   /**
+   * Creates a comment without automation-side decoration.
+   *
+   * @param {string} owner - Repository owner login.
+   * @param {string} repo - Repository name.
+   * @param {number} issueNumber - GitHub issue number.
+   * @param {string} body - The Markdown body of the comment.
+   * @returns {Promise<object>} The created comment REST payload.
+   */
+  async createCommentRaw(owner, repo, issueNumber, body) {
+    return this.createComment(owner, repo, issueNumber, body);
+  }
+
+  /**
    * Lists recent comments on an issue.
    *
    * @param {string} owner - Repository owner login.
@@ -501,6 +514,23 @@ export class GitHubClient {
     return this.rest(
       "DELETE",
       `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/comments/${commentId}`
+    );
+  }
+
+  /**
+   * Updates an issue comment.
+   *
+   * @param {string} owner - Repository owner login.
+   * @param {string} repo - Repository name.
+   * @param {number} commentId - The ID of the comment to update.
+   * @param {string} body - The Markdown body to restore.
+   * @returns {Promise<object>} The updated comment REST payload.
+   */
+  async updateComment(owner, repo, commentId, body) {
+    return this.rest(
+      "PATCH",
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/comments/${commentId}`,
+      { body }
     );
   }
 

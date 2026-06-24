@@ -1,4 +1,4 @@
-import { REQUIRES_WHITELIST } from "../config.js";
+import { GITHUB_APP_BOT_LOGIN, REQUIRES_WHITELIST } from "../config.js";
 import { parseChecklist, getRequiresLabelsForChecklist } from "../utils/checklist.js";
 import { handleBranchCommand, handleBranchRepairCommand } from "./branches.js";
 
@@ -146,6 +146,56 @@ export async function handleIssueCommentEvent({
     processed: true,
     commandsProcessed: commands.length,
   };
+}
+
+/**
+ * Protects automation bot comments from manual edits or deletion.
+ *
+ * @param {object} params
+ * @param {GitHubClient} params.gh
+ * @param {string} params.owner
+ * @param {string} params.repo
+ * @param {number} params.issueNumber
+ * @param {string} params.action
+ * @param {object} params.comment
+ * @param {object} params.changes
+ * @returns {Promise<object>}
+ */
+export async function handleIssueCommentProtectionEvent({
+  gh,
+  owner,
+  repo,
+  issueNumber,
+  action,
+  comment,
+  changes,
+}) {
+  if (comment.user?.login !== GITHUB_APP_BOT_LOGIN) {
+    return { processed: false, reason: "comment is not owned by automation bot" };
+  }
+
+  if (action === "edited") {
+    const previousBody = changes?.body?.from;
+    if (typeof previousBody !== "string") {
+      return { processed: false, reason: "missing previous comment body" };
+    }
+
+    await gh.updateComment(owner, repo, comment.id, previousBody);
+    return { processed: true, protected: true, operation: "restored edited bot comment" };
+  }
+
+  if (action === "deleted") {
+    const body = comment.body;
+    if (typeof body !== "string" || body.trim() === "") {
+      return { processed: false, reason: "missing deleted comment body" };
+    }
+
+    const create = typeof gh.createCommentRaw === "function" ? gh.createCommentRaw.bind(gh) : gh.createComment.bind(gh);
+    await create(owner, repo, issueNumber, body);
+    return { processed: true, protected: true, operation: "recreated deleted bot comment" };
+  }
+
+  return { processed: false, reason: `comment action=${action}` };
 }
 
 async function cleanupCommandComment(gh, owner, repo, comment) {

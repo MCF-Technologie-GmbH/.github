@@ -28,7 +28,10 @@ test("handleBranchCommand reserves and records a linked branch", async () => {
       latestBody = nextBody;
       updates.push(nextBody);
     },
-    async getReference() {
+    async getReference(_owner, _repo, ref) {
+      if (ref === "heads/feat/123-add-login") {
+        throw new Error("REST GET /git/ref/heads/feat/123-add-login -> HTTP 404: Not Found");
+      }
       return { object: { sha: "abc123" } };
     },
     async createLinkedBranch(input) {
@@ -71,7 +74,10 @@ test("handleBranchCommand stores creation errors and allows same-name retry", as
     async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
       latestBody = nextBody;
     },
-    async getReference() {
+    async getReference(_owner, _repo, ref) {
+      if (ref === "heads/feat/123-add-login") {
+        throw new Error("REST GET /git/ref/heads/feat/123-add-login -> HTTP 404: Not Found");
+      }
       return { object: { sha: "abc123" } };
     },
     async createLinkedBranch() {
@@ -143,10 +149,10 @@ test("handleBranchCommand blocks old branch-name metadata without deleting it", 
   });
 
   assert.equal(result.created, false);
-  assert.equal(result.reason, "issue already has another branch");
+  assert.equal(result.reason, "metadata branch does not match expected branch");
   assert.deepEqual(deleted, []);
   assert.match(latestBody, /"name": "bug\/50-test-bug-issue"/);
-  assert.match(comments.at(-1), /A second branch cannot be created/);
+  assert.match(comments.at(-1), /Recorded branch metadata points to/);
 });
 
 test("handleBranchCommand does not delete unlinked recorded branches", async () => {
@@ -257,6 +263,62 @@ test("handleBranchRepairCommand resets metadata when the recorded branch no long
   assert.match(latestBody, /"branch": null/);
   assert.match(comments.at(-1), /Nothing to repair: the recorded branch no longer exists/);
   assert.match(comments.at(-1), /Removed metadata for: `fix\/50-test-bug-issue`/);
+});
+
+test("handleBranchRepairCommand blocks ghost linked branches without resetting metadata", async () => {
+  const body = replaceAutomationState(
+    ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug"),
+    {
+      issue_type: "fix",
+      branch: {
+        name: "fix/50-test-bug-issue",
+        base: "dev",
+        created: true,
+        linked: true,
+        error: null,
+        pr: null,
+      },
+    }
+  );
+  let latestBody = body;
+  const comments = [];
+
+  const gh = {
+    async getIssue() {
+      return {
+        id: "ISSUE_id",
+        title: "fix: test-bug-issue",
+        body: latestBody,
+        repository: { id: "REPO_id" },
+        issueType: { name: "Bug" },
+        linkedBranches: {
+          nodes: [{ ref: { name: "fix/50-test-bug-issue" } }],
+        },
+      };
+    },
+    async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
+      latestBody = nextBody;
+    },
+    async getReference() {
+      throw new Error("REST GET /git/ref/heads/fix/50-test-bug-issue -> HTTP 404: Not Found");
+    },
+    async createComment(_owner, _repo, _issueNumber, body) {
+      comments.push(body);
+    },
+  };
+
+  const result = await handleBranchRepairCommand({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    issueNumber: 50,
+  });
+
+  assert.equal(result.repaired, false);
+  assert.equal(result.reason, "linked branch missing git ref");
+  assert.match(latestBody, /"name": "fix\/50-test-bug-issue"/);
+  assert.match(latestBody, /GitHub still reports/);
+  assert.match(comments.at(-1), /Remove the stale linked branch from the issue sidebar/);
 });
 
 test("handleBranchRepairCommand preserves an existing recorded branch and recreates it as linked", async () => {
@@ -495,6 +557,9 @@ test("handleCreateEvent records a sidebar-linked branch based on dev", async () 
     async getReference(_owner, _repo, ref) {
       if (ref === "heads/feat/123-add-login") return { object: { sha: "sha-dev" } };
       if (ref === "heads/dev") return { object: { sha: "sha-dev" } };
+      if (ref === "heads/feat/123-previous-login") {
+        throw new Error("REST GET /git/ref/heads/feat/123-previous-login -> HTTP 404: Not Found");
+      }
       throw new Error(`unexpected ref ${ref}`);
     },
     async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
@@ -561,6 +626,9 @@ test("handleCreateEvent repairs metadata when a manual linked branch matches rec
     async getReference(_owner, _repo, ref) {
       if (ref === "heads/feat/123-add-login") return { object: { sha: "sha-dev" } };
       if (ref === "heads/dev") return { object: { sha: "sha-dev" } };
+      if (ref === "heads/feat/123-previous-login") {
+        throw new Error("REST GET /git/ref/heads/feat/123-previous-login -> HTTP 404: Not Found");
+      }
       throw new Error(`unexpected ref ${ref}`);
     },
     async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
@@ -625,6 +693,9 @@ test("handleCreateEvent asks for repair before accepting a different manual link
     async getReference(_owner, _repo, ref) {
       if (ref === "heads/feat/123-add-login") return { object: { sha: "sha-dev" } };
       if (ref === "heads/dev") return { object: { sha: "sha-dev" } };
+      if (ref === "heads/feat/123-previous-login") {
+        throw new Error("REST GET /git/ref/heads/feat/123-previous-login -> HTTP 404: Not Found");
+      }
       throw new Error(`unexpected ref ${ref}`);
     },
     async deleteReference(_owner, _repo, ref) {
@@ -647,7 +718,7 @@ test("handleCreateEvent asks for repair before accepting a different manual link
   });
 
   assert.equal(result.deleted, true);
-  assert.equal(result.reason, "issue branch metadata points to another branch");
+  assert.equal(result.reason, "metadata branch does not match expected branch");
   assert.deepEqual(deleted, ["heads/feat/123-add-login"]);
   assert.equal(comments[0].issueNumber, 123);
   assert.match(comments[0].body, /Run `\/branch repair`/);
@@ -795,7 +866,17 @@ test("handleCreateEvent allows bot-created branches only with matching reservati
   const deleted = [];
   const gh = {
     async getIssue() {
-      return { body };
+      return {
+        body,
+        linkedBranches: {
+          nodes: [{ ref: { name: "feat/123-add-login" } }],
+        },
+      };
+    },
+    async getReference(_owner, _repo, ref) {
+      if (ref === "heads/feat/123-add-login") return { object: { sha: "sha-main" } };
+      if (ref === "heads/dev") return { object: { sha: "sha-dev" } };
+      throw new Error(`unexpected ref ${ref}`);
     },
     async deleteReference(_owner, _repo, ref) {
       deleted.push(ref);
@@ -884,7 +965,17 @@ test("handleCreateEvent rejects bot-created branches reserved from a non-dev bas
   const deleted = [];
   const gh = {
     async getIssue() {
-      return { body };
+      return {
+        body,
+        linkedBranches: {
+          nodes: [{ ref: { name: "feat/123-add-login" } }],
+        },
+      };
+    },
+    async getReference(_owner, _repo, ref) {
+      if (ref === "heads/feat/123-add-login") return { object: { sha: "sha-main" } };
+      if (ref === "heads/dev") return { object: { sha: "sha-dev" } };
+      throw new Error(`unexpected ref ${ref}`);
     },
     async deleteReference(_owner, _repo, ref) {
       deleted.push(ref);
@@ -925,10 +1016,19 @@ test("handlePullRequestEvent records valid PR number", async () => {
   let updatedBody = null;
   const gh = {
     async getIssue() {
-      return { body };
+      return {
+        body,
+        linkedBranches: {
+          nodes: [{ ref: { name: "feat/123-add-login" } }],
+        },
+      };
     },
     async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
       updatedBody = nextBody;
+    },
+    async getReference(_owner, _repo, ref) {
+      if (ref === "heads/feat/123-add-login") return { object: { sha: "sha-dev" } };
+      throw new Error(`unexpected ref ${ref}`);
     },
     async createComment() {
       throw new Error("should not comment for valid PR");

@@ -7,7 +7,7 @@ import { verifyGitHubSignature } from "./utils/crypto.js";
 import { normalizeRepo } from "./utils/text.js";
 import { GitHubClient, createInstallationAccessToken } from "./services/github.js";
 import { withCommandLog } from "./utils/comment-log.js";
-import { handleIssueCommentEvent } from "./handlers/comments.js";
+import { handleIssueCommentEvent, handleIssueCommentProtectionEvent } from "./handlers/comments.js";
 import { handleCreateEvent, handlePullRequestEvent } from "./handlers/branches.js";
 import { enforceIssueTypePolicy } from "./handlers/issues.js";
 
@@ -127,6 +127,20 @@ export default {
 
       const issueNumber = issue.number;
 
+      if (event === "issue_comment" && payload.action !== "created") {
+        const result = await handleIssueCommentProtectionEvent({
+          gh,
+          owner,
+          repo,
+          issueNumber,
+          action: payload.action,
+          comment: payload.comment,
+          changes: payload.changes,
+        });
+
+        return json({ ok: true, ...result }, 200);
+      }
+
       // 4. Resolve metadata (Issue Types and Fields) dynamically via GitHub GraphQL API.
       // This prevents relying on hardcoded Node IDs.
       const orgIssueTypes = await gh.getOrgIssueTypes(ORGANIZATION);
@@ -139,17 +153,6 @@ export default {
 
       // 5. Handle Comment Slash Command Webhook Event
       if (event === "issue_comment") {
-        if (payload.action !== "created") {
-          return json(
-            {
-              ok: true,
-              skipped: true,
-              reason: `comment action=${payload.action}`,
-            },
-            200
-          );
-        }
-
         const result = await handleIssueCommentEvent({
           gh,
           owner,

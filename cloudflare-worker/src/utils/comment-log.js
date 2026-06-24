@@ -22,6 +22,10 @@ export function withCommandLog(gh) {
         };
       }
 
+      if (prop === "createCommentRaw") {
+        return async (owner, repo, issueNumber, body) => target.createComment(owner, repo, issueNumber, body);
+      }
+
       if (prop !== "createComment") {
         return Reflect.get(target, prop, receiver);
       }

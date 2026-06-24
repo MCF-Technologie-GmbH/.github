@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { handleIssueCommentEvent } from "../src/handlers/comments.js";
+import { handleIssueCommentEvent, handleIssueCommentProtectionEvent } from "../src/handlers/comments.js";
 import { withCommandLog } from "../src/utils/comment-log.js";
 
 test("handleIssueCommentEvent only treats /branch create as the branch creation command", async () => {
@@ -164,4 +164,87 @@ test("withCommandLog folds previous bot comments into the next bot response", as
   assert.doesNotMatch(createdComments.at(-1), /older nested log/);
   assert.doesNotMatch(createdComments.at(-1), /user comment/);
   assert.match(createdComments.at(-1), /<!-- command-log:meta\n\{"actor":"Lagarie404","command":"\/branch repair","history":\[/);
+});
+
+test("handleIssueCommentProtectionEvent restores edited bot comments", async () => {
+  const updates = [];
+  const gh = {
+    async updateComment(_owner, _repo, commentId, body) {
+      updates.push({ commentId, body });
+    },
+  };
+
+  const result = await handleIssueCommentProtectionEvent({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    issueNumber: 123,
+    action: "edited",
+    comment: {
+      id: 10,
+      body: "tampered",
+      user: { login: "mcf-automation-bot[bot]" },
+    },
+    changes: {
+      body: { from: "original bot comment" },
+    },
+  });
+
+  assert.equal(result.protected, true);
+  assert.deepEqual(updates, [{ commentId: 10, body: "original bot comment" }]);
+});
+
+test("handleIssueCommentProtectionEvent recreates deleted bot comments without log decoration", async () => {
+  const created = [];
+  const gh = {
+    async createCommentRaw(_owner, _repo, issueNumber, body) {
+      created.push({ issueNumber, body });
+    },
+    async createComment() {
+      throw new Error("decorated createComment should not be used");
+    },
+  };
+
+  const result = await handleIssueCommentProtectionEvent({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    issueNumber: 123,
+    action: "deleted",
+    comment: {
+      id: 10,
+      body: "original bot comment",
+      user: { login: "mcf-automation-bot[bot]" },
+    },
+  });
+
+  assert.equal(result.protected, true);
+  assert.deepEqual(created, [{ issueNumber: 123, body: "original bot comment" }]);
+});
+
+test("handleIssueCommentProtectionEvent ignores user-owned comments", async () => {
+  const gh = {
+    async updateComment() {
+      throw new Error("should not update user comments");
+    },
+  };
+
+  const result = await handleIssueCommentProtectionEvent({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    issueNumber: 123,
+    action: "edited",
+    comment: {
+      id: 10,
+      body: "user comment",
+      user: { login: "mark" },
+    },
+    changes: {
+      body: { from: "old user comment" },
+    },
+  });
+
+  assert.equal(result.processed, false);
+  assert.equal(result.reason, "comment is not owned by automation bot");
 });
