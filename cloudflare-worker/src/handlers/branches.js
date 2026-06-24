@@ -195,6 +195,161 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
 }
 
 /**
+ * Repairs branch metadata when the linked branch relationship was removed.
+ *
+ * @param {object} params
+ * @param {GitHubClient} params.gh
+ * @param {string} params.owner
+ * @param {string} params.repo
+ * @param {number} params.issueNumber
+ * @returns {Promise<object>}
+ */
+export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }) {
+  const currentIssue = await gh.getIssue(owner, repo, issueNumber);
+  const issueType = currentIssue.issueType?.name || "issue";
+  let issueBody = ensureAutomationState(currentIssue.body || "", issueType);
+  let state = parseAutomationState(issueBody);
+  const branchName = state?.branch?.name;
+
+  if (issueBody !== (currentIssue.body || "")) {
+    await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, issueBody);
+  }
+
+  if (!branchName) {
+    await gh.createComment(
+      owner,
+      repo,
+      issueNumber,
+      "Nothing to repair: this issue does not have recorded branch metadata."
+    );
+    return { processed: true, command: "branch repair", repaired: false, reason: "no branch metadata" };
+  }
+
+  if (isIssueLinkedBranch(currentIssue, branchName)) {
+    await gh.createComment(
+      owner,
+      repo,
+      issueNumber,
+      [
+        "No repair needed: the recorded branch is already linked.",
+        "",
+        `Branch: \`${branchName}\``,
+      ].join("\n")
+    );
+    return { processed: true, command: "branch repair", repaired: false, reason: "branch already linked" };
+  }
+
+  let branchRef;
+  try {
+    branchRef = await gh.getReference(owner, repo, `heads/${branchName}`);
+  } catch (err) {
+    if (!String(err?.message || "").includes("HTTP 404")) {
+      throw err;
+    }
+
+    state = { ...state, branch: null };
+    issueBody = replaceAutomationState(issueBody, state);
+    await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, issueBody);
+    await gh.createComment(
+      owner,
+      repo,
+      issueNumber,
+      [
+        "Nothing to repair: the recorded branch no longer exists.",
+        "",
+        "Resetting linked branch metadata.",
+        "",
+        `Branch: \`${branchName}\``,
+      ].join("\n")
+    );
+
+    return {
+      processed: true,
+      command: "branch repair",
+      repaired: false,
+      reset: true,
+      reason: "recorded branch does not exist",
+    };
+  }
+
+  const branchOid = branchRef?.object?.sha;
+  if (!branchOid) {
+    throw new Error(`Recorded branch ${branchName} did not return a commit SHA.`);
+  }
+
+  try {
+    await gh.createLinkedBranch({
+      issueId: currentIssue.id,
+      repositoryId: currentIssue.repository?.id,
+      branchName,
+      baseOid: branchOid,
+    });
+  } catch (err) {
+    const failedState = {
+      ...state,
+      branch: {
+        ...state.branch,
+        created: true,
+        linked: false,
+        error: summarizeError(err),
+      },
+    };
+    await gh.updateIssueTitleAndBody(
+      owner,
+      repo,
+      issueNumber,
+      undefined,
+      replaceAutomationState(issueBody, failedState)
+    );
+    await gh.createComment(
+      owner,
+      repo,
+      issueNumber,
+      [
+        "I could not repair the linked branch relationship.",
+        "",
+        `Branch: \`${branchName}\``,
+        "",
+        "```text",
+        failedState.branch.error,
+        "```",
+      ].join("\n")
+    );
+
+    return { processed: true, command: "branch repair", repaired: false, reason: "linked branch repair failed" };
+  }
+
+  const repairedState = {
+    ...state,
+    branch: {
+      ...state.branch,
+      created: true,
+      linked: true,
+      error: null,
+    },
+  };
+  await gh.updateIssueTitleAndBody(
+    owner,
+    repo,
+    issueNumber,
+    undefined,
+    replaceAutomationState(issueBody, repairedState)
+  );
+  await gh.createComment(
+    owner,
+    repo,
+    issueNumber,
+    [
+      "Repaired linked branch metadata.",
+      "",
+      `Branch: \`${branchName}\``,
+    ].join("\n")
+  );
+
+  return { processed: true, command: "branch repair", repaired: true, branch: branchName };
+}
+
+/**
  * Enforces that branches are created only by the automation bot through /branch create.
  *
  * @param {object} params

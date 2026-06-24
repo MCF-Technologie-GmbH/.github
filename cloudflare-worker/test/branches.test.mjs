@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   handleBranchCommand,
+  handleBranchRepairCommand,
   handleCreateEvent,
   handlePullRequestEvent,
 } from "../src/handlers/branches.js";
@@ -209,6 +210,123 @@ test("handleBranchCommand deletes an unlinked stale branch ref before recreating
   assert.deepEqual(deleted, ["heads/fix/50-test-bug-issue"]);
   assert.match(latestBody, /"name": "fix\/50-test-bug-issue"/);
   assert.match(latestBody, /"linked": true/);
+});
+
+test("handleBranchRepairCommand resets metadata when the recorded branch no longer exists", async () => {
+  const body = replaceAutomationState(
+    ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug"),
+    {
+      issue_type: "fix",
+      branch: {
+        name: "fix/50-test-bug-issue",
+        base: "dev",
+        created: true,
+        linked: false,
+        error: null,
+        pr: null,
+      },
+    }
+  );
+  let latestBody = body;
+  const comments = [];
+
+  const gh = {
+    async getIssue() {
+      return {
+        id: "ISSUE_id",
+        title: "fix: test-bug-issue",
+        body: latestBody,
+        repository: { id: "REPO_id" },
+        issueType: { name: "Bug" },
+        linkedBranches: { nodes: [] },
+      };
+    },
+    async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
+      latestBody = nextBody;
+    },
+    async getReference() {
+      throw new Error("REST GET /git/ref/heads/fix/50-test-bug-issue -> HTTP 404: Not Found");
+    },
+    async createComment(_owner, _repo, _issueNumber, body) {
+      comments.push(body);
+    },
+  };
+
+  const result = await handleBranchRepairCommand({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    issueNumber: 50,
+  });
+
+  assert.equal(result.reset, true);
+  assert.match(latestBody, /"branch": null/);
+  assert.match(comments.at(-1), /Nothing to repair: the recorded branch no longer exists/);
+});
+
+test("handleBranchRepairCommand relinks an existing recorded branch", async () => {
+  const body = replaceAutomationState(
+    ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug"),
+    {
+      issue_type: "fix",
+      branch: {
+        name: "fix/50-test-bug-issue",
+        base: "dev",
+        created: true,
+        linked: false,
+        error: "Missing linked branch",
+        pr: null,
+      },
+    }
+  );
+  let latestBody = body;
+  const comments = [];
+  const linkedBranches = [];
+
+  const gh = {
+    async getIssue() {
+      return {
+        id: "ISSUE_id",
+        title: "fix: test-bug-issue",
+        body: latestBody,
+        repository: { id: "REPO_id" },
+        issueType: { name: "Bug" },
+        linkedBranches: { nodes: [] },
+      };
+    },
+    async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
+      latestBody = nextBody;
+    },
+    async getReference(_owner, _repo, ref) {
+      assert.equal(ref, "heads/fix/50-test-bug-issue");
+      return { object: { sha: "branch-sha" } };
+    },
+    async createLinkedBranch(input) {
+      linkedBranches.push(input);
+      return {};
+    },
+    async createComment(_owner, _repo, _issueNumber, body) {
+      comments.push(body);
+    },
+  };
+
+  const result = await handleBranchRepairCommand({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    issueNumber: 50,
+  });
+
+  assert.equal(result.repaired, true);
+  assert.deepEqual(linkedBranches, [{
+    issueId: "ISSUE_id",
+    repositoryId: "REPO_id",
+    branchName: "fix/50-test-bug-issue",
+    baseOid: "branch-sha",
+  }]);
+  assert.match(latestBody, /"linked": true/);
+  assert.match(latestBody, /"error": null/);
+  assert.match(comments.at(-1), /Repaired linked branch metadata/);
 });
 
 test("handleCreateEvent deletes manual issue-shaped branches", async () => {

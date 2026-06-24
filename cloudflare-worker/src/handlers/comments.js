@@ -1,6 +1,6 @@
 import { REQUIRES_WHITELIST } from "../config.js";
 import { parseChecklist, getRequiresLabelsForChecklist } from "../utils/checklist.js";
-import { handleBranchCommand } from "./branches.js";
+import { handleBranchCommand, handleBranchRepairCommand } from "./branches.js";
 
 /**
  * Parses and executes slash commands (/require, /unrequire, /resolve, etc.) found in comments.
@@ -27,10 +27,14 @@ export async function handleIssueCommentEvent({
 }) {
   const commentBody = comment.body || "";
   const lines = commentBody.split(/\r?\n/);
-  const hasBranchCommand = lines.some((line) => line.trim().toLowerCase() === "/branch create");
+  const branchCommand = lines
+    .map((line) => line.trim().toLowerCase())
+    .find((line) => line === "/branch create" || line === "/branch repair");
 
-  if (hasBranchCommand) {
-    const result = await handleBranchCommand({ gh, owner, repo, issueNumber, comment });
+  if (branchCommand) {
+    const result = branchCommand === "/branch repair"
+      ? await handleBranchRepairCommand({ gh, owner, repo, issueNumber })
+      : await handleBranchCommand({ gh, owner, repo, issueNumber, comment });
     await cleanupCommandComment(gh, owner, repo, comment);
     return result;
   }
