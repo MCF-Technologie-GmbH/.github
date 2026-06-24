@@ -668,10 +668,7 @@ async function inspectIssueBranchState({ gh, owner, repo, issue, expectedBranchN
     message: null,
   };
 
-  if (staleLinkedRecordCount > 0) {
-    status.reason = "stale linked branch reservation";
-    status.message = `GitHub reports ${staleLinkedRecordCount} stale linked branch reservation${staleLinkedRecordCount === 1 ? "" : "s"} for this issue, but the git ref no longer exists.`;
-  } else if (linkedNames.length > 1) {
+  if (linkedNames.length > 1) {
     status.reason = "multiple linked branches";
     status.message = "GitHub reports multiple linked branches for this issue.";
   } else if (unexpectedLinkedNames.length > 0) {
@@ -705,7 +702,7 @@ function branchStateBlockingMessage(status) {
     `- Stale linked records: \`${status.staleLinkedRecordCount || 0}\``,
     `- Expected git ref exists: \`${status.expectedRef.exists ? "yes" : "no"}\``,
     "",
-    status.reason === "linked branch missing git ref" || status.reason === "stale linked branch reservation"
+    status.reason === "linked branch missing git ref"
       ? "Remove the stale linked branch from the issue sidebar, then run `/branch repair` again."
       : "Run `/branch repair` or clean up the conflicting branch/link before retrying.",
   ].join("\n");

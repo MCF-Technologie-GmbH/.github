@@ -212,26 +212,34 @@ test("handleBranchCommand does not delete unlinked recorded branches", async () 
   assert.match(comments.at(-1), /Run `\/branch repair`/);
 });
 
-test("handleBranchCommand blocks stale linked branch reservations with null refs", async () => {
+test("handleBranchCommand ignores stale linked branch reservations with null refs", async () => {
   const body = ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug");
   const comments = [];
+  let latestBody = body;
   const gh = {
     async getIssue() {
       return {
         id: "ISSUE_id",
         title: "fix: test-bug-issue",
-        body,
+        body: latestBody,
         repository: { id: "REPO_id" },
         issueType: { name: "Bug" },
         linkedBranches: { nodes: [{ ref: null }, { ref: null }] },
       };
     },
-    async updateIssueTitleAndBody() {},
+    async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
+      latestBody = nextBody;
+    },
     async getReference(_owner, _repo, ref) {
       if (ref === "heads/fix/50-test-bug-issue") {
         throw new Error("REST GET /git/ref/heads/fix/50-test-bug-issue -> HTTP 404: Not Found");
       }
+      if (ref === "heads/dev") return { object: { sha: "sha-dev" } };
       throw new Error(`unexpected ref ${ref}`);
+    },
+    async createLinkedBranch(input) {
+      assert.equal(input.branchName, "fix/50-test-bug-issue");
+      return {};
     },
     async createComment(_owner, _repo, _issueNumber, body) {
       comments.push(body);
@@ -246,10 +254,8 @@ test("handleBranchCommand blocks stale linked branch reservations with null refs
     comment: { id: 1 },
   });
 
-  assert.equal(result.created, false);
-  assert.equal(result.reason, "stale linked branch reservation");
-  assert.match(comments.at(-1), /stale linked branch reservation/);
-  assert.match(comments.at(-1), /Stale linked records: `2`/);
+  assert.equal(result.created, true);
+  assert.match(comments.at(-1), /Created linked branch/);
 });
 
 test("handleBranchRepairCommand resets metadata when the recorded branch no longer exists", async () => {
@@ -361,7 +367,7 @@ test("handleBranchRepairCommand blocks ghost linked branches without resetting m
   assert.match(comments.at(-1), /Remove the stale linked branch from the issue sidebar/);
 });
 
-test("handleBranchRepairCommand blocks stale linked branch reservations even without metadata", async () => {
+test("handleBranchRepairCommand ignores stale linked branch reservations when metadata is empty", async () => {
   const body = ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug");
   const comments = [];
   const gh = {
@@ -395,8 +401,8 @@ test("handleBranchRepairCommand blocks stale linked branch reservations even wit
   });
 
   assert.equal(result.repaired, false);
-  assert.equal(result.reason, "stale linked branch reservation");
-  assert.match(comments.at(-1), /GitHub reports 1 stale linked branch reservation/);
+  assert.equal(result.reason, "no branch metadata");
+  assert.match(comments.at(-1), /does not have recorded branch metadata/);
 });
 
 test("handleBranchRepairCommand preserves an existing recorded branch and recreates it as linked", async () => {
