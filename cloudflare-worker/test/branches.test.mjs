@@ -93,7 +93,7 @@ test("handleBranchCommand stores creation errors and allows same-name retry", as
   assert.match(latestBody, /CreateLinkedBranchInput is not supported/);
 });
 
-test("handleBranchCommand clears stale branch metadata before creating the expected branch", async () => {
+test("handleBranchCommand blocks old branch-name metadata without deleting it", async () => {
   const body = replaceAutomationState(
     ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug"),
     {
@@ -109,66 +109,7 @@ test("handleBranchCommand clears stale branch metadata before creating the expec
     }
   );
   let latestBody = body;
-  const updates = [];
-
-  const gh = {
-    async getIssue() {
-      return {
-        id: "ISSUE_id",
-        title: "fix: test-bug-issue",
-        body: latestBody,
-        repository: { id: "REPO_id" },
-        issueType: { name: "Bug" },
-        linkedBranches: { nodes: [] },
-      };
-    },
-    async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
-      latestBody = nextBody;
-      updates.push(nextBody);
-    },
-    async deleteReference() {},
-    async getReference(_owner, _repo, ref) {
-      if (ref === "heads/bug/50-test-bug-issue") {
-        throw new Error("REST GET /git/ref/heads/bug/50-test-bug-issue -> HTTP 404: Not Found");
-      }
-      return { object: { sha: "abc123" } };
-    },
-    async createLinkedBranch(input) {
-      assert.equal(input.branchName, "fix/50-test-bug-issue");
-      return {};
-    },
-    async createComment() {},
-  };
-
-  const result = await handleBranchCommand({
-    gh,
-    owner: "MCF-Technologie-GmbH",
-    repo: "app",
-    issueNumber: 50,
-    comment: { id: 1 },
-  });
-
-  assert.equal(result.created, true);
-  assert.match(updates.at(-1), /"name": "fix\/50-test-bug-issue"/);
-  assert.doesNotMatch(updates.at(-1), /bug\/50-test-bug-issue/);
-});
-
-test("handleBranchCommand deletes an unlinked stale branch ref before recreating it", async () => {
-  const body = replaceAutomationState(
-    ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug"),
-    {
-      issue_type: "fix",
-      branch: {
-        name: "fix/50-test-bug-issue",
-        base: "dev",
-        created: true,
-        linked: true,
-        error: null,
-        pr: null,
-      },
-    }
-  );
-  let latestBody = body;
+  const comments = [];
   const deleted = [];
 
   const gh = {
@@ -188,14 +129,9 @@ test("handleBranchCommand deletes an unlinked stale branch ref before recreating
     async deleteReference(_owner, _repo, ref) {
       deleted.push(ref);
     },
-    async getReference() {
-      return { object: { sha: "abc123" } };
+    async createComment(_owner, _repo, _issueNumber, commentBody) {
+      comments.push(commentBody);
     },
-    async createLinkedBranch(input) {
-      assert.equal(input.branchName, "fix/50-test-bug-issue");
-      return {};
-    },
-    async createComment() {},
   };
 
   const result = await handleBranchCommand({
@@ -206,10 +142,68 @@ test("handleBranchCommand deletes an unlinked stale branch ref before recreating
     comment: { id: 1 },
   });
 
-  assert.equal(result.created, true);
-  assert.deepEqual(deleted, ["heads/fix/50-test-bug-issue"]);
+  assert.equal(result.created, false);
+  assert.equal(result.reason, "issue already has another branch");
+  assert.deepEqual(deleted, []);
+  assert.match(latestBody, /"name": "bug\/50-test-bug-issue"/);
+  assert.match(comments.at(-1), /A second branch cannot be created/);
+});
+
+test("handleBranchCommand does not delete unlinked recorded branches", async () => {
+  const body = replaceAutomationState(
+    ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug"),
+    {
+      issue_type: "fix",
+      branch: {
+        name: "fix/50-test-bug-issue",
+        base: "dev",
+        created: true,
+        linked: true,
+        error: null,
+        pr: null,
+      },
+    }
+  );
+  let latestBody = body;
+  const deleted = [];
+  const comments = [];
+
+  const gh = {
+    async getIssue() {
+      return {
+        id: "ISSUE_id",
+        title: "fix: test-bug-issue",
+        body: latestBody,
+        repository: { id: "REPO_id" },
+        issueType: { name: "Bug" },
+        linkedBranches: { nodes: [] },
+      };
+    },
+    async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
+      latestBody = nextBody;
+    },
+    async deleteReference(_owner, _repo, ref) {
+      deleted.push(ref);
+    },
+    async createComment(_owner, _repo, _issueNumber, commentBody) {
+      comments.push(commentBody);
+    },
+  };
+
+  const result = await handleBranchCommand({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    issueNumber: 50,
+    comment: { id: 1 },
+  });
+
+  assert.equal(result.created, false);
+  assert.equal(result.reason, "branch metadata needs repair");
+  assert.deepEqual(deleted, []);
   assert.match(latestBody, /"name": "fix\/50-test-bug-issue"/);
   assert.match(latestBody, /"linked": true/);
+  assert.match(comments.at(-1), /Run `\/branch repair`/);
 });
 
 test("handleBranchRepairCommand resets metadata when the recorded branch no longer exists", async () => {
@@ -264,7 +258,7 @@ test("handleBranchRepairCommand resets metadata when the recorded branch no long
   assert.match(comments.at(-1), /Nothing to repair: the recorded branch no longer exists/);
 });
 
-test("handleBranchRepairCommand relinks an existing recorded branch", async () => {
+test("handleBranchRepairCommand preserves an existing recorded branch and recreates it as linked", async () => {
   const body = replaceAutomationState(
     ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug"),
     {
@@ -282,6 +276,8 @@ test("handleBranchRepairCommand relinks an existing recorded branch", async () =
   let latestBody = body;
   const comments = [];
   const linkedBranches = [];
+  const createdRefs = [];
+  const deletedRefs = [];
 
   const gh = {
     async getIssue() {
@@ -301,6 +297,12 @@ test("handleBranchRepairCommand relinks an existing recorded branch", async () =
       assert.equal(ref, "heads/fix/50-test-bug-issue");
       return { object: { sha: "branch-sha" } };
     },
+    async createReference(_owner, _repo, ref, sha) {
+      createdRefs.push({ ref, sha });
+    },
+    async deleteReference(_owner, _repo, ref) {
+      deletedRefs.push(ref);
+    },
     async createLinkedBranch(input) {
       linkedBranches.push(input);
       return {};
@@ -318,6 +320,12 @@ test("handleBranchRepairCommand relinks an existing recorded branch", async () =
   });
 
   assert.equal(result.repaired, true);
+  assert.match(result.temporaryBranch, /^temp\/fix-50-test-bug-issue-\d{14}$/);
+  assert.deepEqual(createdRefs, [{
+    ref: `refs/heads/${result.temporaryBranch}`,
+    sha: "branch-sha",
+  }]);
+  assert.deepEqual(deletedRefs, ["heads/fix/50-test-bug-issue"]);
   assert.deepEqual(linkedBranches, [{
     issueId: "ISSUE_id",
     repositoryId: "REPO_id",
@@ -326,7 +334,8 @@ test("handleBranchRepairCommand relinks an existing recorded branch", async () =
   }]);
   assert.match(latestBody, /"linked": true/);
   assert.match(latestBody, /"error": null/);
-  assert.match(comments.at(-1), /Repaired linked branch metadata/);
+  assert.match(comments.at(-1), /Repaired linked branch relationship/);
+  assert.match(comments.at(-1), /Preserved existing unlinked branch as/);
 });
 
 test("handleCreateEvent deletes manual issue-shaped branches", async () => {

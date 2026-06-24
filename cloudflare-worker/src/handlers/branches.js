@@ -37,13 +37,6 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
     await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, issueBody);
   }
 
-  if (state?.branch?.name && isStaleBranchState(currentIssue, state.branch.name)) {
-    await deleteBranchIfExists(gh, owner, repo, state.branch.name);
-    state = { ...state, branch: null };
-    issueBody = replaceAutomationState(issueBody, state);
-    await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, issueBody);
-  }
-
   if (state?.branch?.name && state.branch.name !== branchName) {
     await gh.createComment(
       owner,
@@ -58,6 +51,22 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
       ].join("\n")
     );
     return { processed: true, command: "branch", created: false, reason: "issue already has another branch" };
+  }
+
+  if (state?.branch?.name && isStaleBranchState(currentIssue, state.branch.name)) {
+    await gh.createComment(
+      owner,
+      repo,
+      issueNumber,
+      [
+        "This issue has recorded branch metadata, but the branch is not currently linked.",
+        "",
+        `Recorded branch: \`${state.branch.name}\``,
+        "",
+        "Run `/branch repair` to repair the linked branch relationship or reset the metadata if the branch no longer exists.",
+      ].join("\n")
+    );
+    return { processed: true, command: "branch", created: false, reason: "branch metadata needs repair" };
   }
 
   if (state?.branch?.created === true) {
@@ -277,7 +286,11 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
     throw new Error(`Recorded branch ${branchName} did not return a commit SHA.`);
   }
 
+  const temporaryBranchName = buildTemporaryBranchName(branchName);
+
   try {
+    await gh.createReference(owner, repo, `refs/heads/${temporaryBranchName}`, branchOid);
+    await gh.deleteReference(owner, repo, `heads/${branchName}`);
     await gh.createLinkedBranch({
       issueId: currentIssue.id,
       repositoryId: currentIssue.repository?.id,
@@ -309,6 +322,9 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
         "I could not repair the linked branch relationship.",
         "",
         `Branch: \`${branchName}\``,
+        `Temporary branch: \`${temporaryBranchName}\``,
+        "",
+        "If the temporary branch was created, the existing commits were preserved there.",
         "",
         "```text",
         failedState.branch.error,
@@ -340,13 +356,20 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
     repo,
     issueNumber,
     [
-      "Repaired linked branch metadata.",
+      "Repaired linked branch relationship.",
       "",
-      `Branch: \`${branchName}\``,
+      `Preserved existing unlinked branch as: \`${temporaryBranchName}\``,
+      `Recreated linked branch: \`${branchName}\``,
     ].join("\n")
   );
 
-  return { processed: true, command: "branch repair", repaired: true, branch: branchName };
+  return {
+    processed: true,
+    command: "branch repair",
+    repaired: true,
+    branch: branchName,
+    temporaryBranch: temporaryBranchName,
+  };
 }
 
 /**
@@ -453,15 +476,6 @@ function isStaleBranchState(issue, branchName) {
   return !isIssueLinkedBranch(issue, branchName);
 }
 
-async function deleteBranchIfExists(gh, owner, repo, branchName) {
-  try {
-    await gh.deleteReference(owner, repo, `heads/${branchName}`);
-  } catch (err) {
-    if (String(err?.message || "").includes("HTTP 404")) return;
-    throw err;
-  }
-}
-
 function canRecordLinkedBranch(state, branchName) {
   return !state?.branch?.name || state.branch.name === branchName;
 }
@@ -549,4 +563,10 @@ export async function handlePullRequestEvent({ gh, owner, repo, payload }) {
 function summarizeError(err) {
   const message = err?.message || String(err);
   return message.length > 1200 ? `${message.slice(0, 1200)}...` : message;
+}
+
+function buildTemporaryBranchName(branchName) {
+  const safeName = branchName.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "branch";
+  const timestamp = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
+  return `temp/${safeName}-${timestamp}`;
 }

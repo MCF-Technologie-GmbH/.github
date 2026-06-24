@@ -315,6 +315,23 @@ export class GitHubClient {
   }
 
   /**
+   * Creates a git reference.
+   *
+   * @param {string} owner - Repository owner login.
+   * @param {string} repo - Repository name.
+   * @param {string} ref - Full ref path such as refs/heads/feature/123-work.
+   * @param {string} sha - Commit SHA for the new ref.
+   * @returns {Promise<object>} Git reference payload.
+   */
+  async createReference(owner, repo, ref, sha) {
+    return this.rest(
+      "POST",
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/refs`,
+      { ref, sha }
+    );
+  }
+
+  /**
    * Deletes a git reference.
    *
    * @param {string} owner - Repository owner login.
