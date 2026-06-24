@@ -149,6 +149,7 @@ test("withCommandLog folds previous bot comments into the next bot response", as
 
   assert.equal(processed.processed, true);
   assert.deepEqual(deleted, [10, 3]);
+  assert.ok(createdComments.at(-1).indexOf("old bot response") < createdComments.at(-1).indexOf("created earlier"));
   assert.match(createdComments.at(-1), /Nothing to repair/);
   assert.match(createdComments.at(-1), /<details><summary>Command log<\/summary>/);
   assert.match(createdComments.at(-1), /#### 2026-06-24 07:50:00 UTC/);

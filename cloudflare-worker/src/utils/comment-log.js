@@ -72,7 +72,7 @@ function appendCommandLog(body, commandLog, metadata) {
     "",
     "<details><summary>Command log</summary>",
     "",
-    ...history.flatMap((entry, index) => {
+    ...[...history].reverse().flatMap((entry, index) => {
       const fence = markdownFenceFor(entry.body);
       return [
         index > 0 ? "---" : "",
