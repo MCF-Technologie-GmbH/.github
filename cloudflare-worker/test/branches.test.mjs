@@ -212,6 +212,46 @@ test("handleBranchCommand does not delete unlinked recorded branches", async () 
   assert.match(comments.at(-1), /Run `\/branch repair`/);
 });
 
+test("handleBranchCommand blocks stale linked branch reservations with null refs", async () => {
+  const body = ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug");
+  const comments = [];
+  const gh = {
+    async getIssue() {
+      return {
+        id: "ISSUE_id",
+        title: "fix: test-bug-issue",
+        body,
+        repository: { id: "REPO_id" },
+        issueType: { name: "Bug" },
+        linkedBranches: { nodes: [{ ref: null }, { ref: null }] },
+      };
+    },
+    async updateIssueTitleAndBody() {},
+    async getReference(_owner, _repo, ref) {
+      if (ref === "heads/fix/50-test-bug-issue") {
+        throw new Error("REST GET /git/ref/heads/fix/50-test-bug-issue -> HTTP 404: Not Found");
+      }
+      throw new Error(`unexpected ref ${ref}`);
+    },
+    async createComment(_owner, _repo, _issueNumber, body) {
+      comments.push(body);
+    },
+  };
+
+  const result = await handleBranchCommand({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    issueNumber: 50,
+    comment: { id: 1 },
+  });
+
+  assert.equal(result.created, false);
+  assert.equal(result.reason, "stale linked branch reservation");
+  assert.match(comments.at(-1), /stale linked branch reservation/);
+  assert.match(comments.at(-1), /Stale linked records: `2`/);
+});
+
 test("handleBranchRepairCommand resets metadata when the recorded branch no longer exists", async () => {
   const body = replaceAutomationState(
     ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug"),
@@ -319,6 +359,44 @@ test("handleBranchRepairCommand blocks ghost linked branches without resetting m
   assert.match(latestBody, /"name": "fix\/50-test-bug-issue"/);
   assert.match(latestBody, /GitHub still reports/);
   assert.match(comments.at(-1), /Remove the stale linked branch from the issue sidebar/);
+});
+
+test("handleBranchRepairCommand blocks stale linked branch reservations even without metadata", async () => {
+  const body = ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug");
+  const comments = [];
+  const gh = {
+    async getIssue() {
+      return {
+        id: "ISSUE_id",
+        title: "fix: test-bug-issue",
+        body,
+        repository: { id: "REPO_id" },
+        issueType: { name: "Bug" },
+        linkedBranches: { nodes: [{ ref: null }] },
+      };
+    },
+    async updateIssueTitleAndBody() {},
+    async getReference(_owner, _repo, ref) {
+      if (ref === "heads/fix/50-test-bug-issue") {
+        throw new Error("REST GET /git/ref/heads/fix/50-test-bug-issue -> HTTP 404: Not Found");
+      }
+      throw new Error(`unexpected ref ${ref}`);
+    },
+    async createComment(_owner, _repo, _issueNumber, body) {
+      comments.push(body);
+    },
+  };
+
+  const result = await handleBranchRepairCommand({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    issueNumber: 50,
+  });
+
+  assert.equal(result.repaired, false);
+  assert.equal(result.reason, "stale linked branch reservation");
+  assert.match(comments.at(-1), /GitHub reports 1 stale linked branch reservation/);
 });
 
 test("handleBranchRepairCommand preserves an existing recorded branch and recreates it as linked", async () => {

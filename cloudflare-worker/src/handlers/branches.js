@@ -235,12 +235,33 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
   let issueBody = ensureAutomationState(currentIssue.body || "", issueType);
   let state = parseAutomationState(issueBody);
   const branchName = state?.branch?.name;
+  const expectedBranchName = buildIssueBranchName({
+    issueType,
+    issueNumber,
+    title: currentIssue.title,
+  });
 
   if (issueBody !== (currentIssue.body || "")) {
     await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, issueBody);
   }
 
+  let branchStatus = await inspectIssueBranchState({
+    gh,
+    owner,
+    repo,
+    issue: currentIssue,
+    issueNumber,
+    expectedBranchName: branchName || expectedBranchName,
+    state,
+  });
+  let blockingMessage = branchStateBlockingMessage(branchStatus);
+
   if (!branchName) {
+    if (blockingMessage) {
+      await gh.createComment(owner, repo, issueNumber, blockingMessage);
+      return { processed: true, command: "branch repair", repaired: false, reason: branchStatus.reason };
+    }
+
     await gh.createComment(
       owner,
       repo,
@@ -250,7 +271,7 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
     return { processed: true, command: "branch repair", repaired: false, reason: "no branch metadata" };
   }
 
-  const branchStatus = await inspectIssueBranchState({
+  branchStatus = await inspectIssueBranchState({
     gh,
     owner,
     repo,
@@ -259,7 +280,7 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
     expectedBranchName: branchName,
     state,
   });
-  const blockingMessage = branchStateBlockingMessage(branchStatus);
+  blockingMessage = branchStateBlockingMessage(branchStatus);
   if (blockingMessage) {
     const failedState = {
       ...state,
@@ -610,6 +631,7 @@ function isStaleBranchState(issue, branchName) {
 
 async function inspectIssueBranchState({ gh, owner, repo, issue, expectedBranchName, state, checkExpectedRefOnly = false }) {
   const linkedNames = linkedBranchNames(issue);
+  const staleLinkedRecordCount = staleLinkedBranchRecordCount(issue);
   const metadataName = state?.branch?.name || null;
   const metadataLinked = metadataName ? linkedNames.includes(metadataName) : false;
   const expectedLinked = expectedBranchName ? linkedNames.includes(expectedBranchName) : false;
@@ -639,13 +661,17 @@ async function inspectIssueBranchState({ gh, owner, repo, issue, expectedBranchN
     expectedLinked,
     expectedRef,
     linkedNames,
+    staleLinkedRecordCount,
     unexpectedLinkedNames,
     ghostLinkedNames,
     reason: null,
     message: null,
   };
 
-  if (linkedNames.length > 1) {
+  if (staleLinkedRecordCount > 0) {
+    status.reason = "stale linked branch reservation";
+    status.message = `GitHub reports ${staleLinkedRecordCount} stale linked branch reservation${staleLinkedRecordCount === 1 ? "" : "s"} for this issue, but the git ref no longer exists.`;
+  } else if (linkedNames.length > 1) {
     status.reason = "multiple linked branches";
     status.message = "GitHub reports multiple linked branches for this issue.";
   } else if (unexpectedLinkedNames.length > 0) {
@@ -676,9 +702,10 @@ function branchStateBlockingMessage(status) {
     `- Expected branch: \`${status.expectedBranchName || "none"}\``,
     `- Recorded metadata: \`${status.metadataName || "none"}\``,
     `- Linked branches: ${status.linkedNames.length ? status.linkedNames.map((name) => `\`${name}\``).join(", ") : "`none`"}`,
+    `- Stale linked records: \`${status.staleLinkedRecordCount || 0}\``,
     `- Expected git ref exists: \`${status.expectedRef.exists ? "yes" : "no"}\``,
     "",
-    status.reason === "linked branch missing git ref"
+    status.reason === "linked branch missing git ref" || status.reason === "stale linked branch reservation"
       ? "Remove the stale linked branch from the issue sidebar, then run `/branch repair` again."
       : "Run `/branch repair` or clean up the conflicting branch/link before retrying.",
   ].join("\n");
@@ -688,6 +715,10 @@ function linkedBranchNames(issue) {
   return [...new Set((issue.linkedBranches?.nodes || [])
     .map((node) => node?.ref?.name)
     .filter(Boolean))];
+}
+
+function staleLinkedBranchRecordCount(issue) {
+  return (issue.linkedBranches?.nodes || []).filter((node) => node && !node.ref).length;
 }
 
 async function getBranchRefInfo(gh, owner, repo, branchName) {
