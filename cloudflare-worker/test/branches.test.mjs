@@ -529,13 +529,78 @@ test("handleCreateEvent records a sidebar-linked branch based on dev", async () 
   assert.match(comments[0].body, /Created from GitHub's sidebar/);
 });
 
-test("handleCreateEvent asks for repair before accepting a manual linked branch when metadata exists", async () => {
+test("handleCreateEvent repairs metadata when a manual linked branch matches recorded metadata", async () => {
   const body = replaceAutomationState(
     ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Feature"),
     {
       issue_type: "feature",
       branch: {
         name: "feat/123-add-login",
+        base: "dev",
+        created: true,
+        linked: false,
+        error: null,
+        pr: null,
+      },
+    }
+  );
+  let updatedBody = null;
+  const deleted = [];
+  const comments = [];
+  const gh = {
+    async getIssue() {
+      return {
+        body,
+        title: "Add login",
+        issueType: { name: "Feature" },
+        linkedBranches: {
+          nodes: [{ ref: { name: "feat/123-add-login" } }],
+        },
+      };
+    },
+    async getReference(_owner, _repo, ref) {
+      if (ref === "heads/feat/123-add-login") return { object: { sha: "sha-dev" } };
+      if (ref === "heads/dev") return { object: { sha: "sha-dev" } };
+      throw new Error(`unexpected ref ${ref}`);
+    },
+    async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
+      updatedBody = nextBody;
+    },
+    async deleteReference(_owner, _repo, ref) {
+      deleted.push(ref);
+    },
+    async createComment(_owner, _repo, issueNumber, commentBody) {
+      comments.push({ issueNumber, body: commentBody });
+    },
+  };
+
+  const result = await handleCreateEvent({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    payload: {
+      ref_type: "branch",
+      ref: "feat/123-add-login",
+      sender: { login: "mark" },
+    },
+  });
+
+  assert.equal(result.allowed, true);
+  assert.deepEqual(deleted, []);
+  assert.match(updatedBody, /"name": "feat\/123-add-login"/);
+  assert.match(updatedBody, /"linked": true/);
+  assert.match(updatedBody, /"error": null/);
+  assert.equal(comments[0].issueNumber, 123);
+  assert.match(comments[0].body, /Branch manually linked and metadata repaired successfully/);
+});
+
+test("handleCreateEvent asks for repair before accepting a different manual linked branch when metadata exists", async () => {
+  const body = replaceAutomationState(
+    ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Feature"),
+    {
+      issue_type: "feature",
+      branch: {
+        name: "feat/123-previous-login",
         base: "dev",
         created: true,
         linked: false,
@@ -582,7 +647,7 @@ test("handleCreateEvent asks for repair before accepting a manual linked branch 
   });
 
   assert.equal(result.deleted, true);
-  assert.equal(result.reason, "issue branch metadata needs repair before manual link");
+  assert.equal(result.reason, "issue branch metadata points to another branch");
   assert.deepEqual(deleted, ["heads/feat/123-add-login"]);
   assert.equal(comments[0].issueNumber, 123);
   assert.match(comments[0].body, /Run `\/branch repair`/);

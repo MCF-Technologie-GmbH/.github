@@ -423,7 +423,7 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
       title: issue.title,
     });
 
-    if (isFromDev && branchName === expectedBranchName && state?.branch?.name) {
+    if (isFromDev && branchName === expectedBranchName && state?.branch?.name && state.branch.name !== branchName) {
       await gh.deleteReference(owner, repo, `heads/${branchName}`);
       await createBranchEventComment(
         gh,
@@ -439,7 +439,7 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
           "",
           `\`${state.branch.name}\``,
           "",
-          "Run `/branch repair` before creating or linking a branch manually.",
+          "Run `/branch repair` before creating or linking a different branch manually.",
         ].join("\n")
       );
 
@@ -449,7 +449,7 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
         deleted: true,
         branch: branchName,
         issue: issueNumber,
-        reason: "issue branch metadata needs repair before manual link",
+        reason: "issue branch metadata points to another branch",
       };
     }
 
@@ -483,7 +483,9 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
         payload,
         "/branch manual",
         [
-          "Branch linked and recorded successfully.",
+          state?.branch?.name === branchName
+            ? "Branch manually linked and metadata repaired successfully."
+            : "Branch linked and recorded successfully.",
           "",
           `Branch: \`${branchName}\``,
           `Base: \`${BASE_BRANCH}\``,
