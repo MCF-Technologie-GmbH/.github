@@ -45,14 +45,20 @@ async function cleanupPreviousBotComments(gh, owner, repo, issueNumber) {
     for (const comment of botComments) {
       await gh.deleteComment(owner, repo, comment.id);
     }
-    return botComments.map((comment) => {
+    return botComments.flatMap((comment) => {
       const body = String(comment.body || "");
-      return {
-        metadata: extractCommandMetadata(body),
+      const metadata = extractCommandMetadata(body);
+      const currentEntry = {
+        actor: metadata?.actor || null,
+        command: metadata?.command || null,
         createdAt: comment.created_at,
         body: stripCommandLog(body).trim(),
       };
-    }).filter((comment) => comment.body);
+      return [
+        ...(metadata?.history || []),
+        currentEntry,
+      ];
+    }).filter((entry) => entry.body);
   } catch (err) {
     console.error(`Failed to delete previous bot comments: ${err.message}`);
     return [];
@@ -60,21 +66,24 @@ async function cleanupPreviousBotComments(gh, owner, repo, issueNumber) {
 }
 
 function appendCommandLog(body, commandLog, metadata) {
+  const history = commandLog;
   const bodyWithLog = commandLog.length ? [
     body,
     "",
     "<details><summary>Command log</summary>",
     "",
-    ...commandLog.flatMap((entry, index) => {
-      const meta = entry.metadata || {};
+    ...history.flatMap((entry, index) => {
+      const fence = markdownFenceFor(entry.body);
       return [
         index > 0 ? "---" : "",
         `#### ${formatTimestamp(entry.createdAt)}`,
-        `Command: ${formatCommand(meta.command)}`,
-        `Executed by: ${formatActor(meta.actor)}`,
+        `Command: ${formatCommand(entry.command)}`,
+        `Executed by: ${formatActor(entry.actor)}`,
         "",
         "Output:",
+        `${fence}text`,
         entry.body,
+        fence,
         "",
       ].filter(Boolean);
     }),
@@ -83,7 +92,7 @@ function appendCommandLog(body, commandLog, metadata) {
 
   return [
     bodyWithLog,
-    metadata ? formatMetadataBlock(metadata) : "",
+    metadata ? formatMetadataBlock({ ...metadata, history }) : "",
   ].filter(Boolean).join("\n");
 }
 
@@ -127,8 +136,9 @@ function normalizeMetadata(meta) {
   const normalized = {
     actor: sanitizeActor(meta.actor),
     command: sanitizeCommand(meta.command),
+    history: normalizeHistory(meta.history),
   };
-  return normalized.actor || normalized.command ? normalized : null;
+  return normalized.actor || normalized.command || normalized.history.length ? normalized : null;
 }
 
 function formatMetadataBlock(meta) {
@@ -154,8 +164,33 @@ function formatActor(actor) {
   return actor ? `@${actor}` : "unknown";
 }
 
+function normalizeHistory(history) {
+  if (!Array.isArray(history)) return [];
+  return history.map((entry) => ({
+    actor: sanitizeActor(entry?.actor),
+    command: sanitizeCommand(entry?.command),
+    createdAt: sanitizeTimestamp(entry?.createdAt),
+    body: sanitizeBody(entry?.body),
+  })).filter((entry) => entry.body);
+}
+
+function sanitizeTimestamp(value) {
+  const text = String(value || "").trim();
+  return text ? text.slice(0, 80) : null;
+}
+
+function sanitizeBody(value) {
+  const text = String(value || "").trim();
+  return text ? text.slice(0, 4000) : null;
+}
+
 function escapeRegex(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function markdownFenceFor(value) {
+  const longestRun = Math.max(0, ...String(value || "").match(/`+/g)?.map((match) => match.length) || []);
+  return "`".repeat(Math.max(3, longestRun + 1));
 }
 
 function issueKey(owner, repo, issueNumber) {

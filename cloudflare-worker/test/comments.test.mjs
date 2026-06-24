@@ -120,7 +120,7 @@ test("withCommandLog folds previous bot comments into the next bot response", as
             "</p>",
             "</details>",
             '<!-- command-log:meta',
-            '{"actor":"Mark-Lagarie","command":"/branch create"}',
+            '{"actor":"Mark-Lagarie","command":"/branch repair","history":[{"actor":"Lagarie404","command":"/branch create","createdAt":"2026-06-24T07:50:00Z","body":"created earlier"}]}',
             'command-log:end -->',
           ].join("\n"),
         },
@@ -151,12 +151,16 @@ test("withCommandLog folds previous bot comments into the next bot response", as
   assert.deepEqual(deleted, [10, 3]);
   assert.match(createdComments.at(-1), /Nothing to repair/);
   assert.match(createdComments.at(-1), /<details><summary>Command log<\/summary>/);
-  assert.match(createdComments.at(-1), /#### 2026-06-24 08:00:00 UTC/);
+  assert.match(createdComments.at(-1), /#### 2026-06-24 07:50:00 UTC/);
   assert.match(createdComments.at(-1), /Command: `\/branch create`/);
+  assert.match(createdComments.at(-1), /Executed by: @Lagarie404/);
+  assert.match(createdComments.at(-1), /Output:\n```text\ncreated earlier\n```/);
+  assert.match(createdComments.at(-1), /#### 2026-06-24 08:00:00 UTC/);
+  assert.match(createdComments.at(-1), /Command: `\/branch repair`/);
   assert.match(createdComments.at(-1), /Executed by: @Mark-Lagarie/);
-  assert.match(createdComments.at(-1), /Output:\nold bot response/);
+  assert.match(createdComments.at(-1), /Output:\n```text\nold bot response\n```/);
   assert.match(createdComments.at(-1), /old bot response/);
   assert.doesNotMatch(createdComments.at(-1), /older nested log/);
   assert.doesNotMatch(createdComments.at(-1), /user comment/);
-  assert.match(createdComments.at(-1), /<!-- command-log:meta\n\{"actor":"Lagarie404","command":"\/branch repair"\}\ncommand-log:end -->/);
+  assert.match(createdComments.at(-1), /<!-- command-log:meta\n\{"actor":"Lagarie404","command":"\/branch repair","history":\[/);
 });
