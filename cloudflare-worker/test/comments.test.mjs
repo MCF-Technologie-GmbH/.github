@@ -81,7 +81,7 @@ test("handleIssueCommentEvent treats /branch repair as a branch command", async 
     repo: "app",
     repoFullName: "mcf-technologie-gmbh/app",
     issueNumber: 123,
-    comment: { id: 3, body: "/branch repair" },
+    comment: { id: 3, body: "/branch repair", user: { login: "Lagarie404" } },
   });
 
   assert.equal(processed.processed, true);
@@ -119,6 +119,9 @@ test("withCommandLog folds previous bot comments into the next bot response", as
             "older nested log",
             "</p>",
             "</details>",
+            '<!-- command-log:meta',
+            '{"actor":"Mark-Lagarie","command":"/branch create"}',
+            'command-log:end -->',
           ].join("\n"),
         },
         { id: 11, user: { login: "mark" }, body: "user comment" },
@@ -141,15 +144,19 @@ test("withCommandLog folds previous bot comments into the next bot response", as
     repo: "app",
     repoFullName: "mcf-technologie-gmbh/app",
     issueNumber: 123,
-    comment: { id: 3, body: "/branch repair" },
+    comment: { id: 3, body: "/branch repair", user: { login: "Lagarie404" } },
   });
 
   assert.equal(processed.processed, true);
   assert.deepEqual(deleted, [10, 3]);
   assert.match(createdComments.at(-1), /Nothing to repair/);
   assert.match(createdComments.at(-1), /<details><summary>Command log<\/summary>/);
-  assert.match(createdComments.at(-1), /Previous response from 2026-06-24T08:00:00Z:/);
+  assert.match(createdComments.at(-1), /#### 2026-06-24 08:00:00 UTC/);
+  assert.match(createdComments.at(-1), /Command: `\/branch create`/);
+  assert.match(createdComments.at(-1), /Executed by: @Mark-Lagarie/);
+  assert.match(createdComments.at(-1), /Output:\nold bot response/);
   assert.match(createdComments.at(-1), /old bot response/);
   assert.doesNotMatch(createdComments.at(-1), /older nested log/);
   assert.doesNotMatch(createdComments.at(-1), /user comment/);
+  assert.match(createdComments.at(-1), /<!-- command-log:meta\n\{"actor":"Lagarie404","command":"\/branch repair"\}\ncommand-log:end -->/);
 });

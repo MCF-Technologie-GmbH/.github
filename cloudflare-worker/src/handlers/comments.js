@@ -32,6 +32,7 @@ export async function handleIssueCommentEvent({
     .find((line) => line === "/branch create" || line === "/branch repair");
 
   if (branchCommand) {
+    setCommandMetadata(gh, owner, repo, issueNumber, comment, branchCommand);
     const result = branchCommand === "/branch repair"
       ? await handleBranchRepairCommand({ gh, owner, repo, issueNumber })
       : await handleBranchCommand({ gh, owner, repo, issueNumber, comment });
@@ -66,6 +67,8 @@ export async function handleIssueCommentEvent({
   if (commands.length === 0) {
     return { processed: false, reason: "no valid commands found" };
   }
+
+  setCommandMetadata(gh, owner, repo, issueNumber, comment, commands.map((cmd) => cmd.line).join("\n"));
 
   const currentIssue = await gh.getIssue(owner, repo, issueNumber);
   let issueBody = currentIssue.body || "";
@@ -150,5 +153,14 @@ async function cleanupCommandComment(gh, owner, repo, comment) {
     await gh.deleteComment(owner, repo, comment.id);
   } catch (err) {
     console.error(`Failed to delete command comment: ${err.message}`);
+  }
+}
+
+function setCommandMetadata(gh, owner, repo, issueNumber, comment, command) {
+  if (typeof gh.setCommandLogMetadata === "function") {
+    gh.setCommandLogMetadata(owner, repo, issueNumber, {
+      actor: comment.user?.login,
+      command,
+    });
   }
 }
