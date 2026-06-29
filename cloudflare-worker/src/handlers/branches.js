@@ -433,6 +433,13 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
   try {
     await gh.createReference(owner, repo, `refs/heads/${temporaryBranchName}`, branchOid);
     await gh.deleteReference(owner, repo, `heads/${branchName}`);
+    currentIssue = (await cleanupStaleLinkedBranchRecords({
+      gh,
+      owner,
+      repo,
+      issueNumber,
+      issue: await gh.getIssue(owner, repo, issueNumber),
+    })).issue;
     await gh.createLinkedBranch({
       issueId: currentIssue.id,
       repositoryId: currentIssue.repository?.id,
@@ -447,8 +454,13 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
 
     await deleteReferenceIfExists(gh, owner, repo, `heads/${temporaryBranchName}`);
   } catch (err) {
-    const originalRefExists = await branchRefExists(gh, owner, repo, branchName);
-    if (originalRefExists) {
+    const originalRefInfo = await getBranchRefInfo(gh, owner, repo, branchName);
+    const baseRefInfo = await getBranchRefInfo(gh, owner, repo, BASE_BRANCH);
+    const shouldPreserveTemporaryBranch = branchOid && branchOid !== baseRefInfo.sha;
+    if (originalRefInfo.exists) {
+      await deleteReferenceIfExists(gh, owner, repo, `heads/${branchName}`);
+    }
+    if (!shouldPreserveTemporaryBranch) {
       await deleteReferenceIfExists(gh, owner, repo, `heads/${temporaryBranchName}`);
     }
 
@@ -456,7 +468,7 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
       ...state,
       branch: {
         ...state.branch,
-        exists: true,
+        exists: false,
         linked: false,
         error: summarizeError(err),
       },
@@ -478,9 +490,9 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
         `Branch: \`${branchName}\``,
         `Temporary branch: \`${temporaryBranchName}\``,
         "",
-        originalRefExists
-          ? "The temporary branch was removed because the original branch ref exists again."
-          : "If the temporary branch still exists, the existing commits were preserved there.",
+        shouldPreserveTemporaryBranch
+          ? "The original orphan branch ref was removed. If the temporary branch still exists, the existing commits were preserved there."
+          : "The original orphan branch ref and temporary branch were removed because there were no commits to preserve.",
         "",
         "```text",
         failedState.branch.error,
@@ -1061,10 +1073,6 @@ async function getBranchRefInfo(gh, owner, repo, branchName) {
     }
     throw err;
   }
-}
-
-async function branchRefExists(gh, owner, repo, branchName) {
-  return (await getBranchRefInfo(gh, owner, repo, branchName)).exists === true;
 }
 
 async function waitForLinkedBranch(gh, owner, repo, issueNumber, branchName, attempts = 5, delayMs = 250) {

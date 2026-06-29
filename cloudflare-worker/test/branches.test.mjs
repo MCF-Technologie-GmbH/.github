@@ -632,6 +632,10 @@ test("handleBranchRepairCommand fails if GitHub does not report the recreated br
   let latestBody = body;
   const comments = [];
   const deletedRefs = [];
+  const refs = new Map([
+    ["heads/fix/50-test-bug-issue", "sha-dev"],
+    ["heads/dev", "sha-dev"],
+  ]);
 
   const gh = {
     async getIssue() {
@@ -647,14 +651,22 @@ test("handleBranchRepairCommand fails if GitHub does not report the recreated br
     async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
       latestBody = nextBody;
     },
-    async getReference() {
-      return { object: { sha: "branch-sha" } };
+    async getReference(_owner, _repo, ref) {
+      if (!refs.has(ref)) {
+        throw new Error(`REST GET /git/ref/${ref} -> HTTP 404: Not Found`);
+      }
+      return { object: { sha: refs.get(ref) } };
     },
-    async createReference() {},
+    async createReference(_owner, _repo, ref, sha) {
+      refs.set(ref.replace(/^refs\//, ""), sha);
+    },
     async deleteReference(_owner, _repo, ref) {
       deletedRefs.push(ref);
+      refs.delete(ref);
     },
-    async createLinkedBranch() {},
+    async createLinkedBranch(input) {
+      refs.set(`heads/${input.branchName}`, "sha-dev");
+    },
     async createComment(_owner, _repo, _issueNumber, commentBody) {
       comments.push(commentBody);
     },
@@ -671,11 +683,13 @@ test("handleBranchRepairCommand fails if GitHub does not report the recreated br
   assert.equal(result.reason, "linked branch repair failed");
   assert.deepEqual(deletedRefs, [
     "heads/fix/50-test-bug-issue",
+    "heads/fix/50-test-bug-issue",
     `heads/${result.temporaryBranch}`,
   ]);
+  assert.match(latestBody, /"exists": false/);
   assert.match(latestBody, /"linked": false/);
   assert.match(latestBody, /did not report it as a linked branch/);
-  assert.match(comments.at(-1), /temporary branch was removed/);
+  assert.match(comments.at(-1), /original orphan branch ref and temporary branch were removed/);
   assert.match(comments.at(-1), /I could not repair the linked branch relationship/);
 });
 

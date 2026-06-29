@@ -92,7 +92,7 @@ Estos comandos no publican una respuesta visible cuando son validos. Actualizan 
 | `/branch repair` | La rama registrada ya esta enlazada. | `No repair needed: the recorded branch is already linked.` + `Branch: ...`. | No cambia la metadata de rama salvo normalizacion previa. |
 | `/branch repair` | La rama registrada no existe. | `Nothing to repair: the recorded branch does not exist.` + `Marked the branch state as missing so /branch create can be used again.` + `Allowed branch: ...`. | Guarda `{ branch: { exists: false, linked: false, error: null, pr } }` y conserva `allowed_branch_name`. |
 | `/branch repair` | Reparacion correcta. | `Relinked branch successfully.` + `Branch: ...`. | Guarda `{ branch: { exists: true, linked: true, error: null, pr } }`. Durante el proceso crea una rama temporal `temp/...`, recrea la linked branch y borra la temporal. |
-| `/branch repair` | Falla reparar la relacion linked branch. | `I could not repair the linked branch relationship.` + `Branch: ...` + `Temporary branch: ...` + mensaje de si la temporal se borro o conserva commits + bloque `text` con el error. | Guarda `{ branch: { exists: true, linked: false, error: "<error>", pr } }`. |
+| `/branch repair` | Falla reparar la relacion linked branch. | `I could not repair the linked branch relationship.` + `Branch: ...` + `Temporary branch: ...` + mensaje de si se borraron refs huerfanas o si la temporal conserva commits + bloque `text` con el error. | Borra el ref original huerfano, guarda `{ branch: { exists: false, linked: false, error: "<error>", pr } }`, y conserva la temporal solo si hay commits que no estan en `dev`. |
 
 ### Plantillas exactas de respuestas de ramas
 
