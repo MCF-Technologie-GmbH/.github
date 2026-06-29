@@ -24,6 +24,19 @@ export function extractSection(body, name) {
 }
 
 /**
+ * Extracts all contents for a repeated commented section.
+ *
+ * @param {string} body - The Markdown body text.
+ * @param {string} name - The name of the section.
+ * @returns {string[]} Section contents in document order.
+ */
+export function extractSections(body, name) {
+  if (!body) return [];
+  const regex = new RegExp(`<!-- ${name}:start -->([\\s\\S]*?)<!-- ${name}:end -->`, "g");
+  return [...String(body).matchAll(regex)].map((match) => match[1]);
+}
+
+/**
  * Replaces the content of a commented section inside a Markdown body with new content.
  * Keeps the comment tags intact.
  *
@@ -36,6 +49,24 @@ export function replaceSection(body, name, newContent) {
   if (!body) return "";
   const regex = new RegExp(`<!-- ${name}:start -->([\\s\\S]*?)<!-- ${name}:end -->`);
   return body.replace(regex, `<!-- ${name}:start -->${newContent}<!-- ${name}:end -->`);
+}
+
+/**
+ * Replaces all repeated commented sections with the provided contents.
+ *
+ * @param {string} body - The Markdown body text.
+ * @param {string} name - The name of the section.
+ * @param {string[]} newContents - Replacement contents in document order.
+ * @returns {string} The modified Markdown body.
+ */
+export function replaceSections(body, name, newContents) {
+  if (!body) return "";
+  let index = 0;
+  const regex = new RegExp(`<!-- ${name}:start -->([\\s\\S]*?)<!-- ${name}:end -->`, "g");
+  return String(body).replace(regex, () => {
+    const replacement = newContents[index++];
+    return `<!-- ${name}:start -->${replacement ?? ""}<!-- ${name}:end -->`;
+  });
 }
 
 /**

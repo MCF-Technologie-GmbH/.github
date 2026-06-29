@@ -1,5 +1,7 @@
 const STATE_START = "<!-- automation-state:start";
 const STATE_END = "automation-state:end -->";
+const MANAGED_BRANCH_START = "<!-- managed-branch:start -->";
+const MANAGED_BRANCH_END = "<!-- managed-branch:end -->";
 
 const ISSUE_TYPE_BRANCH_PREFIXES = {
   Bug: "fix",
@@ -128,6 +130,39 @@ export function replaceAutomationState(body, state) {
 }
 
 /**
+ * Adds or replaces the protected visible managed branch block at the top.
+ *
+ * @param {string} body
+ * @param {object} params
+ * @param {string} params.owner
+ * @param {string} params.repo
+ * @param {string} params.branchName
+ * @returns {string}
+ */
+export function setManagedBranchBodyLink(body, { owner, repo, branchName }) {
+  const withoutLink = removeManagedBranchBodyLink(body);
+  if (!owner || !repo || !branchName) return withoutLink;
+  const block = [
+    "<!-- protected:start -->",
+    MANAGED_BRANCH_START,
+    `Branch: [\`${branchName}\`](https://github.com/${owner}/${repo}/tree/${encodeBranchPath(branchName)})`,
+    MANAGED_BRANCH_END,
+    "<!-- protected:end -->",
+  ].join("\n");
+  return `${block}\n\n${withoutLink}`.trim();
+}
+
+/**
+ * Removes the protected visible managed branch block.
+ *
+ * @param {string} body
+ * @returns {string}
+ */
+export function removeManagedBranchBodyLink(body) {
+  return String(body || "").replace(managedBranchBlockRegex(), "").trim();
+}
+
+/**
  * Checks whether a PR body links to the expected issue number.
  *
  * @param {string} body
@@ -219,4 +254,12 @@ function automationStateRegex() {
 
 function wrappedAutomationStateRegex() {
   return /\s*<!-- protected:start -->\s*<!-- automation-state:start\s*[\s\S]*?\s*automation-state:end -->\s*<!-- protected:end -->\s*/;
+}
+
+function managedBranchBlockRegex() {
+  return /\s*<!-- protected:start -->\s*<!-- managed-branch:start -->[\s\S]*?<!-- managed-branch:end -->\s*<!-- protected:end -->\s*/;
+}
+
+function encodeBranchPath(branchName) {
+  return String(branchName || "").split("/").map(encodeURIComponent).join("/");
 }

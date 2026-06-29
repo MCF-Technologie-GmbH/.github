@@ -1578,12 +1578,41 @@ test("handlePushEvent creates draft PR after first commit push", async () => {
     title: "feat: Add login (#123)",
     head: "feat/123-add-login",
     base: "dev",
-    body: "Closes #123",
+    body: "Branch: [`feat/123-add-login`](https://github.com/MCF-Technologie-GmbH/app/tree/feat/123-add-login)\n\nCloses #123",
     draft: true,
   }]);
+  assert.match(updatedBody, /^<!-- protected:start -->\n<!-- managed-branch:start -->\nBranch: \[`feat\/123-add-login`\]\(https:\/\/github.com\/MCF-Technologie-GmbH\/app\/tree\/feat\/123-add-login\)/);
   assert.match(updatedBody, /"pr": 456/);
   assert.match(comments[0].body, /Created draft PR/);
   assert.match(comments[0].body, /#456/);
+});
+
+test("handlePushEvent ignores branch creation push events", async () => {
+  const gh = {
+    async getIssue() {
+      throw new Error("should not inspect issue metadata for branch creation push");
+    },
+    async createComment() {
+      throw new Error("should not comment for branch creation push");
+    },
+    async createPullRequest() {
+      throw new Error("should not create PR for branch creation push");
+    },
+  };
+
+  const result = await handlePushEvent({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    payload: {
+      ref: "refs/heads/fix/60-test",
+      created: true,
+      sender: { login: "mark" },
+    },
+  });
+
+  assert.equal(result.processed, false);
+  assert.equal(result.reason, "push created branch");
 });
 
 test("handlePushEvent skips draft PR when branch still matches dev", async () => {
@@ -1763,9 +1792,10 @@ test("handlePullRequestEvent records valid PR number", async () => {
     pullNumber: 456,
     update: {
       title: "feat: Add login (#123)",
-      body: "Refs #123\n\nCloses #123",
+      body: "Branch: [`feat/123-add-login`](https://github.com/MCF-Technologie-GmbH/app/tree/feat/123-add-login)\n\nRefs #123\n\nCloses #123",
     },
   }]);
+  assert.match(updatedBody, /^<!-- protected:start -->\n<!-- managed-branch:start -->\nBranch: \[`feat\/123-add-login`\]\(https:\/\/github.com\/MCF-Technologie-GmbH\/app\/tree\/feat\/123-add-login\)/);
   assert.match(comments[0].body, /adopted by automation/);
 });
 

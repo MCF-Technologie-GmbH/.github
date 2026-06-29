@@ -7,7 +7,9 @@ import {
   ensureAutomationState,
   extractIssueNumberFromBranch,
   parseAutomationState,
+  removeManagedBranchBodyLink,
   replaceAutomationState,
+  setManagedBranchBodyLink,
 } from "../src/utils/automation-state.js";
 
 test("ensureAutomationState inserts hidden JSON in a protected block at the bottom", () => {
@@ -55,6 +57,40 @@ test("replaceAutomationState updates branch metadata", () => {
       pr: null,
     },
   });
+});
+
+test("setManagedBranchBodyLink inserts protected branch link at the top", () => {
+  const body = ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug");
+  const updated = setManagedBranchBodyLink(body, {
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    branchName: "fix/62-test",
+  });
+
+  assert.match(updated, /^<!-- protected:start -->\n<!-- managed-branch:start -->\nBranch: \[`fix\/62-test`\]\(https:\/\/github.com\/MCF-Technologie-GmbH\/app\/tree\/fix\/62-test\)/);
+  assert.match(updated, /<!-- managed-branch:end -->\n<!-- protected:end -->\n\n<!-- protected:start -->\nBody/);
+});
+
+test("setManagedBranchBodyLink replaces old branch link and removeManagedBranchBodyLink removes it", () => {
+  const body = [
+    "<!-- protected:start -->",
+    "<!-- managed-branch:start -->",
+    "Branch: [`old`](https://github.com/org/repo/tree/old)",
+    "<!-- managed-branch:end -->",
+    "<!-- protected:end -->",
+    "",
+    "Body",
+  ].join("\n");
+
+  const updated = setManagedBranchBodyLink(body, {
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    branchName: "feat/1-new",
+  });
+
+  assert.doesNotMatch(updated, /old/);
+  assert.match(updated, /Branch: \[`feat\/1-new`\]/);
+  assert.equal(removeManagedBranchBodyLink(updated), "Body");
 });
 
 test("buildIssueBranchName uses issue type key, issue number, and title slug", () => {

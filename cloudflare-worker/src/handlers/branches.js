@@ -5,7 +5,9 @@ import {
   ensureAutomationState,
   extractIssueNumberFromBranch,
   parseAutomationState,
+  removeManagedBranchBodyLink,
   replaceAutomationState,
+  setManagedBranchBodyLink,
 } from "../utils/automation-state.js";
 
 const BASE_BRANCH = "dev";
@@ -645,7 +647,7 @@ export async function handleBranchDeleteCommand({ gh, owner, repo, issueNumber }
       pr: null,
     },
   };
-  issueBody = replaceAutomationState(afterDeleteIssue.body || issueBody, state);
+  issueBody = removeManagedBranchBodyLink(replaceAutomationState(afterDeleteIssue.body || issueBody, state));
   await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, issueBody);
 
   await gh.createComment(
@@ -910,6 +912,10 @@ export async function handlePushEvent({ gh, owner, repo, payload }) {
     return { processed: false, reason: "push deleted branch" };
   }
 
+  if (payload.created) {
+    return { processed: false, reason: "push created branch" };
+  }
+
   const branchName = ref.slice("refs/heads/".length);
   const issueNumber = extractIssueNumberFromBranch(branchName);
   if (!issueNumber) {
@@ -1069,7 +1075,11 @@ export async function handlePushEvent({ gh, owner, repo, payload }) {
     repo,
     issueNumber,
     undefined,
-    replaceAutomationState(issue.body || "", updatedState)
+    setManagedBranchBodyLink(replaceAutomationState(issue.body || "", updatedState), {
+      owner,
+      repo,
+      branchName,
+    })
   );
   await createBranchEventComment(
     gh,
@@ -1143,7 +1153,7 @@ export async function handleIssueClosedEvent({ gh, owner, repo, issueNumber, iss
     repo,
     issueNumber,
     undefined,
-    replaceAutomationState(staleCleanup.issue.body || afterDeleteIssue.body || issue.body || "", updatedState)
+    removeManagedBranchBodyLink(replaceAutomationState(staleCleanup.issue.body || afterDeleteIssue.body || issue.body || "", updatedState))
   );
   await gh.createComment(
     owner,
@@ -1444,7 +1454,13 @@ async function createDraftPullRequestForIssue({ gh, owner, repo, issueNumber, is
     }),
     head: branchName,
     base: BASE_BRANCH,
-    body: `Closes #${issueNumber}`,
+    body: formatPullRequestBody({
+      owner,
+      repo,
+      branchName,
+      body: `Closes #${issueNumber}`,
+      issueNumber,
+    }),
     draft: true,
   });
 }
@@ -1548,9 +1564,14 @@ export async function handlePullRequestEvent({ gh, owner, repo, payload }) {
   });
   const expectedBodyLink = `Closes #${issueNumber}`;
   const nextTitle = pr.title === expectedTitle ? undefined : expectedTitle;
-  const nextBody = bodyClosesIssue(pr.body || "", issueNumber)
-    ? undefined
-    : appendPullRequestIssueLink(pr.body || "", expectedBodyLink);
+  const expectedBody = formatPullRequestBody({
+    owner,
+    repo,
+    branchName,
+    body: pr.body || "",
+    issueNumber,
+  });
+  const nextBody = pr.body === expectedBody ? undefined : expectedBody;
 
   if (nextTitle !== undefined || nextBody !== undefined) {
     await gh.updatePullRequest(owner, repo, pr.number, {
@@ -1565,7 +1586,7 @@ export async function handlePullRequestEvent({ gh, owner, repo, payload }) {
         "This PR was adopted by automation because it uses the managed branch for this issue.",
         "",
         nextTitle !== undefined ? `Updated title to: \`${expectedTitle}\`` : null,
-        nextBody !== undefined ? `Ensured PR body links the issue with \`${expectedBodyLink}\`.` : null,
+        nextBody !== undefined ? `Ensured PR body includes the managed branch link and \`${expectedBodyLink}\`.` : null,
       ].filter(Boolean).join("\n")
     );
   }
@@ -1584,7 +1605,11 @@ export async function handlePullRequestEvent({ gh, owner, repo, payload }) {
     repo,
     issueNumber,
     undefined,
-    replaceAutomationState(issue.body || "", updatedState)
+    setManagedBranchBodyLink(replaceAutomationState(issue.body || "", updatedState), {
+      owner,
+      repo,
+      branchName,
+    })
   );
 
   return { processed: true, valid: true, issue: issueNumber, pr: pr.number };
@@ -1606,7 +1631,7 @@ async function handlePullRequestClosedEvent({ gh, owner, repo, payload }) {
 
   if (pr.merged === true) {
     const updatedState = resetBranchState(state);
-    await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, replaceAutomationState(issue.body || "", updatedState));
+    await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, removeManagedBranchBodyLink(replaceAutomationState(issue.body || "", updatedState)));
     return { processed: true, merged: true, issue: issueNumber, pr: pr.number, metadataCleaned: true };
   }
 
@@ -1615,7 +1640,7 @@ async function handlePullRequestClosedEvent({ gh, owner, repo, payload }) {
   issue = await gh.getIssue(owner, repo, issueNumber);
   const staleCleanup = await cleanupStaleLinkedBranchRecords({ gh, owner, repo, issueNumber, issue });
   const updatedState = resetBranchState(state);
-  await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, replaceAutomationState(staleCleanup.issue.body || issue.body || "", updatedState));
+  await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, removeManagedBranchBodyLink(replaceAutomationState(staleCleanup.issue.body || issue.body || "", updatedState)));
   await gh.createComment(
     owner,
     repo,
@@ -1643,14 +1668,31 @@ function summarizeError(err) {
   return message.length > 1200 ? `${message.slice(0, 1200)}...` : message;
 }
 
-function appendPullRequestIssueLink(body, issueLink) {
-  const text = String(body || "").trim();
-  return text ? `${text}\n\n${issueLink}` : issueLink;
-}
-
 function bodyClosesIssue(body, issueNumber) {
   const escaped = String(issueNumber).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(`\\bclose[sd]?\\s+#${escaped}\\b`, "i").test(String(body || ""));
+}
+
+function formatPullRequestBody({ owner, repo, branchName, body, issueNumber }) {
+  const cleanedBody = String(body || "")
+    .replace(/^Branch: \[`[^`]+`\]\(https:\/\/github\.com\/[^)]+\)\s*/i, "")
+    .trim();
+  const bodyWithIssueLink = bodyClosesIssue(cleanedBody, issueNumber)
+    ? cleanedBody
+    : [cleanedBody, `Closes #${issueNumber}`].filter(Boolean).join("\n\n");
+  return [
+    `Branch: ${branchMarkdownLink(owner, repo, branchName)}`,
+    "",
+    bodyWithIssueLink,
+  ].join("\n").trim();
+}
+
+function branchMarkdownLink(owner, repo, branchName) {
+  return `[\`${branchName}\`](https://github.com/${owner}/${repo}/tree/${encodeBranchPath(branchName)})`;
+}
+
+function encodeBranchPath(branchName) {
+  return String(branchName || "").split("/").map(encodeURIComponent).join("/");
 }
 
 function resetBranchState(state) {

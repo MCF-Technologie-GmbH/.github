@@ -208,7 +208,7 @@ test("withCommandLog folds previous bot comments into the next bot response", as
   assert.equal(createdComments.length, 1);
   assert.ok(createdComments.at(-1).indexOf("old bot response") < createdComments.at(-1).indexOf("created earlier"));
   assert.match(createdComments.at(-1), /Nothing to repair/);
-  assert.match(createdComments.at(-1), /<details><summary>Command log<\/summary>/);
+  assert.match(createdComments.at(-1), /<details><summary>Bot log<\/summary>/);
   assert.match(createdComments.at(-1), /#### 2026-06-24 07:50:00 UTC/);
   assert.match(createdComments.at(-1), /Command: `\/branch create`/);
   assert.match(createdComments.at(-1), /Executed by: @Lagarie404/);

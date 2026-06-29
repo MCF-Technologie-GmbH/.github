@@ -5,8 +5,8 @@ import {
   ISSUE_TYPE_CHANGE_ACTIONS
 } from "../config.js";
 import {
-  extractSection,
-  replaceSection,
+  extractSections,
+  replaceSections,
   detectScopeFromBody
 } from "../utils/text.js";
 import {
@@ -213,17 +213,17 @@ export async function enforceIssueTypePolicy({
 
   // 6. Handling body edits: Prevent re-injecting helper blocks and enforce protected zones.
   if (action === "edited" && changes?.body) {
-    const oldProtected = extractSection(changes.body.from, "protected");
-    const newProtected = extractSection(issueBody, "protected");
+    const oldProtectedSections = extractSections(changes.body.from, "protected");
+    const newProtectedSections = extractSections(issueBody, "protected");
 
     let finalBody = issueBody;
     // Revert edits inside <!-- protected:start/end --> blocks or full body if tags were deleted.
-    if (oldProtected) {
-      if (!newProtected) {
+    if (oldProtectedSections.length) {
+      if (oldProtectedSections.length !== newProtectedSections.length) {
         // If protected tags were removed, revert the entire body to the previous state.
         finalBody = changes.body.from;
-      } else if (oldProtected !== newProtected) {
-        finalBody = replaceSection(finalBody, "protected", oldProtected);
+      } else if (oldProtectedSections.some((section, index) => section !== newProtectedSections[index])) {
+        finalBody = replaceSections(finalBody, "protected", oldProtectedSections);
       }
     }
 

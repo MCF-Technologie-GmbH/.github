@@ -79,7 +79,7 @@ function appendCommandLog(body, commandLog, metadata) {
   const bodyWithLog = commandLog.length ? [
     body,
     "",
-    "<details><summary>Command log</summary>",
+    "<details><summary>Bot log</summary>",
     "",
     ...[...history].reverse().flatMap((entry, index) => {
       const fence = markdownFenceFor(entry.body);
@@ -107,7 +107,7 @@ function appendCommandLog(body, commandLog, metadata) {
 
 function stripCommandLog(body) {
   return stripCommandMetadata(String(body || ""))
-    .replace(/\n*<details><summary>Command log<\/summary>[\s\S]*?<\/details>\s*$/i, "");
+    .replace(/\n*<details><summary>(?:Command log|Bot log)<\/summary>[\s\S]*?<\/details>\s*$/i, "");
 }
 
 function extractCommandMetadata(body) {
