@@ -108,3 +108,49 @@ test("enforceIssueTypePolicy does not revert legacy scope prefixes in edited tit
   assert.equal(result.scope, null);
   assert.deepEqual(updates, []);
 });
+
+for (const changes of [
+  { type: { from: "Bug" } },
+  { issue_type: { from: "Bug" } },
+  { issueType: { from: "Bug" } },
+]) {
+  test(`enforceIssueTypePolicy reverts edited issue type changes for ${Object.keys(changes)[0]}`, async () => {
+    const typeUpdates = [];
+    const comments = [];
+    const gh = {
+      async getOriginalIssueType() {
+        return { id: "TYPE_bug", name: "Bug" };
+      },
+      async updateIssueType(issueId, issueTypeId) {
+        typeUpdates.push({ issueId, issueTypeId });
+      },
+      async createComment(_owner, _repo, issueNumber, body) {
+        comments.push({ issueNumber, body });
+      },
+    };
+
+    const result = await enforceIssueTypePolicy({
+      gh,
+      owner: "MCF-Technologie-GmbH",
+      repo: "app",
+      repoFullName: "mcf-technologie-gmbh/app",
+      issueNumber: 123,
+      action: "edited",
+      currentIssue: createIssue({
+        body: "<!-- protected:start -->\nBody\n<!-- protected:end -->",
+      }),
+      currentType: "Feature",
+      changes,
+      typeMap: new Map([["Bug", "TYPE_bug"], ["Feature", "TYPE_feature"]]),
+      scopeField: null,
+      priorityField: null,
+      effortField: null,
+    });
+
+    assert.equal(result.operation, "reverted");
+    assert.equal(result.revertedTo, "Bug");
+    assert.deepEqual(typeUpdates, [{ issueId: "ISSUE_id", issueTypeId: "TYPE_bug" }]);
+    assert.equal(comments[0].issueNumber, 123);
+    assert.match(comments[0].body, /Issue types cannot be changed after issue creation/);
+  });
+}

@@ -53,8 +53,7 @@ export async function enforceIssueTypePolicy({
 }) {
   const isProjectsRepo = repoFullName === PROJECTS_REPO_FULL_NAME;
   const isProjectType = currentType === RESERVED_PROJECT_ISSUE_TYPE;
-  const isTypeChange = ISSUE_TYPE_CHANGE_ACTIONS.has(action) &&
-    (action !== "edited" || changes?.type != null);
+  const isTypeChange = hasIssueTypeChange(action, changes);
 
   // 1. Projects repository: Only "Project" (Epics) issues are permitted.
   if (isProjectsRepo) {
@@ -284,6 +283,17 @@ export async function enforceIssueTypePolicy({
     title: currentIssue.title,
     debug,
   };
+}
+
+function hasIssueTypeChange(action, changes) {
+  if (!ISSUE_TYPE_CHANGE_ACTIONS.has(action)) return false;
+  if (action !== "edited") return true;
+
+  return Boolean(
+    changes?.type != null ||
+    changes?.issue_type != null ||
+    changes?.issueType != null
+  );
 }
 
 /**
