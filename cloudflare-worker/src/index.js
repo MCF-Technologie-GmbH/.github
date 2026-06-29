@@ -5,7 +5,7 @@ import {
 } from "./config.js";
 import { verifyGitHubSignature } from "./utils/crypto.js";
 import { normalizeRepo } from "./utils/text.js";
-import { GitHubClient, createInstallationAccessToken } from "./services/github.js";
+import { GitHubClient, createInstallationAccessToken } from "./services/github/index.js";
 import { withCommandLog } from "./utils/comment-log.js";
 import { handleIssueCommentEvent, handleIssueCommentProtectionEvent } from "./handlers/comments.js";
 import { handleCreateEvent, handlePullRequestEvent, handlePushEvent } from "./handlers/branches.js";
