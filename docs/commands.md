@@ -28,7 +28,7 @@ automation-state:end -->
 | Campo | Que significa | Cuando cambia |
 | --- | --- | --- |
 | `original_issue_type` | Issue Type original de la issue. Es la fuente estable para revertir cambios manuales de type sin depender del timeline de GitHub. | Se guarda cuando el Worker crea o normaliza el `automation-state`. |
-| `allowed_branch_name` | Nombre esperado/autorizado para la unica rama gestionada de la issue. Se genera desde tipo, numero y titulo, por ejemplo `feat/123-add-login`. | Se crea/normaliza al ejecutar `/branch create`, `/branch repair`, `/branch delete` o al aceptar una rama creada desde la sidebar de GitHub. |
+| `allowed_branch_name` | Nombre esperado/autorizado para la unica rama gestionada de la issue. Se genera desde tipo, numero y titulo, por ejemplo `feat/123-add-login`. | Se crea/normaliza al ejecutar `/branch create`, `/branch repair`, `/branch delete`, al aceptar una rama creada desde la sidebar de GitHub, o al cambiar el titulo mientras no exista una branch gestionada. |
 | `branch.exists` | Si el bot considera que la rama existe. | Pasa a `false` durante la reserva de `/branch create`; a `true` cuando la rama se crea o se acepta; a `false` si `/branch repair` detecta que la rama registrada no existe o si `/branch delete` la borra/resetea. |
 | `branch.linked` | Si GitHub reporta la rama como linked branch de la issue. | Pasa a `true` cuando se crea/repara/acepta el enlace; pasa a `false` cuando falla la creacion o reparacion, o cuando `/branch repair` detecta que la rama registrada no existe. |
 | `branch.error` | Ultimo error registrado para la rama. | Se limpia a `null` en reservas, creaciones, reparaciones y resets correctos. Se llena con el error resumido cuando falla crear o reparar, o con el mensaje del conflicto de estado. |
@@ -96,6 +96,25 @@ Estos comandos no publican una respuesta visible cuando son validos. Actualizan 
 | `/branch delete` | Hay linked branch visible o expected branch existente. | `Deleted the branch managed for this issue.` + `Branch: ...` + `This cannot be undone by automation.` | Borra la linked branch visible si existe; si no, borra `heads/<allowed_branch_name>`. Limpia linked branch records obsoletos y guarda `{ branch: { exists: false, linked: false, error: null, pr } }`. |
 | `/branch delete` | Hay metadata pero el ref ya no existe. | `The managed branch did not exist, so I only reset the branch metadata.` + `Branch: ...` + `This cannot be undone by automation.` | Limpia linked branch records obsoletos y guarda `{ branch: { exists: false, linked: false, error: null, pr } }`. |
 | `/branch delete` | No hay metadata de rama. | `Nothing to delete: this issue does not have branch metadata.` | Puede normalizar el bloque, pero no crea `branch`. |
+
+## Edicion de issues
+
+| Evento | Caso | Respuesta visible real | Cambio en `automation-state` |
+| --- | --- | --- | --- |
+| Editar titulo | No existe branch gestionada (`branch` vacio o `exists: false`, `linked: false`, `pr: null`). | Sin comentario visible. | Recalcula `allowed_branch_name` con el titulo nuevo. |
+| Editar titulo | Existe branch gestionada, incluso si `exists: true` y `linked: false`. | `The issue title cannot be changed while a managed branch exists.` + managed branch + instrucciones para usar `/branch delete`. | Revierte el titulo al valor anterior y conserva `allowed_branch_name`. |
+
+Mensaje exacto cuando el titulo queda bloqueado:
+
+```md
+The issue title cannot be changed while a managed branch exists.
+
+Managed branch: `<allowedBranchName>`
+
+Delete the existing branch with `/branch delete` before changing the title.
+
+Deleting a branch cannot be undone by automation.
+```
 
 ### Plantillas exactas de respuestas de ramas
 

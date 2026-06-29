@@ -15,7 +15,12 @@ import {
   cleanChecklistOnCreation,
   getRequiresLabelsForChecklist
 } from "../utils/checklist.js";
-import { ensureAutomationState, parseAutomationState } from "../utils/automation-state.js";
+import {
+  buildIssueBranchName,
+  ensureAutomationState,
+  parseAutomationState,
+  replaceAutomationState,
+} from "../utils/automation-state.js";
 
 /**
  * Enforces organizational policies on GitHub Issues when they are opened, edited, or reopened.
@@ -89,7 +94,9 @@ export async function enforceIssueTypePolicy({
   let issueBody = currentIssue.body || "";
   let updatedBody = issueBody;
   let hasBodyChanges = false;
+  let titleUpdate;
   let resolvedType = currentType;
+  let issueTitleForAutomation = currentIssue.title;
   const creationTemplate = action === "opened" || action === "reopened"
     ? detectTemplateFromIssue(issueBody, typeMap)
     : null;
@@ -141,6 +148,30 @@ export async function enforceIssueTypePolicy({
     effortValue = currentSidebarEffort;
   }
 
+  const titleChanged = action === "edited" && typeof changes?.title?.from === "string" && changes.title.from !== currentIssue.title;
+  if (titleChanged) {
+    const state = parseAutomationState(issueBody);
+    const issueType = state?.original_issue_type || resolvedType;
+    if (branchStateBlocksTitleChange(state, issueType, issueNumber, currentIssue.title)) {
+      titleUpdate = changes.title.from;
+      issueTitleForAutomation = changes.title.from;
+      await gh.createComment(
+        owner,
+        repo,
+        issueNumber,
+        [
+          "The issue title cannot be changed while a managed branch exists.",
+          "",
+          state?.allowed_branch_name ? `Managed branch: \`${state.allowed_branch_name}\`` : null,
+          state?.allowed_branch_name ? "" : null,
+          "Delete the existing branch with `/branch delete` before changing the title.",
+          "",
+          "Deleting a branch cannot be undone by automation.",
+        ].filter((line) => line !== null).join("\n")
+      );
+    }
+  }
+
   // 5. Handling issue creation: Extract configuration fields and clean templates.
   if (action === "opened" || action === "reopened") {
     // Correct issue type if it doesn't match the form template used.
@@ -171,7 +202,7 @@ export async function enforceIssueTypePolicy({
     cleaned = injectZoningComments(cleaned);
     cleaned = ensureAutomationState(cleaned, resolvedType, {
       issueNumber,
-      title: currentIssue.title,
+      title: issueTitleForAutomation,
     });
 
     if (cleaned !== issueBody) {
@@ -203,11 +234,24 @@ export async function enforceIssueTypePolicy({
     healed = removeEffortSection(healed);
     healed = ensureAutomationState(healed, resolvedType, {
       issueNumber,
-      title: currentIssue.title,
+      title: issueTitleForAutomation,
     });
 
     if (healed !== issueBody) {
       updatedBody = healed;
+      hasBodyChanges = true;
+    }
+  }
+
+  if (titleChanged && titleUpdate === undefined) {
+    const titleBody = updateAllowedBranchNameForIssueTitle({
+      body: hasBodyChanges ? updatedBody : issueBody,
+      issueType: parseAutomationState(hasBodyChanges ? updatedBody : issueBody)?.original_issue_type || resolvedType,
+      issueNumber,
+      title: currentIssue.title,
+    });
+    if (titleBody !== (hasBodyChanges ? updatedBody : issueBody)) {
+      updatedBody = titleBody;
       hasBodyChanges = true;
     }
   }
@@ -266,16 +310,16 @@ export async function enforceIssueTypePolicy({
   await syncSingleSelectIssueField(gh, currentIssue.id, priorityField, priorityValue, debug.priority);
   await syncSingleSelectIssueField(gh, currentIssue.id, effortField, effortValue, debug.effort);
 
-  // 10. Update body if changed. Titles are left exactly as the issue author wrote them.
-  if (hasBodyChanges) {
+  // 10. Update body/title if changed by policy.
+  if (hasBodyChanges || titleUpdate !== undefined) {
     await gh.updateIssueTitleAndBody(
       owner,
       repo,
       issueNumber,
-      undefined,
-      issueBody
+      titleUpdate,
+      hasBodyChanges ? issueBody : undefined
     );
-    console.log(`Sanitized issue body and injected zoning comments`);
+    console.log(`Updated issue body/title policy state`);
   }
 
   return {
@@ -286,9 +330,29 @@ export async function enforceIssueTypePolicy({
     issue: issueNumber,
     currentType: resolvedType,
     scope: scopeValue,
-    title: currentIssue.title,
+    title: titleUpdate ?? currentIssue.title,
     debug,
   };
+}
+
+function branchStateBlocksTitleChange(state, issueType, issueNumber, currentTitle) {
+  const branch = state?.branch;
+  const branchExists = branch?.exists === true || branch?.linked === true || branch?.pr != null;
+  if (!branchExists) return false;
+
+  const currentAllowedBranch = buildIssueBranchName({ issueType, issueNumber, title: currentTitle });
+  return !state?.allowed_branch_name || state.allowed_branch_name !== currentAllowedBranch;
+}
+
+function updateAllowedBranchNameForIssueTitle({ body, issueType, issueNumber, title }) {
+  const ensuredBody = ensureAutomationState(body, issueType, { issueNumber, title });
+  const state = parseAutomationState(ensuredBody);
+  const allowedBranchName = buildIssueBranchName({ issueType, issueNumber, title });
+  if (state?.allowed_branch_name === allowedBranchName) return ensuredBody;
+  return replaceAutomationState(ensuredBody, {
+    ...state,
+    allowed_branch_name: allowedBranchName,
+  });
 }
 
 function hasIssueTypeChange(action, changes) {

@@ -219,7 +219,108 @@ test("enforceIssueTypePolicy does not revert legacy scope prefixes in edited tit
 
   assert.equal(result.title, "feat(api): Add login flow");
   assert.equal(result.scope, null);
-  assert.deepEqual(updates, []);
+  assert.equal(updates.length, 1);
+  assert.equal(updates[0].title, undefined);
+  assert.match(updates[0].body, /"allowed_branch_name": "feat\/123-add-login-flow"/);
+});
+
+test("enforceIssueTypePolicy updates allowed branch name when title changes without a branch", async () => {
+  const updates = [];
+  const comments = [];
+  const body = ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Feature", {
+    issueNumber: 123,
+    title: "Add login flow",
+  });
+  const gh = {
+    async updateIssueTitleAndBody(_owner, _repo, _issueNumber, title, nextBody) {
+      updates.push({ title, body: nextBody });
+    },
+    async createComment(_owner, _repo, _issueNumber, body) {
+      comments.push(body);
+    },
+    async addLabels() {},
+    async removeLabel() {},
+    async updateIssueFieldValue() {},
+  };
+
+  const result = await enforceIssueTypePolicy({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    repoFullName: "mcf-technologie-gmbh/app",
+    issueNumber: 123,
+    action: "edited",
+    currentIssue: createIssue({
+      title: "Add password reset",
+      body,
+    }),
+    currentType: "Feature",
+    changes: {
+      title: { from: "Add login flow" },
+    },
+    typeMap: new Map([["Feature", "TYPE_feature"]]),
+    scopeField: null,
+    priorityField: null,
+    effortField: null,
+  });
+
+  assert.equal(result.title, "Add password reset");
+  assert.equal(comments.length, 0);
+  assert.equal(updates.length, 1);
+  assert.equal(updates[0].title, undefined);
+  assert.match(updates[0].body, /"allowed_branch_name": "feat\/123-add-password-reset"/);
+});
+
+test("enforceIssueTypePolicy reverts title changes while an unlinked branch still exists", async () => {
+  const updates = [];
+  const comments = [];
+  const body = ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Feature", {
+    issueNumber: 123,
+    title: "Add login flow",
+  }).replace(
+    /"branch": null/,
+    '"branch": {\n    "exists": true,\n    "linked": false,\n    "error": null,\n    "pr": null\n  }'
+  );
+  const gh = {
+    async updateIssueTitleAndBody(_owner, _repo, _issueNumber, title, nextBody) {
+      updates.push({ title, body: nextBody });
+    },
+    async createComment(_owner, _repo, issueNumber, body) {
+      comments.push({ issueNumber, body });
+    },
+    async addLabels() {},
+    async removeLabel() {},
+    async updateIssueFieldValue() {},
+  };
+
+  const result = await enforceIssueTypePolicy({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    repoFullName: "mcf-technologie-gmbh/app",
+    issueNumber: 123,
+    action: "edited",
+    currentIssue: createIssue({
+      title: "Add password reset",
+      body,
+    }),
+    currentType: "Feature",
+    changes: {
+      title: { from: "Add login flow" },
+    },
+    typeMap: new Map([["Feature", "TYPE_feature"]]),
+    scopeField: null,
+    priorityField: null,
+    effortField: null,
+  });
+
+  assert.equal(result.title, "Add login flow");
+  assert.equal(updates.length, 1);
+  assert.deepEqual(updates[0], { title: "Add login flow", body: undefined });
+  assert.equal(comments[0].issueNumber, 123);
+  assert.match(comments[0].body, /cannot be changed while a managed branch exists/);
+  assert.match(comments[0].body, /Managed branch: `feat\/123-add-login-flow`/);
+  assert.match(comments[0].body, /\/branch delete/);
 });
 
 test("enforceIssueTypePolicy reverts typed issue changes from recorded original type", async () => {

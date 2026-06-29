@@ -44,6 +44,7 @@ It compares the value against the organization issue types retrieved dynamically
      id: issue-type
      attributes:
        label: Issue Type
+       description: This template only supports the YourTypeName issue type.
        options:
          - YourTypeName
      validations:

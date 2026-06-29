@@ -6,6 +6,7 @@ body:
     id: issue-type
     attributes:
       label: Issue Type
+      description: This template only supports the Chore issue type.
       options:
         - Chore
     validations:
