@@ -23,7 +23,12 @@ export function withCommandLog(gh) {
       }
 
       if (prop === "createCommentRaw") {
-        return async (owner, repo, issueNumber, body) => target.createComment(owner, repo, issueNumber, body);
+        return async (owner, repo, issueNumber, body) => {
+          const create = typeof target.createCommentRaw === "function"
+            ? target.createCommentRaw.bind(target)
+            : target.createComment.bind(target);
+          return create(owner, repo, issueNumber, body);
+        };
       }
 
       if (prop !== "createComment") {

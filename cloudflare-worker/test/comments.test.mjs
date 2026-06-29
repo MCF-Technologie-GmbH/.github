@@ -205,6 +205,7 @@ test("withCommandLog folds previous bot comments into the next bot response", as
 
   assert.equal(processed.processed, true);
   assert.deepEqual(deleted, [10, 3]);
+  assert.equal(createdComments.length, 1);
   assert.ok(createdComments.at(-1).indexOf("old bot response") < createdComments.at(-1).indexOf("created earlier"));
   assert.match(createdComments.at(-1), /Nothing to repair/);
   assert.match(createdComments.at(-1), /<details><summary>Command log<\/summary>/);
@@ -220,6 +221,33 @@ test("withCommandLog folds previous bot comments into the next bot response", as
   assert.doesNotMatch(createdComments.at(-1), /older nested log/);
   assert.doesNotMatch(createdComments.at(-1), /user comment/);
   assert.match(createdComments.at(-1), /<!-- command-log:meta\n\{"actor":"Lagarie404","command":"\/branch repair","history":\[/);
+});
+
+test("withCommandLog createCommentRaw bypasses decoration and cleanup", async () => {
+  const created = [];
+  let listed = false;
+  let deleted = false;
+  const gh = withCommandLog({
+    async listIssueComments() {
+      listed = true;
+      return [];
+    },
+    async deleteComment() {
+      deleted = true;
+    },
+    async createCommentRaw(_owner, _repo, issueNumber, body) {
+      created.push({ issueNumber, body });
+    },
+    async createComment() {
+      throw new Error("decorated createComment should not be used");
+    },
+  });
+
+  await gh.createCommentRaw("MCF-Technologie-GmbH", "app", 123, "plain body");
+
+  assert.deepEqual(created, [{ issueNumber: 123, body: "plain body" }]);
+  assert.equal(listed, false);
+  assert.equal(deleted, false);
 });
 
 test("handleIssueCommentProtectionEvent restores edited bot comments", async () => {

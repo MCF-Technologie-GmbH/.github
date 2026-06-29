@@ -42,6 +42,17 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
   }
 
   currentIssue = (await cleanupStaleLinkedBranchRecords({ gh, owner, repo, issueNumber, issue: currentIssue })).issue;
+  ({ issue: currentIssue, issueBody, state } = await syncIssueBranchMetadata({
+    gh,
+    owner,
+    repo,
+    issueNumber,
+    issue: currentIssue,
+    issueBody,
+    state,
+    expectedBranchName: branchName,
+    checkExpectedRefOnly: true,
+  }));
 
   const branchStatus = await inspectIssueBranchState({
     gh,
@@ -88,13 +99,14 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
       repo,
       issueNumber,
       [
-        "This issue has recorded branch metadata, but the branch is not currently linked.",
+        "The expected branch exists, but GitHub no longer reports it as linked to this issue.",
         "",
-        `Recorded branch: \`${allowedBranchName}\``,
+        "Expected branch:",
         "",
-        "Run `/branch repair` to repair the linked branch relationship or reset the metadata if the branch no longer exists.",
+        `\`${allowedBranchName}\``,
         "",
-        "Run `/branch delete` only if you want to permanently delete the recorded branch. This cannot be undone.",
+        "Run `/branch repair` to relink it.",
+        "Run `/branch delete` only if you want to permanently delete it. This cannot be undone.",
       ].join("\n")
     );
     return { processed: true, command: "branch", created: false, reason: "branch metadata needs repair" };
@@ -290,6 +302,16 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
 
   const staleCleanup = await cleanupStaleLinkedBranchRecords({ gh, owner, repo, issueNumber, issue: currentIssue });
   currentIssue = staleCleanup.issue;
+  ({ issue: currentIssue, issueBody, state } = await syncIssueBranchMetadata({
+    gh,
+    owner,
+    repo,
+    issueNumber,
+    issue: currentIssue,
+    issueBody,
+    state,
+    expectedBranchName: branchName || expectedBranchName,
+  }));
 
   let branchStatus = await inspectIssueBranchState({
     gh,
@@ -330,12 +352,7 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
       return { processed: true, command: "branch repair", repaired: false, reason: branchStatus.reason };
     }
 
-    await gh.createComment(
-      owner,
-      repo,
-      issueNumber,
-      "Nothing to repair: this issue does not have recorded branch metadata."
-    );
+    await gh.createComment(owner, repo, issueNumber, "Nothing to repair: this issue does not have branch metadata.");
     return { processed: true, command: "branch repair", repaired: false, reason: "no branch metadata" };
   }
 
@@ -376,7 +393,7 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
       repo,
       issueNumber,
       [
-        "No repair needed: the recorded branch is already linked.",
+        "No repair needed: the expected branch is already linked.",
         "",
         `Branch: \`${branchName}\``,
       ].join("\n")
@@ -408,11 +425,11 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
       repo,
       issueNumber,
       [
-        "Nothing to repair: the recorded branch does not exist.",
+        "Nothing to repair: the expected branch does not exist.",
         "",
         "Marked the branch state as missing so `/branch create` can be used again.",
         "",
-        `Allowed branch: \`${branchName}\``,
+        `Expected branch: \`${branchName}\``,
       ].join("\n")
     );
 
@@ -421,13 +438,13 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
       command: "branch repair",
       repaired: false,
       reset: true,
-      reason: "recorded branch does not exist",
+      reason: "expected branch does not exist",
     };
   }
 
   const branchOid = branchRef?.object?.sha;
   if (!branchOid) {
-    throw new Error(`Recorded branch ${branchName} did not return a commit SHA.`);
+    throw new Error(`Expected branch ${branchName} did not return a commit SHA.`);
   }
 
   const temporaryBranchName = buildTemporaryBranchName(branchName);
@@ -551,7 +568,7 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
 }
 
 /**
- * Deletes the branch recorded for an issue and marks branch metadata as missing.
+ * Deletes the branch managed for an issue and marks branch metadata as missing.
  *
  * @param {object} params
  * @param {GitHubClient} params.gh
@@ -575,20 +592,32 @@ export async function handleBranchDeleteCommand({ gh, owner, repo, issueNumber }
   }
 
   currentIssue = (await cleanupStaleLinkedBranchRecords({ gh, owner, repo, issueNumber, issue: currentIssue })).issue;
+  ({ issue: currentIssue, issueBody, state } = await syncIssueBranchMetadata({
+    gh,
+    owner,
+    repo,
+    issueNumber,
+    issue: currentIssue,
+    issueBody,
+    state,
+    expectedBranchName: branchName,
+  }));
 
   if (!branchName) {
     await gh.createComment(
       owner,
       repo,
       issueNumber,
-      "Nothing to delete: this issue does not have recorded branch metadata."
+      "Nothing to delete: this issue does not have branch metadata."
     );
     return { processed: true, command: "branch delete", deleted: false, reason: "no branch metadata" };
   }
 
-  const refInfo = await getBranchRefInfo(gh, owner, repo, branchName);
+  const linkedBranchName = linkedBranchNames(currentIssue)[0] || null;
+  const branchToDelete = linkedBranchName || branchName;
+  const refInfo = await getBranchRefInfo(gh, owner, repo, branchToDelete);
   if (refInfo.exists) {
-    await gh.deleteReference(owner, repo, `heads/${branchName}`);
+    await gh.deleteReference(owner, repo, `heads/${branchToDelete}`);
   }
 
   const afterDeleteIssue = await gh.getIssue(owner, repo, issueNumber);
@@ -612,10 +641,10 @@ export async function handleBranchDeleteCommand({ gh, owner, repo, issueNumber }
     issueNumber,
     [
       refInfo.exists
-        ? "Deleted the recorded branch for this issue."
-        : "The recorded branch did not exist, so I only reset the branch metadata.",
+        ? "Deleted the branch managed for this issue."
+        : "The managed branch did not exist, so I only reset the branch metadata.",
       "",
-      `Branch: \`${branchName}\``,
+      `Branch: \`${branchToDelete}\``,
       "",
       "This cannot be undone by automation.",
     ].join("\n")
@@ -625,7 +654,7 @@ export async function handleBranchDeleteCommand({ gh, owner, repo, issueNumber }
     processed: true,
     command: "branch delete",
     deleted: refInfo.exists === true,
-    branch: branchName,
+    branch: branchToDelete,
     cleanedLinkedBranches: staleCleanup.deletedCount,
   };
 }
@@ -711,7 +740,7 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
         [
           `Deleted manually linked branch \`${branchName}\`.`,
           "",
-          "This issue already has recorded branch metadata:",
+          "This issue already has expected branch metadata:",
           "",
           `\`${state.allowed_branch_name}\``,
           "",
@@ -806,6 +835,28 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
 
   if (issueNumber) {
     try {
+      const expectedBranchName = issue
+        ? buildIssueBranchName({
+          issueType: issue.issueType?.name || "issue",
+          issueNumber,
+          title: issue.title,
+        })
+        : null;
+      const invalidBranchNameMessage = expectedBranchName && branchName !== expectedBranchName
+        ? [
+          "This branch name is not valid for this issue.",
+          "",
+          "Expected branch:",
+          "",
+          `\`${expectedBranchName}\``,
+          "",
+          "Received branch:",
+          "",
+          `\`${branchName}\``,
+          "",
+          "Use `/branch create` to create the correct branch automatically.",
+        ].join("\n")
+        : null;
       await createBranchEventComment(
         gh,
         owner,
@@ -813,10 +864,10 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
         issueNumber,
         payload,
         "/branch manual",
-        [
+        invalidBranchNameMessage || [
           `Deleted branch \`${branchName}\` because it was not accepted by automation.`,
           "",
-          "Prefer `/branch create` for managed issue branches, or use the GitHub sidebar only when the generated branch name matches the issue convention and no branch is already recorded.",
+          "Prefer `/branch create` for managed issue branches, or use the GitHub sidebar only when the generated branch name matches the issue convention and no branch is already managed.",
         ].join("\n")
       );
     } catch (err) {
@@ -900,7 +951,7 @@ export async function handlePushEvent({ gh, owner, repo, payload }) {
         "",
         `Pushed branch: \`${branchName}\``,
         `Expected branch: \`${expectedBranchName}\``,
-        `Recorded branch: \`${state?.allowed_branch_name || "none"}\``,
+        `Expected metadata branch: \`${state?.allowed_branch_name || "none"}\``,
         "",
         "Run `/branch repair` if the branch should be managed by automation.",
       ].join("\n")
@@ -1055,6 +1106,50 @@ async function cleanupStaleLinkedBranchRecords({ gh, owner, repo, issueNumber, i
   };
 }
 
+async function syncIssueBranchMetadata({ gh, owner, repo, issueNumber, issue, issueBody, state, expectedBranchName, checkExpectedRefOnly = false }) {
+  if (!state?.branch) {
+    return { issue, issueBody, state };
+  }
+
+  const branchStatus = await inspectIssueBranchState({
+    gh,
+    owner,
+    repo,
+    issue,
+    issueNumber,
+    expectedBranchName,
+    state,
+    checkExpectedRefOnly,
+  });
+  const syncedState = {
+    ...state,
+    branch: {
+      ...state.branch,
+      exists: branchStatus.metadataRef.exists == null
+        ? state.branch.exists === true
+        : branchStatus.metadataRef.exists === true,
+      linked: branchStatus.metadataLinked === true,
+      error: branchStatus.reason ? branchStatus.message : null,
+    },
+  };
+
+  if (
+    syncedState.branch.exists === state.branch.exists &&
+    syncedState.branch.linked === state.branch.linked &&
+    syncedState.branch.error === state.branch.error
+  ) {
+    return { issue, issueBody, state };
+  }
+
+  const syncedBody = replaceAutomationState(issueBody, syncedState);
+  await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, syncedBody);
+  return {
+    issue,
+    issueBody: syncedBody,
+    state: parseAutomationState(syncedBody),
+  };
+}
+
 async function inspectIssueBranchState({ gh, owner, repo, issue, expectedBranchName, state, checkExpectedRefOnly = false }) {
   const linkedNames = linkedBranchNames(issue);
   const staleLinkedRecordCount = staleLinkedBranchRecordCount(issue);
@@ -1102,7 +1197,7 @@ async function inspectIssueBranchState({ gh, owner, repo, issue, expectedBranchN
     status.message = `GitHub reports an unexpected linked branch: \`${unexpectedLinkedNames[0]}\`.`;
   } else if (metadataName && metadataName !== expectedBranchName) {
     status.reason = "metadata branch does not match expected branch";
-    status.message = `Recorded branch metadata points to \`${metadataName}\`, but the expected issue branch is \`${expectedBranchName}\`.`;
+    status.message = `Branch metadata points to \`${metadataName}\`, but the expected issue branch is \`${expectedBranchName}\`.`;
   } else if (ghostLinkedNames.length > 0) {
     status.reason = "linked branch missing git ref";
     status.message = `GitHub still reports \`${ghostLinkedNames[0]}\` as linked, but the git ref no longer exists.`;
@@ -1116,6 +1211,60 @@ async function inspectIssueBranchState({ gh, owner, repo, issue, expectedBranchN
 
 function branchStateBlockingMessage(status) {
   if (!status?.reason) return null;
+  if (status.reason === "unexpected linked branch") {
+    return [
+      "This issue already has a linked branch:",
+      "",
+      `\`${status.unexpectedLinkedNames[0]}\``,
+      "",
+      "Each issue can only manage one branch.",
+      "",
+      "If you want to create a new branch, first delete the existing branch with `/branch delete`.",
+      "",
+      "Deleting a branch cannot be undone by automation.",
+    ].join("\n");
+  }
+
+  if (status.reason === "metadata branch does not match expected branch") {
+    return [
+      "The expected branch name for this issue changed.",
+      "",
+      "Expected branch:",
+      "",
+      `\`${status.expectedBranchName}\``,
+      "",
+      "Current metadata branch:",
+      "",
+      `\`${status.metadataName}\``,
+      "",
+      "Run `/branch repair` if the metadata is stale, or `/branch delete` if you want to permanently delete the existing branch. Deleting a branch cannot be undone by automation.",
+    ].join("\n");
+  }
+
+  if (status.reason === "unlinked git ref already exists") {
+    return [
+      "The expected branch already exists, but GitHub does not report it as linked to this issue.",
+      "",
+      "Expected branch:",
+      "",
+      `\`${status.expectedBranchName}\``,
+      "",
+      "Run `/branch repair` to relink it.",
+    ].join("\n");
+  }
+
+  if (status.reason === "linked branch missing git ref") {
+    return [
+      "GitHub reports a linked branch for this issue, but the branch no longer exists.",
+      "",
+      "Linked branch:",
+      "",
+      `\`${status.ghostLinkedNames[0]}\``,
+      "",
+      "Run `/branch repair` to clean the stale link.",
+    ].join("\n");
+  }
+
   return [
     "Branch state needs attention before automation can continue.",
     "",
@@ -1123,7 +1272,7 @@ function branchStateBlockingMessage(status) {
     "",
     "Current state:",
     `- Expected branch: \`${status.expectedBranchName || "none"}\``,
-    `- Recorded metadata: \`${status.metadataName || "none"}\``,
+    `- Metadata branch: \`${status.metadataName || "none"}\``,
     `- Linked branches: ${status.linkedNames.length ? status.linkedNames.map((name) => `\`${name}\``).join(", ") : "`none`"}`,
     `- Stale linked records: \`${status.staleLinkedRecordCount || 0}\``,
     `- Expected git ref exists: \`${status.expectedRef.exists ? "yes" : "no"}\``,

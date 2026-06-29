@@ -167,10 +167,10 @@ test("handleBranchCommand blocks old branch-name metadata without deleting it", 
   assert.equal(result.reason, "metadata branch does not match expected branch");
   assert.deepEqual(deleted, []);
   assert.match(latestBody, /"allowed_branch_name": "bug\/50-test-bug-issue"/);
-  assert.match(comments.at(-1), /Recorded branch metadata points to/);
+  assert.match(comments.at(-1), /expected branch name for this issue changed/i);
 });
 
-test("handleBranchCommand does not delete unlinked recorded branches", async () => {
+test("handleBranchCommand does not delete unlinked expected branches", async () => {
   const body = replaceAutomationState(
     ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug"),
     {
@@ -223,12 +223,12 @@ test("handleBranchCommand does not delete unlinked recorded branches", async () 
   assert.equal(result.reason, "branch metadata needs repair");
   assert.deepEqual(deleted, []);
   assert.match(latestBody, /"allowed_branch_name": "fix\/50-test-bug-issue"/);
-  assert.match(latestBody, /"linked": true/);
+  assert.match(latestBody, /"linked": false/);
   assert.match(comments.at(-1), /Run `\/branch repair`/);
   assert.match(comments.at(-1), /Run `\/branch delete`/);
 });
 
-test("handleBranchCommand recreates recorded branch metadata when the git ref no longer exists", async () => {
+test("handleBranchCommand recreates expected branch metadata when the git ref no longer exists", async () => {
   const body = replaceAutomationState(
     ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug"),
     {
@@ -369,7 +369,7 @@ test("handleBranchCommand ignores stale linked branch reservations with null ref
   assert.deepEqual(pullRequests, []);
 });
 
-test("handleBranchRepairCommand resets metadata when the recorded branch no longer exists", async () => {
+test("handleBranchRepairCommand resets metadata when the expected branch no longer exists", async () => {
   const body = replaceAutomationState(
     ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug"),
     {
@@ -418,11 +418,11 @@ test("handleBranchRepairCommand resets metadata when the recorded branch no long
 
   assert.equal(result.reset, true);
   assert.match(latestBody, /"exists": false/);
-  assert.match(comments.at(-1), /Nothing to repair: the recorded branch does not exist/);
-  assert.match(comments.at(-1), /Allowed branch: `fix\/50-test-bug-issue`/);
+  assert.match(comments.at(-1), /Nothing to repair: the expected branch does not exist/);
+  assert.match(comments.at(-1), /Expected branch: `fix\/50-test-bug-issue`/);
 });
 
-test("handleBranchDeleteCommand deletes the recorded branch and resets metadata", async () => {
+test("handleBranchDeleteCommand deletes the managed branch and resets metadata", async () => {
   const body = replaceAutomationState(
     ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug"),
     {
@@ -490,8 +490,71 @@ test("handleBranchDeleteCommand deletes the recorded branch and resets metadata"
   assert.match(latestBody, /"linked": false/);
   assert.match(latestBody, /"error": null/);
   assert.match(latestBody, /"pr": 123/);
-  assert.match(comments.at(-1), /Deleted the recorded branch/);
+  assert.match(comments.at(-1), /Deleted the branch managed for this issue/);
   assert.match(comments.at(-1), /cannot be undone/);
+});
+
+test("handleBranchDeleteCommand deletes the visible linked branch before expected metadata branch", async () => {
+  const body = replaceAutomationState(
+    ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug"),
+    {
+      allowed_branch_name: "fix/50-test-bug-issue",
+      branch: {
+        exists: true,
+        linked: false,
+        error: null,
+        pr: null,
+      },
+    }
+  );
+  let latestBody = body;
+  const deletedRefs = [];
+  let issueReads = 0;
+
+  const gh = {
+    async getIssue() {
+      issueReads += 1;
+      return {
+        id: "ISSUE_id",
+        title: "fix: test-bug-issue",
+        body: latestBody,
+        repository: { id: "REPO_id" },
+        issueType: { name: "Bug" },
+        linkedBranches: {
+          nodes: issueReads > 1
+            ? [{ id: "LB_1", ref: null }]
+            : [{ id: "LB_1", ref: { name: "54-test-bug-issue" } }],
+        },
+      };
+    },
+    async getReference(_owner, _repo, ref) {
+      assert.ok(["heads/fix/50-test-bug-issue", "heads/54-test-bug-issue"].includes(ref));
+      return { object: { sha: "branch-sha" } };
+    },
+    async deleteReference(_owner, _repo, ref) {
+      deletedRefs.push(ref);
+    },
+    async deleteLinkedBranch(linkedBranchId) {
+      assert.equal(linkedBranchId, "LB_1");
+    },
+    async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
+      latestBody = nextBody;
+    },
+    async createComment() {},
+  };
+
+  const result = await handleBranchDeleteCommand({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    issueNumber: 50,
+  });
+
+  assert.equal(result.deleted, true);
+  assert.equal(result.branch, "54-test-bug-issue");
+  assert.deepEqual(deletedRefs, ["heads/54-test-bug-issue"]);
+  assert.match(latestBody, /"exists": false/);
+  assert.match(latestBody, /"linked": false/);
 });
 
 test("handleBranchRepairCommand blocks ghost linked branches without resetting metadata", async () => {
@@ -547,7 +610,7 @@ test("handleBranchRepairCommand blocks ghost linked branches without resetting m
   assert.equal(result.reason, "linked branch missing git ref");
   assert.match(latestBody, /"allowed_branch_name": "fix\/50-test-bug-issue"/);
   assert.match(latestBody, /GitHub still reports/);
-  assert.match(comments.at(-1), /Remove the stale linked branch from the issue sidebar/);
+  assert.match(comments.at(-1), /Run `\/branch repair` to clean the stale link/);
 });
 
 test("handleBranchRepairCommand reports stale linked branch cleanup when metadata is empty", async () => {
@@ -599,7 +662,7 @@ test("handleBranchRepairCommand reports stale linked branch cleanup when metadat
   assert.match(comments.at(-1), /Removed records: `1`/);
 });
 
-test("handleBranchRepairCommand preserves an existing recorded branch and recreates it as linked", async () => {
+test("handleBranchRepairCommand preserves an existing expected branch and recreates it as linked", async () => {
   const body = replaceAutomationState(
     ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug"),
     {
@@ -865,7 +928,8 @@ test("handleCreateEvent deletes manual issue-shaped branches", async () => {
   assert.equal(result.deleted, true);
   assert.deepEqual(deleted, ["heads/feat/123-add-login"]);
   assert.equal(comments[0].issueNumber, 123);
-  assert.match(comments[0].body, /Prefer `\/branch create`/);
+  assert.match(comments[0].body, /This branch name is not valid for this issue/);
+  assert.match(comments[0].body, /Use `\/branch create`/);
 });
 
 test("handleCreateEvent deletes sidebar-style issue branches", async () => {
@@ -966,7 +1030,7 @@ test("handleCreateEvent records a sidebar-linked branch based on dev", async () 
   assert.deepEqual(pullRequests, []);
 });
 
-test("handleCreateEvent repairs metadata when a manual linked branch matches recorded metadata", async () => {
+test("handleCreateEvent repairs metadata when a manual linked branch matches expected metadata", async () => {
   const body = replaceAutomationState(
     ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Feature"),
     {
