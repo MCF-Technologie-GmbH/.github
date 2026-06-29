@@ -683,13 +683,14 @@ test("handleBranchRepairCommand fails if GitHub does not report the recreated br
   assert.equal(result.reason, "linked branch repair failed");
   assert.deepEqual(deletedRefs, [
     "heads/fix/50-test-bug-issue",
-    "heads/fix/50-test-bug-issue",
     `heads/${result.temporaryBranch}`,
   ]);
-  assert.match(latestBody, /"exists": false/);
+  assert.equal(refs.get("heads/fix/50-test-bug-issue"), "sha-dev");
+  assert.equal(refs.has(`heads/${result.temporaryBranch}`), false);
+  assert.match(latestBody, /"exists": true/);
   assert.match(latestBody, /"linked": false/);
   assert.match(latestBody, /did not report it as a linked branch/);
-  assert.match(comments.at(-1), /original orphan branch ref and temporary branch were removed/);
+  assert.match(comments.at(-1), /original branch ref exists again/);
   assert.match(comments.at(-1), /I could not repair the linked branch relationship/);
 });
 

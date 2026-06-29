@@ -455,12 +455,7 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
     await deleteReferenceIfExists(gh, owner, repo, `heads/${temporaryBranchName}`);
   } catch (err) {
     const originalRefInfo = await getBranchRefInfo(gh, owner, repo, branchName);
-    const baseRefInfo = await getBranchRefInfo(gh, owner, repo, BASE_BRANCH);
-    const shouldPreserveTemporaryBranch = branchOid && branchOid !== baseRefInfo.sha;
     if (originalRefInfo.exists) {
-      await deleteReferenceIfExists(gh, owner, repo, `heads/${branchName}`);
-    }
-    if (!shouldPreserveTemporaryBranch) {
       await deleteReferenceIfExists(gh, owner, repo, `heads/${temporaryBranchName}`);
     }
 
@@ -468,7 +463,7 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
       ...state,
       branch: {
         ...state.branch,
-        exists: false,
+        exists: originalRefInfo.exists,
         linked: false,
         error: summarizeError(err),
       },
@@ -490,9 +485,9 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
         `Branch: \`${branchName}\``,
         `Temporary branch: \`${temporaryBranchName}\``,
         "",
-        shouldPreserveTemporaryBranch
-          ? "The original orphan branch ref was removed. If the temporary branch still exists, the existing commits were preserved there."
-          : "The original orphan branch ref and temporary branch were removed because there were no commits to preserve.",
+        originalRefInfo.exists
+          ? "The original branch ref exists again, so the temporary backup branch was removed."
+          : "The original branch ref was not recreated. If the temporary branch still exists, the previous branch contents were preserved there.",
         "",
         "```text",
         failedState.branch.error,
