@@ -688,6 +688,74 @@ test("handleBranchRepairCommand preserves an existing recorded branch and recrea
   assert.doesNotMatch(comments.at(-1), /temporary/i);
 });
 
+test("handleBranchRepairCommand trusts createLinkedBranch payload before linkedBranches catches up", async () => {
+  const body = replaceAutomationState(
+    ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug"),
+    {
+      issue_type: "fix",
+      branch: {
+        name: "fix/50-test-bug-issue",
+        base: "dev",
+        created: true,
+        linked: false,
+        error: "Missing linked branch",
+        pr: null,
+      },
+    }
+  );
+  let latestBody = body;
+  const deletedRefs = [];
+  const gh = {
+    async getIssue() {
+      return {
+        id: "ISSUE_id",
+        title: "fix: test-bug-issue",
+        body: latestBody,
+        repository: { id: "REPO_id" },
+        issueType: { name: "Bug" },
+        linkedBranches: { nodes: [] },
+      };
+    },
+    async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
+      latestBody = nextBody;
+    },
+    async getReference(_owner, _repo, ref) {
+      assert.equal(ref, "heads/fix/50-test-bug-issue");
+      return { object: { sha: "branch-sha" } };
+    },
+    async createReference() {},
+    async deleteReference(_owner, _repo, ref) {
+      deletedRefs.push(ref);
+    },
+    async createLinkedBranch() {
+      return {
+        createLinkedBranch: {
+          linkedBranch: {
+            id: "LB_1",
+            ref: { name: "fix/50-test-bug-issue" },
+          },
+        },
+      };
+    },
+    async createComment() {},
+  };
+
+  const result = await handleBranchRepairCommand({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    issueNumber: 50,
+  });
+
+  assert.equal(result.repaired, true);
+  assert.deepEqual(deletedRefs, [
+    "heads/fix/50-test-bug-issue",
+    `heads/${result.temporaryBranch}`,
+  ]);
+  assert.match(latestBody, /"linked": true/);
+  assert.match(latestBody, /"error": null/);
+});
+
 test("handleBranchRepairCommand fails if GitHub does not report the recreated branch as linked", async () => {
   const body = replaceAutomationState(
     ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug"),

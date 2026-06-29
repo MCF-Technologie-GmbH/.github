@@ -10,6 +10,16 @@ export const branchMethods = {
       `mutation($input: CreateLinkedBranchInput!) {
         createLinkedBranch(input: $input) {
           clientMutationId
+          linkedBranch {
+            id
+            ref {
+              name
+              prefix
+              target {
+                oid
+              }
+            }
+          }
         }
       }`,
       {

@@ -442,16 +442,24 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
       issueNumber,
       issue: await gh.getIssue(owner, repo, issueNumber),
     })).issue;
-    await gh.createLinkedBranch({
+    const linkedBranchResult = await gh.createLinkedBranch({
       issueId: currentIssue.id,
       repositoryId: currentIssue.repository?.id,
       branchName,
       baseOid: branchOid,
     });
 
-    const repairedIssue = await waitForLinkedBranch(gh, owner, repo, issueNumber, branchName);
-    if (!isIssueLinkedBranch(repairedIssue, branchName)) {
+    const linkedBranch = linkedBranchResult?.createLinkedBranch?.linkedBranch;
+    const linkedBranchName = linkedBranch?.ref?.name;
+    if (linkedBranchName && linkedBranchName !== branchName) {
       throw new Error("GitHub created the branch ref but did not report it as a linked branch for this issue.");
+    }
+
+    if (!linkedBranchName) {
+      const repairedIssue = await waitForLinkedBranch(gh, owner, repo, issueNumber, branchName);
+      if (!isIssueLinkedBranch(repairedIssue, branchName)) {
+        throw new Error("GitHub created the branch ref but did not report it as a linked branch for this issue.");
+      }
     }
 
     await deleteReferenceIfExists(gh, owner, repo, `heads/${temporaryBranchName}`);
