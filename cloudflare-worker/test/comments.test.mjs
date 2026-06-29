@@ -88,6 +88,62 @@ test("handleIssueCommentEvent treats /branch repair as a branch command", async 
   assert.equal(processed.command, "branch repair");
 });
 
+test("handleIssueCommentEvent treats /branch delete as a branch command", async () => {
+  let latestBody = [
+    "<!-- protected:start -->",
+    "Body",
+    "<!-- protected:end -->",
+    "",
+    "<!-- protected:start -->",
+    "<!-- automation-state:start",
+    JSON.stringify({
+      original_issue_type: "Feature",
+      allowed_branch_name: "feat/123-add-login",
+      branch: { exists: true, linked: true, error: null, pr: null },
+    }, null, 2),
+    "automation-state:end -->",
+    "<!-- protected:end -->",
+  ].join("\n");
+  const deletedRefs = [];
+  const gh = {
+    async getIssue() {
+      return {
+        id: "ISSUE_id",
+        title: "Add login",
+        body: latestBody,
+        repository: { id: "REPO_id" },
+        issueType: { name: "Feature" },
+        linkedBranches: { nodes: [] },
+      };
+    },
+    async getReference(_owner, _repo, ref) {
+      assert.equal(ref, "heads/feat/123-add-login");
+      return { object: { sha: "abc123" } };
+    },
+    async deleteReference(_owner, _repo, ref) {
+      deletedRefs.push(ref);
+    },
+    async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
+      latestBody = nextBody;
+    },
+    async createComment() {},
+    async deleteComment() {},
+  };
+
+  const processed = await handleIssueCommentEvent({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    repoFullName: "mcf-technologie-gmbh/app",
+    issueNumber: 123,
+    comment: { id: 4, body: "/branch delete", user: { login: "Lagarie404" } },
+  });
+
+  assert.equal(processed.processed, true);
+  assert.equal(processed.command, "branch delete");
+  assert.deepEqual(deletedRefs, ["heads/feat/123-add-login"]);
+});
+
 test("withCommandLog folds previous bot comments into the next bot response", async () => {
   const deleted = [];
   const createdComments = [];

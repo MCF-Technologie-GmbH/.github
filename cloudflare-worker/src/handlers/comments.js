@@ -1,6 +1,6 @@
 import { GITHUB_APP_BOT_LOGIN, REQUIRES_WHITELIST } from "../config.js";
 import { parseChecklist, getRequiresLabelsForChecklist } from "../utils/checklist.js";
-import { handleBranchCommand, handleBranchRepairCommand } from "./branches.js";
+import { handleBranchCommand, handleBranchDeleteCommand, handleBranchRepairCommand } from "./branches.js";
 
 /**
  * Parses and executes slash commands (/require, /unrequire, /resolve, etc.) found in comments.
@@ -29,13 +29,18 @@ export async function handleIssueCommentEvent({
   const lines = commentBody.split(/\r?\n/);
   const branchCommand = lines
     .map((line) => line.trim().toLowerCase())
-    .find((line) => line === "/branch create" || line === "/branch repair");
+    .find((line) => line === "/branch create" || line === "/branch repair" || line === "/branch delete");
 
   if (branchCommand) {
     setCommandMetadata(gh, owner, repo, issueNumber, comment, branchCommand);
-    const result = branchCommand === "/branch repair"
-      ? await handleBranchRepairCommand({ gh, owner, repo, issueNumber })
-      : await handleBranchCommand({ gh, owner, repo, issueNumber, comment });
+    let result;
+    if (branchCommand === "/branch repair") {
+      result = await handleBranchRepairCommand({ gh, owner, repo, issueNumber });
+    } else if (branchCommand === "/branch delete") {
+      result = await handleBranchDeleteCommand({ gh, owner, repo, issueNumber });
+    } else {
+      result = await handleBranchCommand({ gh, owner, repo, issueNumber, comment });
+    }
     await cleanupCommandComment(gh, owner, repo, comment);
     return result;
   }

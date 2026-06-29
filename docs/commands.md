@@ -28,8 +28,8 @@ automation-state:end -->
 | Campo | Que significa | Cuando cambia |
 | --- | --- | --- |
 | `original_issue_type` | Issue Type original de la issue. Es la fuente estable para revertir cambios manuales de type sin depender del timeline de GitHub. | Se guarda cuando el Worker crea o normaliza el `automation-state`. |
-| `allowed_branch_name` | Unica rama permitida para la issue. Se genera desde tipo, numero y titulo, por ejemplo `feat/123-add-login`. | Se crea/normaliza al ejecutar `/branch create`, `/branch repair` o al aceptar una rama creada desde la sidebar de GitHub. |
-| `branch.exists` | Si el bot considera que la rama existe. | Pasa a `false` durante la reserva de `/branch create`; a `true` cuando la rama se crea o se acepta; a `false` si `/branch repair` detecta que la rama registrada no existe. |
+| `allowed_branch_name` | Unica rama permitida para la issue. Se genera desde tipo, numero y titulo, por ejemplo `feat/123-add-login`. | Se crea/normaliza al ejecutar `/branch create`, `/branch repair`, `/branch delete` o al aceptar una rama creada desde la sidebar de GitHub. |
+| `branch.exists` | Si el bot considera que la rama existe. | Pasa a `false` durante la reserva de `/branch create`; a `true` cuando la rama se crea o se acepta; a `false` si `/branch repair` detecta que la rama registrada no existe o si `/branch delete` la borra/resetea. |
 | `branch.linked` | Si GitHub reporta la rama como linked branch de la issue. | Pasa a `true` cuando se crea/repara/acepta el enlace; pasa a `false` cuando falla la creacion o reparacion, o cuando `/branch repair` detecta que la rama registrada no existe. |
 | `branch.error` | Ultimo error registrado para la rama. | Se limpia a `null` en reservas, creaciones, reparaciones y resets correctos. Se llena con el error resumido cuando falla crear o reparar, o con el mensaje del conflicto de estado. |
 | `branch.pr` | Numero de PR asociado a la rama. | Se conserva al recrear/reparar ramas. Se actualiza al abrir un PR valido desde la rama autorizada. |
@@ -81,7 +81,7 @@ Estos comandos no publican una respuesta visible cuando son validos. Actualizan 
 | --- | --- | --- | --- |
 | `/branch create` | Creacion correcta. | `Created linked branch:` + rama + `Base: dev` + `A draft PR will be created automatically after the first push with commits.` | Reserva primero `{ allowed_branch_name, branch: { exists: false, linked: false, error: null, pr } }`. Al crear la rama, cambia a `{ exists: true, linked: true, error: null, pr }`. |
 | `/branch create` | Ya existe `allowed_branch_name` distinto al esperado. | `This issue already has an assigned branch:` + rama registrada + `A second branch cannot be created for the same issue.` | Normaliza/inserta `allowed_branch_name` si faltaba, pero no crea otra rama. |
-| `/branch create` | Hay metadata de rama existente pero la rama no esta enlazada y no se puede recrear automaticamente. | `This issue has recorded branch metadata, but the branch is not currently linked.` + `Recorded branch: ...` + `Run /branch repair...` | No cambia la metadata de rama salvo normalizacion previa del bloque. |
+| `/branch create` | Hay metadata de rama existente pero la rama no esta enlazada y no se puede recrear automaticamente. | `This issue has recorded branch metadata, but the branch is not currently linked.` + `Recorded branch: ...` + `Run /branch repair...` + `Run /branch delete... This cannot be undone.` | No cambia la metadata de rama salvo normalizacion previa del bloque. |
 | `/branch create` | Ya hay rama autorizada. | `This issue already has an authorized branch:` + rama. | No cambia la metadata de rama salvo normalizacion previa del bloque. |
 | `/branch create` | La reserva cambio mientras corria el comando. | `The branch reservation changed while processing /branch create. Please retry.` | Puede quedar la reserva escrita antes del reload; no marca `exists: true`. |
 | `/branch create` | Falla crear la linked branch. | `I could not create the linked branch.` + `Branch: ...` + `Base: dev` + `The same branch can be retried with /branch create after the error is fixed.` + bloque `text` con el error. | Guarda `{ allowed_branch_name, branch: { exists: false, linked: false, error: "<error>", pr } }`. |
@@ -93,6 +93,9 @@ Estos comandos no publican una respuesta visible cuando son validos. Actualizan 
 | `/branch repair` | La rama registrada no existe. | `Nothing to repair: the recorded branch does not exist.` + `Marked the branch state as missing so /branch create can be used again.` + `Allowed branch: ...`. | Guarda `{ branch: { exists: false, linked: false, error: null, pr } }` y conserva `allowed_branch_name`. |
 | `/branch repair` | Reparacion correcta. | `Relinked branch successfully.` + `Branch: ...`. | Guarda `{ branch: { exists: true, linked: true, error: null, pr } }`. Durante el proceso crea una rama temporal `temp/...`, recrea la linked branch y borra la temporal. |
 | `/branch repair` | Falla reparar la relacion linked branch despues de crear la temporal. | `I could not repair the linked branch relationship.` + `Branch: ...` + `Temporary branch: ...` + mensaje indicando si la rama original existe otra vez o si la temporal conserva el backup + bloque `text` con el error. | Si el ref original existe otra vez, borra `temp/...` y guarda `{ branch: { exists: true, linked: false, error: "<error>", pr } }`. Si no existe, conserva `temp/...` como backup y guarda `exists: false`. |
+| `/branch delete` | Hay rama registrada y existe el ref. | `Deleted the recorded branch for this issue.` + `Branch: ...` + `This cannot be undone by automation.` | Borra `heads/<allowed_branch_name>`, limpia linked branch records obsoletos y guarda `{ branch: { exists: false, linked: false, error: null, pr } }`. |
+| `/branch delete` | Hay metadata pero el ref ya no existe. | `The recorded branch did not exist, so I only reset the branch metadata.` + `Branch: ...` + `This cannot be undone by automation.` | Limpia linked branch records obsoletos y guarda `{ branch: { exists: false, linked: false, error: null, pr } }`. |
+| `/branch delete` | No hay metadata de rama. | `Nothing to delete: this issue does not have recorded branch metadata.` | Puede normalizar el bloque, pero no crea `branch`. |
 
 ### Plantillas exactas de respuestas de ramas
 
@@ -126,6 +129,8 @@ This issue has recorded branch metadata, but the branch is not currently linked.
 Recorded branch: `<allowedBranchName>`
 
 Run `/branch repair` to repair the linked branch relationship or reset the metadata if the branch no longer exists.
+
+Run `/branch delete` only if you want to permanently delete the recorded branch. This cannot be undone.
 ```
 
 `/branch create` cuando ya hay rama autorizada:
@@ -217,12 +222,38 @@ I could not repair the linked branch relationship.
 Branch: `<branchName>`
 Temporary branch: `<temporaryBranchName>`
 
-If the temporary branch still exists, the existing commits were preserved there.
+The original branch ref exists again, so the temporary backup branch was removed.
 
 ```text
 <error>
 ```
 ````
+
+`/branch delete` correcto:
+
+```md
+Deleted the recorded branch for this issue.
+
+Branch: `<branchName>`
+
+This cannot be undone by automation.
+```
+
+`/branch delete` cuando el ref ya no existe:
+
+```md
+The recorded branch did not exist, so I only reset the branch metadata.
+
+Branch: `<branchName>`
+
+This cannot be undone by automation.
+```
+
+`/branch delete` sin metadata:
+
+```md
+Nothing to delete: this issue does not have recorded branch metadata.
+```
 
 ### Mensajes de bloqueo de ramas
 

@@ -93,6 +93,8 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
         `Recorded branch: \`${allowedBranchName}\``,
         "",
         "Run `/branch repair` to repair the linked branch relationship or reset the metadata if the branch no longer exists.",
+        "",
+        "Run `/branch delete` only if you want to permanently delete the recorded branch. This cannot be undone.",
       ].join("\n")
     );
     return { processed: true, command: "branch", created: false, reason: "branch metadata needs repair" };
@@ -537,6 +539,86 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
     repaired: true,
     branch: branchName,
     temporaryBranch: temporaryBranchName,
+  };
+}
+
+/**
+ * Deletes the branch recorded for an issue and marks branch metadata as missing.
+ *
+ * @param {object} params
+ * @param {GitHubClient} params.gh
+ * @param {string} params.owner
+ * @param {string} params.repo
+ * @param {number} params.issueNumber
+ * @returns {Promise<object>}
+ */
+export async function handleBranchDeleteCommand({ gh, owner, repo, issueNumber }) {
+  let currentIssue = await gh.getIssue(owner, repo, issueNumber);
+  const issueType = currentIssue.issueType?.name || "issue";
+  let issueBody = ensureAutomationState(currentIssue.body || "", issueType, {
+    issueNumber,
+    title: currentIssue.title,
+  });
+  let state = parseAutomationState(issueBody);
+  const branchName = state?.allowed_branch_name || null;
+
+  if (issueBody !== (currentIssue.body || "")) {
+    await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, issueBody);
+  }
+
+  currentIssue = (await cleanupStaleLinkedBranchRecords({ gh, owner, repo, issueNumber, issue: currentIssue })).issue;
+
+  if (!branchName) {
+    await gh.createComment(
+      owner,
+      repo,
+      issueNumber,
+      "Nothing to delete: this issue does not have recorded branch metadata."
+    );
+    return { processed: true, command: "branch delete", deleted: false, reason: "no branch metadata" };
+  }
+
+  const refInfo = await getBranchRefInfo(gh, owner, repo, branchName);
+  if (refInfo.exists) {
+    await gh.deleteReference(owner, repo, `heads/${branchName}`);
+  }
+
+  const afterDeleteIssue = await gh.getIssue(owner, repo, issueNumber);
+  const staleCleanup = await cleanupStaleLinkedBranchRecords({ gh, owner, repo, issueNumber, issue: afterDeleteIssue });
+
+  state = {
+    ...state,
+    branch: {
+      exists: false,
+      linked: false,
+      error: null,
+      pr: state?.branch?.pr ?? null,
+    },
+  };
+  issueBody = replaceAutomationState(afterDeleteIssue.body || issueBody, state);
+  await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, issueBody);
+
+  await gh.createComment(
+    owner,
+    repo,
+    issueNumber,
+    [
+      refInfo.exists
+        ? "Deleted the recorded branch for this issue."
+        : "The recorded branch did not exist, so I only reset the branch metadata.",
+      "",
+      `Branch: \`${branchName}\``,
+      "",
+      "This cannot be undone by automation.",
+    ].join("\n")
+  );
+
+  return {
+    processed: true,
+    command: "branch delete",
+    deleted: refInfo.exists === true,
+    branch: branchName,
+    cleanedLinkedBranches: staleCleanup.deletedCount,
   };
 }
 

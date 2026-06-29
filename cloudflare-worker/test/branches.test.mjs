@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   handleBranchCommand,
+  handleBranchDeleteCommand,
   handleBranchRepairCommand,
   handleCreateEvent,
   handlePullRequestEvent,
@@ -224,6 +225,7 @@ test("handleBranchCommand does not delete unlinked recorded branches", async () 
   assert.match(latestBody, /"allowed_branch_name": "fix\/50-test-bug-issue"/);
   assert.match(latestBody, /"linked": true/);
   assert.match(comments.at(-1), /Run `\/branch repair`/);
+  assert.match(comments.at(-1), /Run `\/branch delete`/);
 });
 
 test("handleBranchCommand recreates recorded branch metadata when the git ref no longer exists", async () => {
@@ -418,6 +420,78 @@ test("handleBranchRepairCommand resets metadata when the recorded branch no long
   assert.match(latestBody, /"exists": false/);
   assert.match(comments.at(-1), /Nothing to repair: the recorded branch does not exist/);
   assert.match(comments.at(-1), /Allowed branch: `fix\/50-test-bug-issue`/);
+});
+
+test("handleBranchDeleteCommand deletes the recorded branch and resets metadata", async () => {
+  const body = replaceAutomationState(
+    ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug"),
+    {
+      issue_type: "fix",
+      branch: {
+        name: "fix/50-test-bug-issue",
+        base: "dev",
+        created: true,
+        linked: true,
+        error: null,
+        pr: 123,
+      },
+    }
+  );
+  let latestBody = body;
+  const deletedRefs = [];
+  const comments = [];
+  let issueReads = 0;
+
+  const gh = {
+    async getIssue() {
+      issueReads += 1;
+      return {
+        id: "ISSUE_id",
+        title: "fix: test-bug-issue",
+        body: latestBody,
+        repository: { id: "REPO_id" },
+        issueType: { name: "Bug" },
+        linkedBranches: {
+          nodes: issueReads > 1
+            ? [{ id: "LB_1", ref: null }]
+            : [{ id: "LB_1", ref: { name: "fix/50-test-bug-issue" } }],
+        },
+      };
+    },
+    async getReference(_owner, _repo, ref) {
+      assert.equal(ref, "heads/fix/50-test-bug-issue");
+      return { object: { sha: "branch-sha" } };
+    },
+    async deleteReference(_owner, _repo, ref) {
+      deletedRefs.push(ref);
+    },
+    async deleteLinkedBranch(linkedBranchId) {
+      assert.equal(linkedBranchId, "LB_1");
+    },
+    async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
+      latestBody = nextBody;
+    },
+    async createComment(_owner, _repo, _issueNumber, body) {
+      comments.push(body);
+    },
+  };
+
+  const result = await handleBranchDeleteCommand({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    issueNumber: 50,
+  });
+
+  assert.equal(result.deleted, true);
+  assert.equal(result.branch, "fix/50-test-bug-issue");
+  assert.deepEqual(deletedRefs, ["heads/fix/50-test-bug-issue"]);
+  assert.match(latestBody, /"exists": false/);
+  assert.match(latestBody, /"linked": false/);
+  assert.match(latestBody, /"error": null/);
+  assert.match(latestBody, /"pr": 123/);
+  assert.match(comments.at(-1), /Deleted the recorded branch/);
+  assert.match(comments.at(-1), /cannot be undone/);
 });
 
 test("handleBranchRepairCommand blocks ghost linked branches without resetting metadata", async () => {
