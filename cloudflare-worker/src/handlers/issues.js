@@ -152,7 +152,7 @@ export async function enforceIssueTypePolicy({
   if (titleChanged) {
     const state = parseAutomationState(issueBody);
     const issueType = state?.original_issue_type || resolvedType;
-    if (branchStateBlocksTitleChange(state, issueType, issueNumber, currentIssue.title)) {
+    if (await branchStateBlocksTitleChange(gh, owner, repo, state, issueType, issueNumber, currentIssue.title)) {
       titleUpdate = changes.title.from;
       issueTitleForAutomation = changes.title.from;
       await gh.createComment(
@@ -335,13 +335,16 @@ export async function enforceIssueTypePolicy({
   };
 }
 
-function branchStateBlocksTitleChange(state, issueType, issueNumber, currentTitle) {
+async function branchStateBlocksTitleChange(gh, owner, repo, state, issueType, issueNumber, currentTitle) {
   const branch = state?.branch;
   const branchExists = branch?.exists === true || branch?.linked === true || branch?.pr != null;
-  if (!branchExists) return false;
-
   const currentAllowedBranch = buildIssueBranchName({ issueType, issueNumber, title: currentTitle });
-  return !state?.allowed_branch_name || state.allowed_branch_name !== currentAllowedBranch;
+  const titleChangedFromAllowedBranch = !state?.allowed_branch_name || state.allowed_branch_name !== currentAllowedBranch;
+  if (!titleChangedFromAllowedBranch) return false;
+  if (branchExists) return true;
+  return state?.allowed_branch_name
+    ? await gitRefExists(gh, owner, repo, state.allowed_branch_name)
+    : false;
 }
 
 function updateAllowedBranchNameForIssueTitle({ body, issueType, issueNumber, title }) {
@@ -364,6 +367,17 @@ function hasIssueTypeChange(action, changes) {
     changes?.issue_type != null ||
     changes?.issueType != null
   );
+}
+
+async function gitRefExists(gh, owner, repo, branchName) {
+  if (typeof gh.getReference !== "function") return false;
+  try {
+    await gh.getReference(owner, repo, `heads/${branchName}`);
+    return true;
+  } catch (err) {
+    if (String(err?.message || "").includes("HTTP 404")) return false;
+    throw err;
+  }
 }
 
 /**

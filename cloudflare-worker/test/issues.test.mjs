@@ -323,6 +323,58 @@ test("enforceIssueTypePolicy reverts title changes while an unlinked branch stil
   assert.match(comments[0].body, /\/branch delete/);
 });
 
+test("enforceIssueTypePolicy reverts title changes when stale metadata says branch is missing but ref exists", async () => {
+  const updates = [];
+  const comments = [];
+  const body = ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Feature", {
+    issueNumber: 123,
+    title: "Add login flow",
+  }).replace(
+    /"branch": null/,
+    '"branch": {\n    "exists": false,\n    "linked": false,\n    "error": null,\n    "pr": null\n  }'
+  );
+  const gh = {
+    async getReference(_owner, _repo, ref) {
+      assert.equal(ref, "heads/feat/123-add-login-flow");
+      return { object: { sha: "branch-sha" } };
+    },
+    async updateIssueTitleAndBody(_owner, _repo, _issueNumber, title, nextBody) {
+      updates.push({ title, body: nextBody });
+    },
+    async createComment(_owner, _repo, issueNumber, body) {
+      comments.push({ issueNumber, body });
+    },
+    async addLabels() {},
+    async removeLabel() {},
+    async updateIssueFieldValue() {},
+  };
+
+  const result = await enforceIssueTypePolicy({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    repoFullName: "mcf-technologie-gmbh/app",
+    issueNumber: 123,
+    action: "edited",
+    currentIssue: createIssue({
+      title: "Add password reset",
+      body,
+    }),
+    currentType: "Feature",
+    changes: {
+      title: { from: "Add login flow" },
+    },
+    typeMap: new Map([["Feature", "TYPE_feature"]]),
+    scopeField: null,
+    priorityField: null,
+    effortField: null,
+  });
+
+  assert.equal(result.title, "Add login flow");
+  assert.deepEqual(updates, [{ title: "Add login flow", body: undefined }]);
+  assert.match(comments[0].body, /cannot be changed while a managed branch exists/);
+});
+
 test("enforceIssueTypePolicy reverts typed issue changes from recorded original type", async () => {
   const typeUpdates = [];
   const comments = [];
