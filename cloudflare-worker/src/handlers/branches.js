@@ -1,6 +1,5 @@
 import { GITHUB_APP_BOT_LOGIN } from "../config.js";
 import {
-  bodyLinksIssue,
   buildIssueBranchName,
   buildIssuePullRequestTitle,
   ensureAutomationState,
@@ -615,6 +614,20 @@ export async function handleBranchDeleteCommand({ gh, owner, repo, issueNumber }
 
   const linkedBranchName = linkedBranchNames(currentIssue)[0] || null;
   const branchToDelete = linkedBranchName || branchName;
+  const associatedPr = state?.branch?.pr ? await getOpenPullRequestOrNull(gh, owner, repo, state.branch.pr) : null;
+  if (associatedPr) {
+    state = {
+      ...state,
+      branch: {
+        ...state.branch,
+        error: null,
+        pr: null,
+      },
+    };
+    issueBody = replaceAutomationState(issueBody, state);
+    await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, issueBody);
+    await closePullRequestForBranchDeletion({ gh, owner, repo, issueNumber, prNumber: associatedPr.number, branchName: branchToDelete });
+  }
   const refInfo = await getBranchRefInfo(gh, owner, repo, branchToDelete);
   if (refInfo.exists) {
     await gh.deleteReference(owner, repo, `heads/${branchToDelete}`);
@@ -629,7 +642,7 @@ export async function handleBranchDeleteCommand({ gh, owner, repo, issueNumber }
       exists: false,
       linked: false,
       error: null,
-      pr: state?.branch?.pr ?? null,
+      pr: null,
     },
   };
   issueBody = replaceAutomationState(afterDeleteIssue.body || issueBody, state);
@@ -645,9 +658,11 @@ export async function handleBranchDeleteCommand({ gh, owner, repo, issueNumber }
         : "The managed branch did not exist, so I only reset the branch metadata.",
       "",
       `Branch: \`${branchToDelete}\``,
+      associatedPr ? "" : null,
+      associatedPr ? `Closed associated PR: #${associatedPr.number}` : null,
       "",
       "This cannot be undone by automation.",
-    ].join("\n")
+    ].filter((line) => line !== null).join("\n")
   );
 
   return {
@@ -655,6 +670,7 @@ export async function handleBranchDeleteCommand({ gh, owner, repo, issueNumber }
     command: "branch delete",
     deleted: refInfo.exists === true,
     branch: branchToDelete,
+    prClosed: associatedPr?.number || null,
     cleanedLinkedBranches: staleCleanup.deletedCount,
   };
 }
@@ -1081,6 +1097,78 @@ export async function handlePushEvent({ gh, owner, repo, payload }) {
   };
 }
 
+export async function handleIssueClosedEvent({ gh, owner, repo, issueNumber, issue, stateReason }) {
+  const state = parseAutomationState(issue.body || "");
+  if (!state?.branch) {
+    return { processed: false, reason: "closed issue has no branch metadata" };
+  }
+
+  const pr = state.branch.pr ? await getPullRequestOrNull(gh, owner, repo, state.branch.pr) : null;
+  if (pr?.state === "open") {
+    await gh.reopenIssue(owner, repo, issueNumber);
+    await gh.createComment(
+      owner,
+      repo,
+      issueNumber,
+      [
+        "This issue cannot be closed while its PR is still open.",
+        "",
+        "Close or merge the PR first.",
+        "",
+        `Open PR: #${pr.number}`,
+      ].join("\n")
+    );
+    return { processed: true, reopened: true, issue: issueNumber, pr: pr.number, reason: "PR is still open" };
+  }
+
+  if (stateReason !== "not_planned") {
+    return { processed: false, reason: `closed issue state_reason=${stateReason || "unknown"}` };
+  }
+
+  const branchName = state.allowed_branch_name;
+  if (!branchName) {
+    return { processed: false, reason: "closed issue has no allowed branch" };
+  }
+
+  const refInfo = await getBranchRefInfo(gh, owner, repo, branchName);
+  if (refInfo.exists) {
+    await gh.deleteReference(owner, repo, `heads/${branchName}`);
+  }
+
+  const afterDeleteIssue = await gh.getIssue(owner, repo, issueNumber);
+  const staleCleanup = await cleanupStaleLinkedBranchRecords({ gh, owner, repo, issueNumber, issue: afterDeleteIssue });
+  const updatedState = resetBranchState(state);
+  await gh.updateIssueTitleAndBody(
+    owner,
+    repo,
+    issueNumber,
+    undefined,
+    replaceAutomationState(staleCleanup.issue.body || afterDeleteIssue.body || issue.body || "", updatedState)
+  );
+  await gh.createComment(
+    owner,
+    repo,
+    issueNumber,
+    [
+      "This issue was closed as not planned.",
+      "",
+      refInfo.exists
+        ? `Deleted managed branch: \`${branchName}\``
+        : `Managed branch did not exist: \`${branchName}\``,
+      pr ? "" : null,
+      pr ? `Associated PR was already closed: #${pr.number}` : null,
+    ].filter((line) => line !== null).join("\n")
+  );
+
+  return {
+    processed: true,
+    issue: issueNumber,
+    branchDeleted: refInfo.exists ? branchName : null,
+    pr: pr?.number || null,
+    cleanedLinkedBranches: staleCleanup.deletedCount,
+  };
+}
+
 function isIssueLinkedBranch(issue, branchName) {
   const nodes = issue.linkedBranches?.nodes || [];
   return nodes.some((node) => node?.ref?.name === branchName);
@@ -1385,6 +1473,10 @@ async function branchMatchesBase(gh, owner, repo, branchName, baseBranch) {
  * @returns {Promise<object>}
  */
 export async function handlePullRequestEvent({ gh, owner, repo, payload }) {
+  if (payload.action === "closed") {
+    return handlePullRequestClosedEvent({ gh, owner, repo, payload });
+  }
+
   if (payload.action !== "opened") {
     return { processed: false, reason: `pull_request action=${payload.action}` };
   }
@@ -1431,10 +1523,6 @@ export async function handlePullRequestEvent({ gh, owner, repo, payload }) {
     problems.push(`the PR base must be \`${BASE_BRANCH}\``);
   }
 
-  if (!bodyLinksIssue(pr.body || "", issueNumber)) {
-    problems.push(`the PR body must reference this issue, for example \`Refs #${issueNumber}\``);
-  }
-
   if (state?.branch?.pr && state.branch.pr !== pr.number) {
     problems.push(`this issue is already associated with PR #${state.branch.pr}`);
   }
@@ -1453,10 +1541,40 @@ export async function handlePullRequestEvent({ gh, owner, repo, payload }) {
     return { processed: true, valid: false, issue: issueNumber, pr: pr.number };
   }
 
+  const expectedTitle = buildIssuePullRequestTitle({
+    issueType: issue.issueType?.name || state?.original_issue_type || "issue",
+    issueNumber,
+    title: issue.title,
+  });
+  const expectedBodyLink = `Closes #${issueNumber}`;
+  const nextTitle = pr.title === expectedTitle ? undefined : expectedTitle;
+  const nextBody = bodyClosesIssue(pr.body || "", issueNumber)
+    ? undefined
+    : appendPullRequestIssueLink(pr.body || "", expectedBodyLink);
+
+  if (nextTitle !== undefined || nextBody !== undefined) {
+    await gh.updatePullRequest(owner, repo, pr.number, {
+      title: nextTitle,
+      body: nextBody,
+    });
+    await gh.createComment(
+      owner,
+      repo,
+      pr.number,
+      [
+        "This PR was adopted by automation because it uses the managed branch for this issue.",
+        "",
+        nextTitle !== undefined ? `Updated title to: \`${expectedTitle}\`` : null,
+        nextBody !== undefined ? `Ensured PR body links the issue with \`${expectedBodyLink}\`.` : null,
+      ].filter(Boolean).join("\n")
+    );
+  }
+
   const updatedState = {
     ...state,
     branch: {
       ...state.branch,
+      error: null,
       pr: pr.number,
     },
   };
@@ -1472,9 +1590,113 @@ export async function handlePullRequestEvent({ gh, owner, repo, payload }) {
   return { processed: true, valid: true, issue: issueNumber, pr: pr.number };
 }
 
+async function handlePullRequestClosedEvent({ gh, owner, repo, payload }) {
+  const pr = payload.pull_request;
+  const branchName = pr?.head?.ref;
+  const issueNumber = extractIssueNumberFromBranch(branchName);
+  if (!issueNumber) {
+    return { processed: false, reason: "PR branch is not issue-managed" };
+  }
+
+  let issue = await gh.getIssue(owner, repo, issueNumber);
+  const state = parseAutomationState(issue.body || "");
+  if (!state?.branch || state.allowed_branch_name !== branchName || state.branch.pr !== pr.number) {
+    return { processed: true, valid: false, issue: issueNumber, pr: pr.number, reason: "closed PR is not active for issue" };
+  }
+
+  if (pr.merged === true) {
+    const updatedState = resetBranchState(state);
+    await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, replaceAutomationState(issue.body || "", updatedState));
+    return { processed: true, merged: true, issue: issueNumber, pr: pr.number, metadataCleaned: true };
+  }
+
+  await gh.closeIssue(owner, repo, issueNumber, "not_planned");
+  await deleteReferenceIfExists(gh, owner, repo, `heads/${branchName}`);
+  issue = await gh.getIssue(owner, repo, issueNumber);
+  const staleCleanup = await cleanupStaleLinkedBranchRecords({ gh, owner, repo, issueNumber, issue });
+  const updatedState = resetBranchState(state);
+  await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, replaceAutomationState(staleCleanup.issue.body || issue.body || "", updatedState));
+  await gh.createComment(
+    owner,
+    repo,
+    issueNumber,
+    [
+      "This issue was closed as not planned because its PR was closed without merge.",
+      "",
+      `Closed PR: #${pr.number}`,
+      `Deleted managed branch: \`${branchName}\``,
+    ].join("\n")
+  );
+
+  return {
+    processed: true,
+    merged: false,
+    issue: issueNumber,
+    pr: pr.number,
+    branchDeleted: branchName,
+    cleanedLinkedBranches: staleCleanup.deletedCount,
+  };
+}
+
 function summarizeError(err) {
   const message = err?.message || String(err);
   return message.length > 1200 ? `${message.slice(0, 1200)}...` : message;
+}
+
+function appendPullRequestIssueLink(body, issueLink) {
+  const text = String(body || "").trim();
+  return text ? `${text}\n\n${issueLink}` : issueLink;
+}
+
+function bodyClosesIssue(body, issueNumber) {
+  const escaped = String(issueNumber).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`\\bclose[sd]?\\s+#${escaped}\\b`, "i").test(String(body || ""));
+}
+
+function resetBranchState(state) {
+  return {
+    ...state,
+    branch: {
+      exists: false,
+      linked: false,
+      error: null,
+      pr: null,
+    },
+  };
+}
+
+async function getPullRequestOrNull(gh, owner, repo, pullNumber) {
+  if (!pullNumber || typeof gh.getPullRequest !== "function") return null;
+  try {
+    return await gh.getPullRequest(owner, repo, pullNumber);
+  } catch (err) {
+    if (String(err?.message || "").includes("HTTP 404")) return null;
+    throw err;
+  }
+}
+
+async function getOpenPullRequestOrNull(gh, owner, repo, pullNumber) {
+  const pr = await getPullRequestOrNull(gh, owner, repo, pullNumber);
+  return pr?.state === "open" ? pr : null;
+}
+
+async function closePullRequestForBranchDeletion({ gh, owner, repo, issueNumber, prNumber, branchName }) {
+  if (typeof gh.closePullRequest === "function") {
+    await gh.closePullRequest(owner, repo, prNumber);
+  }
+  await gh.createComment(
+    owner,
+    repo,
+    prNumber,
+    [
+      "This PR was closed because the managed branch was deleted with `/branch delete`.",
+      "",
+      `Issue: #${issueNumber}`,
+      `Deleted branch: \`${branchName}\``,
+      "",
+      "If this branch is not recreated, GitHub may allow restoring it from this closed PR.",
+    ].join("\n")
+  );
 }
 
 function buildTemporaryBranchName(branchName) {

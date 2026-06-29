@@ -154,6 +154,16 @@ export const issueMethods = {
     );
   },
 
+  async reopenIssue(owner, repo, issueNumber) {
+    return this.rest(
+      "PATCH",
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issueNumber}`,
+      {
+        state: "open",
+      }
+    );
+  },
+
   async updateIssueTitleAndBody(owner, repo, issueNumber, title, body) {
     const update = {};
     if (title !== undefined) update.title = title;

@@ -8,7 +8,7 @@ import { normalizeRepo } from "./utils/text.js";
 import { GitHubClient, createInstallationAccessToken } from "./services/github/index.js";
 import { withCommandLog } from "./utils/comment-log.js";
 import { handleIssueCommentEvent, handleIssueCommentProtectionEvent } from "./handlers/comments.js";
-import { handleCreateEvent, handlePullRequestEvent, handlePushEvent } from "./handlers/branches.js";
+import { handleCreateEvent, handleIssueClosedEvent, handlePullRequestEvent, handlePushEvent } from "./handlers/branches.js";
 import { enforceIssueTypePolicy } from "./handlers/issues.js";
 
 const SUPPORTED_EVENTS = new Set(["issues", "issue_comment", "create", "pull_request", "push"]);
@@ -184,12 +184,21 @@ export default {
           200
         );
       }
-
-
-
       const currentIssue = await gh.getIssue(owner, repo, issueNumber);
-      const currentType = currentIssue.issueType?.name || "none";
 
+      if (action === "closed") {
+        const result = await handleIssueClosedEvent({
+          gh,
+          owner,
+          repo,
+          issueNumber,
+          issue: currentIssue,
+          stateReason: issue.state_reason,
+        });
+        return json({ ok: true, ...result }, 200);
+      }
+
+      const currentType = currentIssue.issueType?.name || "none";
       const result = await enforceIssueTypePolicy({
         gh,
         owner,

@@ -13,7 +13,7 @@ export const GITHUB_APP_BOT_LOGIN = "mcf-automation-bot[bot]";
 export const GITHUB_API_VERSION = "2022-11-28";
 export const GITHUB_GRAPHQL_FEATURES = "issue_types, issue_fields";
 
-export const ISSUE_ACTIONS_TO_VALIDATE = new Set(["opened", "reopened", "edited", "typed", "untyped"]);
+export const ISSUE_ACTIONS_TO_VALIDATE = new Set(["opened", "reopened", "edited", "typed", "untyped", "closed"]);
 export const ISSUE_TYPE_CHANGE_ACTIONS = new Set(["typed", "untyped", "edited"]);
 
 /**

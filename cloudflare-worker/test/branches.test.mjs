@@ -5,6 +5,7 @@ import {
   handleBranchDeleteCommand,
   handleBranchRepairCommand,
   handleCreateEvent,
+  handleIssueClosedEvent,
   handlePullRequestEvent,
   handlePushEvent,
 } from "../src/handlers/branches.js";
@@ -489,7 +490,7 @@ test("handleBranchDeleteCommand deletes the managed branch and resets metadata",
   assert.match(latestBody, /"exists": false/);
   assert.match(latestBody, /"linked": false/);
   assert.match(latestBody, /"error": null/);
-  assert.match(latestBody, /"pr": 123/);
+  assert.match(latestBody, /"pr": null/);
   assert.match(comments.at(-1), /Deleted the branch managed for this issue/);
   assert.match(comments.at(-1), /cannot be undone/);
 });
@@ -555,6 +556,75 @@ test("handleBranchDeleteCommand deletes the visible linked branch before expecte
   assert.deepEqual(deletedRefs, ["heads/54-test-bug-issue"]);
   assert.match(latestBody, /"exists": false/);
   assert.match(latestBody, /"linked": false/);
+});
+
+test("handleBranchDeleteCommand closes an associated PR before deleting the branch", async () => {
+  const body = replaceAutomationState(
+    ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug"),
+    {
+      allowed_branch_name: "fix/50-test-bug-issue",
+      branch: {
+        exists: true,
+        linked: true,
+        error: null,
+        pr: 321,
+      },
+    }
+  );
+  let latestBody = body;
+  const closedPrs = [];
+  const deletedRefs = [];
+  const comments = [];
+
+  const gh = {
+    async getIssue() {
+      return {
+        id: "ISSUE_id",
+        title: "test bug issue",
+        body: latestBody,
+        repository: { id: "REPO_id" },
+        issueType: { name: "Bug" },
+        linkedBranches: {
+          nodes: [{ id: "LB_1", ref: { name: "fix/50-test-bug-issue" } }],
+        },
+      };
+    },
+    async getPullRequest(_owner, _repo, pullNumber) {
+      assert.equal(pullNumber, 321);
+      return { number: 321, state: "open" };
+    },
+    async closePullRequest(_owner, _repo, pullNumber) {
+      assert.match(latestBody, /"pr": null/);
+      closedPrs.push(pullNumber);
+    },
+    async getReference(_owner, _repo, ref) {
+      assert.equal(ref, "heads/fix/50-test-bug-issue");
+      return { object: { sha: "branch-sha" } };
+    },
+    async deleteReference(_owner, _repo, ref) {
+      deletedRefs.push(ref);
+    },
+    async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
+      latestBody = nextBody;
+    },
+    async createComment(_owner, _repo, issueNumber, body) {
+      comments.push({ issueNumber, body });
+    },
+  };
+
+  const result = await handleBranchDeleteCommand({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    issueNumber: 50,
+  });
+
+  assert.equal(result.prClosed, 321);
+  assert.deepEqual(closedPrs, [321]);
+  assert.deepEqual(deletedRefs, ["heads/fix/50-test-bug-issue"]);
+  assert.match(latestBody, /"pr": null/);
+  assert.match(comments.find((comment) => comment.issueNumber === 321).body, /closed because the managed branch was deleted/);
+  assert.match(comments.find((comment) => comment.issueNumber === 50).body, /Closed associated PR: #321/);
 });
 
 test("handleBranchRepairCommand blocks ghost linked branches without resetting metadata", async () => {
@@ -1312,6 +1382,8 @@ test("handleCreateEvent allows bot-created branches only with matching reservati
     async getIssue() {
       return {
         body,
+        title: "Add login",
+        issueType: { name: "Feature" },
         linkedBranches: {
           nodes: [{ ref: { name: "feat/123-add-login" } }],
         },
@@ -1410,6 +1482,8 @@ test("handleCreateEvent allows bot-created branches with matching legacy reserva
   const gh = {
     async getIssue() {
       return {
+        title: "Add login",
+        issueType: { name: "Feature" },
         body,
         linkedBranches: {
           nodes: [{ ref: { name: "feat/123-add-login" } }],
@@ -1639,9 +1713,13 @@ test("handlePullRequestEvent records valid PR number", async () => {
     }
   );
   let updatedBody = null;
+  const pullUpdates = [];
+  const comments = [];
   const gh = {
     async getIssue() {
       return {
+        title: "Add login",
+        issueType: { name: "Feature" },
         body,
         linkedBranches: {
           nodes: [{ ref: { name: "feat/123-add-login" } }],
@@ -1651,12 +1729,15 @@ test("handlePullRequestEvent records valid PR number", async () => {
     async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
       updatedBody = nextBody;
     },
+    async updatePullRequest(_owner, _repo, pullNumber, update) {
+      pullUpdates.push({ pullNumber, update });
+    },
     async getReference(_owner, _repo, ref) {
       if (ref === "heads/feat/123-add-login") return { object: { sha: "sha-dev" } };
       throw new Error(`unexpected ref ${ref}`);
     },
-    async createComment() {
-      throw new Error("should not comment for valid PR");
+    async createComment(_owner, _repo, issueNumber, body) {
+      comments.push({ issueNumber, body });
     },
   };
 
@@ -1668,6 +1749,7 @@ test("handlePullRequestEvent records valid PR number", async () => {
       action: "opened",
       pull_request: {
         number: 456,
+        title: "wrong title",
         body: "Refs #123",
         head: { ref: "feat/123-add-login" },
         base: { ref: "dev" },
@@ -1677,4 +1759,227 @@ test("handlePullRequestEvent records valid PR number", async () => {
 
   assert.equal(result.valid, true);
   assert.match(updatedBody, /"pr": 456/);
+  assert.deepEqual(pullUpdates, [{
+    pullNumber: 456,
+    update: {
+      title: "feat: Add login (#123)",
+      body: "Refs #123\n\nCloses #123",
+    },
+  }]);
+  assert.match(comments[0].body, /adopted by automation/);
+});
+
+test("handlePullRequestEvent closes issue as not planned and deletes branch when PR closes without merge", async () => {
+  const body = replaceAutomationState(
+    ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Feature"),
+    {
+      allowed_branch_name: "feat/123-add-login",
+      branch: {
+        exists: true,
+        linked: true,
+        error: null,
+        pr: 456,
+      },
+    }
+  );
+  let latestBody = body;
+  const closedIssues = [];
+  const deletedRefs = [];
+  const comments = [];
+
+  const gh = {
+    async getIssue() {
+      return {
+        body: latestBody,
+        title: "Add login",
+        issueType: { name: "Feature" },
+        linkedBranches: {
+          nodes: [{ ref: { name: "feat/123-add-login" } }],
+        },
+      };
+    },
+    async closeIssue(_owner, _repo, issueNumber, reason) {
+      closedIssues.push({ issueNumber, reason });
+    },
+    async deleteReference(_owner, _repo, ref) {
+      deletedRefs.push(ref);
+    },
+    async deleteLinkedBranch() {},
+    async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
+      latestBody = nextBody;
+    },
+    async createComment(_owner, _repo, issueNumber, body) {
+      comments.push({ issueNumber, body });
+    },
+  };
+
+  const result = await handlePullRequestEvent({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    payload: {
+      action: "closed",
+      pull_request: {
+        number: 456,
+        merged: false,
+        head: { ref: "feat/123-add-login" },
+      },
+    },
+  });
+
+  assert.equal(result.merged, false);
+  assert.deepEqual(closedIssues, [{ issueNumber: 123, reason: "not_planned" }]);
+  assert.deepEqual(deletedRefs, ["heads/feat/123-add-login"]);
+  assert.match(latestBody, /"pr": null/);
+  assert.match(comments[0].body, /closed as not planned/);
+});
+
+test("handlePullRequestEvent cleans metadata without closing issue when PR is merged", async () => {
+  const body = replaceAutomationState(
+    ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Feature"),
+    {
+      allowed_branch_name: "feat/123-add-login",
+      branch: {
+        exists: true,
+        linked: true,
+        error: null,
+        pr: 456,
+      },
+    }
+  );
+  let latestBody = body;
+  const gh = {
+    async getIssue() {
+      return {
+        body: latestBody,
+        title: "Add login",
+        issueType: { name: "Feature" },
+        linkedBranches: { nodes: [] },
+      };
+    },
+    async closeIssue() {
+      throw new Error("should not close issue as not planned");
+    },
+    async deleteReference() {
+      throw new Error("native auto-delete handles merged PR branches");
+    },
+    async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
+      latestBody = nextBody;
+    },
+  };
+
+  const result = await handlePullRequestEvent({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    payload: {
+      action: "closed",
+      pull_request: {
+        number: 456,
+        merged: true,
+        head: { ref: "feat/123-add-login" },
+      },
+    },
+  });
+
+  assert.equal(result.merged, true);
+  assert.match(latestBody, /"pr": null/);
+  assert.match(latestBody, /"exists": false/);
+});
+
+test("handleIssueClosedEvent reopens issues closed while their PR is still open", async () => {
+  const body = replaceAutomationState(
+    ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Feature"),
+    {
+      allowed_branch_name: "feat/123-add-login",
+      branch: {
+        exists: true,
+        linked: true,
+        error: null,
+        pr: 456,
+      },
+    }
+  );
+  const reopened = [];
+  const comments = [];
+  const gh = {
+    async getPullRequest(_owner, _repo, pullNumber) {
+      assert.equal(pullNumber, 456);
+      return { number: 456, state: "open" };
+    },
+    async reopenIssue(_owner, _repo, issueNumber) {
+      reopened.push(issueNumber);
+    },
+    async createComment(_owner, _repo, issueNumber, body) {
+      comments.push({ issueNumber, body });
+    },
+  };
+
+  const result = await handleIssueClosedEvent({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    issueNumber: 123,
+    stateReason: "not_planned",
+    issue: { body },
+  });
+
+  assert.equal(result.reopened, true);
+  assert.deepEqual(reopened, [123]);
+  assert.match(comments[0].body, /cannot be closed while its PR is still open/);
+});
+
+test("handleIssueClosedEvent deletes branch when issue is closed not planned without PR", async () => {
+  const body = replaceAutomationState(
+    ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Feature"),
+    {
+      allowed_branch_name: "feat/123-add-login",
+      branch: {
+        exists: true,
+        linked: true,
+        error: null,
+        pr: null,
+      },
+    }
+  );
+  let latestBody = body;
+  const deletedRefs = [];
+  const comments = [];
+  const gh = {
+    async getReference(_owner, _repo, ref) {
+      assert.equal(ref, "heads/feat/123-add-login");
+      return { object: { sha: "branch-sha" } };
+    },
+    async deleteReference(_owner, _repo, ref) {
+      deletedRefs.push(ref);
+    },
+    async getIssue() {
+      return {
+        body: latestBody,
+        linkedBranches: {
+          nodes: [{ ref: { name: "feat/123-add-login" } }],
+        },
+      };
+    },
+    async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
+      latestBody = nextBody;
+    },
+    async createComment(_owner, _repo, issueNumber, body) {
+      comments.push({ issueNumber, body });
+    },
+  };
+
+  const result = await handleIssueClosedEvent({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    issueNumber: 123,
+    stateReason: "not_planned",
+    issue: { body },
+  });
+
+  assert.equal(result.branchDeleted, "feat/123-add-login");
+  assert.deepEqual(deletedRefs, ["heads/feat/123-add-login"]);
+  assert.match(latestBody, /"pr": null/);
+  assert.match(comments[0].body, /closed as not planned/);
 });
