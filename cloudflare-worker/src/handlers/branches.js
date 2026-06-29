@@ -2,6 +2,7 @@ import { GITHUB_APP_BOT_LOGIN } from "../config.js";
 import {
   bodyLinksIssue,
   buildIssueBranchName,
+  buildIssuePullRequestTitle,
   ensureAutomationState,
   extractIssueNumberFromBranch,
   parseAutomationState,
@@ -150,7 +151,7 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
       baseOid,
     });
 
-    const createdState = {
+    const linkedState = {
       ...reservedState,
       branch: {
         ...reservedState.branch,
@@ -159,12 +160,83 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
         error: null,
       },
     };
+    const linkedIssueBody = replaceAutomationState(reloadedIssue.body || issueBody, linkedState);
     await gh.updateIssueTitleAndBody(
       owner,
       repo,
       issueNumber,
       undefined,
-      replaceAutomationState(reloadedIssue.body || issueBody, createdState)
+      linkedIssueBody
+    );
+
+    let draftPr;
+    try {
+      draftPr = await createDraftPullRequestForIssue({
+        gh,
+        owner,
+        repo,
+        issueNumber,
+        issueType,
+        issueTitle: currentIssue.title,
+        branchName,
+      });
+    } catch (prErr) {
+      const failedPrState = {
+        ...reservedState,
+        branch: {
+          ...reservedState.branch,
+          exists: true,
+          linked: true,
+          error: summarizeError(prErr),
+        },
+      };
+      await gh.updateIssueTitleAndBody(
+        owner,
+        repo,
+        issueNumber,
+        undefined,
+        replaceAutomationState(linkedIssueBody, failedPrState)
+      );
+      await gh.createComment(
+        owner,
+        repo,
+        issueNumber,
+        [
+          "Created linked branch, but I could not create the draft PR.",
+          "",
+          `Branch: \`${branchName}\``,
+          `Base: \`${BASE_BRANCH}\``,
+          "",
+          "```text",
+          failedPrState.branch.error,
+          "```",
+        ].join("\n")
+      );
+
+      return {
+        processed: true,
+        command: "branch",
+        created: true,
+        prCreated: false,
+        branch: branchName,
+        reason: "draft pull request creation failed",
+      };
+    }
+
+    const createdState = {
+      ...linkedState,
+      branch: {
+        ...linkedState.branch,
+        error: null,
+        pr: draftPr.number,
+      },
+    };
+    await gh.updateIssueTitleAndBody(
+      owner,
+      repo,
+      issueNumber,
+      undefined,
+      replaceAutomationState(linkedIssueBody, createdState)
     );
 
     await gh.createComment(
@@ -177,10 +249,12 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
         `\`${branchName}\``,
         "",
         `Base: \`${BASE_BRANCH}\``,
+        "",
+        `Created draft PR: #${draftPr.number}`,
       ].join("\n")
     );
 
-    return { processed: true, command: "branch", created: true, branch: branchName };
+    return { processed: true, command: "branch", created: true, branch: branchName, pr: draftPr.number };
   } catch (err) {
     const failedState = {
       ...reservedState,
@@ -596,7 +670,7 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
         issueNumber,
         title: issue.title,
       });
-      const updatedState = {
+      const linkedState = {
         allowed_branch_name: branchName,
         branch: {
           exists: true,
@@ -605,13 +679,86 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
           pr: state?.branch?.pr ?? null,
         },
       };
+      const linkedBody = replaceAutomationState(body, linkedState);
+      await gh.updateIssueTitleAndBody(
+        owner,
+        repo,
+        issueNumber,
+        undefined,
+        linkedBody
+      );
+
+      let draftPr;
+      try {
+        draftPr = await createDraftPullRequestForIssue({
+          gh,
+          owner,
+          repo,
+          issueNumber,
+          issueType,
+          issueTitle: issue.title,
+          branchName,
+        });
+      } catch (prErr) {
+        const failedPrState = {
+          allowed_branch_name: branchName,
+          branch: {
+            exists: true,
+            linked: true,
+            error: summarizeError(prErr),
+            pr: state?.branch?.pr ?? null,
+          },
+        };
+        await gh.updateIssueTitleAndBody(
+          owner,
+          repo,
+          issueNumber,
+          undefined,
+          replaceAutomationState(linkedBody, failedPrState)
+        );
+        await createBranchEventComment(
+          gh,
+          owner,
+          repo,
+          issueNumber,
+          payload,
+          "/branch manual",
+          [
+            "Branch linked and recorded, but I could not create the draft PR.",
+            "",
+            `Branch: \`${branchName}\``,
+            `Base: \`${BASE_BRANCH}\``,
+            "",
+            "```text",
+            failedPrState.branch.error,
+            "```",
+          ].join("\n")
+        );
+
+        return {
+          processed: true,
+          allowed: true,
+          prCreated: false,
+          branch: branchName,
+          issue: issueNumber,
+          reason: "draft pull request creation failed",
+        };
+      }
+      const updatedState = {
+        ...linkedState,
+        branch: {
+          ...linkedState.branch,
+          error: null,
+          pr: draftPr.number,
+        },
+      };
 
       await gh.updateIssueTitleAndBody(
         owner,
         repo,
         issueNumber,
         undefined,
-        replaceAutomationState(body, updatedState)
+        replaceAutomationState(linkedBody, updatedState)
       );
 
       await createBranchEventComment(
@@ -628,6 +775,7 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
           "",
           `Branch: \`${branchName}\``,
           `Base: \`${BASE_BRANCH}\``,
+          `Draft PR: #${draftPr.number}`,
           "",
           "Created from GitHub's sidebar and accepted by automation.",
         ].join("\n")
@@ -638,6 +786,7 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
         allowed: true,
         branch: branchName,
         issue: issueNumber,
+        pr: draftPr.number,
         reason: "branch is linked to issue and based on dev",
       };
     }
@@ -806,6 +955,26 @@ async function createBranchEventComment(gh, owner, repo, issueNumber, payload, c
     });
   }
   await gh.createComment(owner, repo, issueNumber, body);
+}
+
+async function createDraftPullRequestForIssue({ gh, owner, repo, issueNumber, issueType, issueTitle, branchName }) {
+  if (typeof gh.createPullRequest !== "function") {
+    throw new Error("GitHub client does not support pull request creation.");
+  }
+
+  return gh.createPullRequest({
+    owner,
+    repo,
+    title: buildIssuePullRequestTitle({
+      issueType,
+      issueNumber,
+      title: issueTitle,
+    }),
+    head: branchName,
+    base: BASE_BRANCH,
+    body: `Closes #${issueNumber}`,
+    draft: true,
+  });
 }
 
 async function deleteReferenceIfExists(gh, owner, repo, ref) {

@@ -7,9 +7,7 @@ import {
 import {
   extractSection,
   replaceSection,
-  extractScopeFromTitle,
-  detectScopeFromBody,
-  formatTitle
+  detectScopeFromBody
 } from "../utils/text.js";
 import {
   parseChecklist,
@@ -21,7 +19,7 @@ import { ensureAutomationState } from "../utils/automation-state.js";
 
 /**
  * Enforces organizational policies on GitHub Issues when they are opened, edited, or reopened.
- * Handles issue type and scope immutability, title formatting, checklist validation, and label sync.
+ * Handles issue type and scope field syncing, checklist validation, and label sync.
  *
  * @param {object} params
  * @param {GitHubClient} params.gh - API client wrapper
@@ -106,20 +104,6 @@ export async function enforceIssueTypePolicy({
   let hasBodyChanges = false;
   let resolvedType = currentType;
 
-  // 4. Scope Immutability: Revert edits that change the scope tag in the title.
-  if (action === "edited" && changes?.title) {
-    const oldScope = extractScopeFromTitle(changes.title.from);
-    const newScope = extractScopeFromTitle(currentIssue.title);
-    if (oldScope && newScope && oldScope !== newScope) {
-      const correctedTitle = formatTitle(currentIssue.title, resolvedType, oldScope);
-      if (correctedTitle !== currentIssue.title) {
-        await gh.updateIssueTitleAndBody(owner, repo, issueNumber, correctedTitle, undefined);
-        console.log(`Reverted scope change in title from "${newScope}" back to "${oldScope}"`);
-        currentIssue.title = correctedTitle;
-      }
-    }
-  }
-
   // Extract custom field values currently set in the sidebar
   const currentSidebarScope = getCurrentSingleSelectIssueFieldValue(currentIssue, "Scope");
   const currentSidebarPriority = getCurrentSingleSelectIssueFieldValue(currentIssue, "Priority");
@@ -129,10 +113,10 @@ export async function enforceIssueTypePolicy({
   let scopeValue = normalizeOptionalIssueFieldValue(detectScopeFromBody(issueBody));
 
   if (action === "edited" && currentSidebarScope) {
-    // During edits, the sidebar field value is the source of truth for the title prefix
+    // During edits, the sidebar field value is the source of truth.
     scopeValue = currentSidebarScope;
   } else if (!scopeValue) {
-    scopeValue = scopeValue || currentSidebarScope || extractScopeFromTitle(currentIssue.title);
+    scopeValue = currentSidebarScope || null;
   }
 
   // Detect priority and effort from the raw body
@@ -277,20 +261,16 @@ export async function enforceIssueTypePolicy({
   await syncSingleSelectIssueField(gh, currentIssue.id, priorityField, priorityValue, debug.priority);
   await syncSingleSelectIssueField(gh, currentIssue.id, effortField, effortValue, debug.effort);
 
-  // 10. Format Issue Title to conventional format type(scope): description, and update title and body in a single PATCH call.
-  const formattedTitle = formatTitle(currentIssue.title, resolvedType, scopeValue);
-  const hasTitleChanges = formattedTitle !== currentIssue.title;
-
-  if (hasBodyChanges || hasTitleChanges) {
+  // 10. Update body if changed. Titles are left exactly as the issue author wrote them.
+  if (hasBodyChanges) {
     await gh.updateIssueTitleAndBody(
       owner,
       repo,
       issueNumber,
-      hasTitleChanges ? formattedTitle : undefined,
-      hasBodyChanges ? issueBody : undefined
+      undefined,
+      issueBody
     );
-    if (hasTitleChanges) console.log(`Re-formatted issue title to: ${formattedTitle}`);
-    if (hasBodyChanges) console.log(`Sanitized issue body and injected zoning comments`);
+    console.log(`Sanitized issue body and injected zoning comments`);
   }
 
   return {
@@ -301,7 +281,7 @@ export async function enforceIssueTypePolicy({
     issue: issueNumber,
     currentType: resolvedType,
     scope: scopeValue,
-    title: formattedTitle,
+    title: currentIssue.title,
     debug,
   };
 }

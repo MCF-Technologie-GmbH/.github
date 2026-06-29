@@ -12,6 +12,7 @@ test("handleBranchCommand reserves and records a linked branch", async () => {
   const body = ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Feature");
   const updates = [];
   const comments = [];
+  const pullRequests = [];
   let latestBody = body;
 
   const gh = {
@@ -38,6 +39,10 @@ test("handleBranchCommand reserves and records a linked branch", async () => {
       assert.equal(input.branchName, "feat/123-add-login");
       return {};
     },
+    async createPullRequest(input) {
+      pullRequests.push(input);
+      return { number: 456 };
+    },
     async createComment(_owner, _repo, _issueNumber, body) {
       comments.push(body);
     },
@@ -52,9 +57,21 @@ test("handleBranchCommand reserves and records a linked branch", async () => {
   });
 
   assert.equal(result.created, true);
+  assert.equal(result.pr, 456);
   assert.match(updates.at(-1), /"exists": true/);
   assert.match(updates.at(-1), /"linked": true/);
+  assert.match(updates.at(-1), /"pr": 456/);
   assert.match(comments.at(-1), /Created linked branch/);
+  assert.match(comments.at(-1), /Created draft PR: #456/);
+  assert.deepEqual(pullRequests, [{
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    title: "feat: Add login (#123)",
+    head: "feat/123-add-login",
+    base: "dev",
+    body: "Closes #123",
+    draft: true,
+  }]);
 });
 
 test("handleBranchCommand stores creation errors and allows same-name retry", async () => {
@@ -229,6 +246,7 @@ test("handleBranchCommand recreates recorded branch metadata when the git ref no
   );
   let latestBody = body;
   const comments = [];
+  const pullRequests = [];
   const gh = {
     async getIssue() {
       return {
@@ -254,6 +272,10 @@ test("handleBranchCommand recreates recorded branch metadata when the git ref no
       assert.equal(input.branchName, "fix/52-test-bug-issue");
       return {};
     },
+    async createPullRequest(input) {
+      pullRequests.push(input);
+      return { number: 457 };
+    },
     async createComment(_owner, _repo, _issueNumber, body) {
       comments.push(body);
     },
@@ -268,9 +290,20 @@ test("handleBranchCommand recreates recorded branch metadata when the git ref no
   });
 
   assert.equal(result.created, true);
+  assert.equal(result.pr, 457);
   assert.match(latestBody, /"exists": true/);
   assert.match(latestBody, /"linked": true/);
+  assert.match(latestBody, /"pr": 457/);
   assert.match(comments.at(-1), /Created linked branch/);
+  assert.deepEqual(pullRequests, [{
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    title: "fix: test-bug-issue (#52)",
+    head: "fix/52-test-bug-issue",
+    base: "dev",
+    body: "Closes #52",
+    draft: true,
+  }]);
 });
 
 test("handleBranchCommand ignores stale linked branch reservations with null refs", async () => {
@@ -278,6 +311,7 @@ test("handleBranchCommand ignores stale linked branch reservations with null ref
   const comments = [];
   let latestBody = body;
   const deletedLinkedBranches = [];
+  const pullRequests = [];
   let issueReads = 0;
   const gh = {
     async getIssue() {
@@ -309,6 +343,10 @@ test("handleBranchCommand ignores stale linked branch reservations with null ref
       assert.equal(input.branchName, "fix/50-test-bug-issue");
       return {};
     },
+    async createPullRequest(input) {
+      pullRequests.push(input);
+      return { number: 458 };
+    },
     async deleteLinkedBranch(linkedBranchId) {
       deletedLinkedBranches.push(linkedBranchId);
     },
@@ -326,8 +364,18 @@ test("handleBranchCommand ignores stale linked branch reservations with null ref
   });
 
   assert.equal(result.created, true);
+  assert.equal(result.pr, 458);
   assert.deepEqual(deletedLinkedBranches, ["LB_1", "LB_2"]);
   assert.match(comments.at(-1), /Created linked branch/);
+  assert.deepEqual(pullRequests, [{
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    title: "fix: test-bug-issue (#50)",
+    head: "fix/50-test-bug-issue",
+    base: "dev",
+    body: "Closes #50",
+    draft: true,
+  }]);
 });
 
 test("handleBranchRepairCommand resets metadata when the recorded branch no longer exists", async () => {
@@ -702,6 +750,7 @@ test("handleCreateEvent records a sidebar-linked branch based on dev", async () 
   let updatedBody = null;
   const deleted = [];
   const comments = [];
+  const pullRequests = [];
   const gh = {
     async getIssue() {
       return {
@@ -735,6 +784,10 @@ test("handleCreateEvent records a sidebar-linked branch based on dev", async () 
     async deleteReference(_owner, _repo, ref) {
       deleted.push(ref);
     },
+    async createPullRequest(input) {
+      pullRequests.push(input);
+      return { number: 459 };
+    },
     async createComment(_owner, _repo, issueNumber, body) {
       comments.push({ issueNumber, body });
     },
@@ -755,9 +808,20 @@ test("handleCreateEvent records a sidebar-linked branch based on dev", async () 
   assert.deepEqual(deleted, []);
   assert.match(updatedBody, /"allowed_branch_name": "feat\/123-add-login"/);
   assert.match(updatedBody, /"linked": true/);
+  assert.match(updatedBody, /"pr": 459/);
   assert.equal(comments[0].issueNumber, 123);
   assert.match(comments[0].body, /Branch linked and recorded successfully/);
+  assert.match(comments[0].body, /Draft PR: #459/);
   assert.match(comments[0].body, /Created from GitHub's sidebar/);
+  assert.deepEqual(pullRequests, [{
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    title: "feat: Add login (#123)",
+    head: "feat/123-add-login",
+    base: "dev",
+    body: "Closes #123",
+    draft: true,
+  }]);
 });
 
 test("handleCreateEvent repairs metadata when a manual linked branch matches recorded metadata", async () => {
@@ -778,6 +842,7 @@ test("handleCreateEvent repairs metadata when a manual linked branch matches rec
   let updatedBody = null;
   const deleted = [];
   const comments = [];
+  const pullRequests = [];
   const gh = {
     async getIssue() {
       return {
@@ -803,6 +868,10 @@ test("handleCreateEvent repairs metadata when a manual linked branch matches rec
     async deleteReference(_owner, _repo, ref) {
       deleted.push(ref);
     },
+    async createPullRequest(input) {
+      pullRequests.push(input);
+      return { number: 460 };
+    },
     async createComment(_owner, _repo, issueNumber, commentBody) {
       comments.push({ issueNumber, body: commentBody });
     },
@@ -824,8 +893,19 @@ test("handleCreateEvent repairs metadata when a manual linked branch matches rec
   assert.match(updatedBody, /"allowed_branch_name": "feat\/123-add-login"/);
   assert.match(updatedBody, /"linked": true/);
   assert.match(updatedBody, /"error": null/);
+  assert.match(updatedBody, /"pr": 460/);
   assert.equal(comments[0].issueNumber, 123);
   assert.match(comments[0].body, /Branch manually linked and metadata repaired successfully/);
+  assert.match(comments[0].body, /Draft PR: #460/);
+  assert.deepEqual(pullRequests, [{
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    title: "feat: Add login (#123)",
+    head: "feat/123-add-login",
+    base: "dev",
+    body: "Closes #123",
+    draft: true,
+  }]);
 });
 
 test("handleCreateEvent asks for repair before accepting a different manual linked branch when metadata exists", async () => {

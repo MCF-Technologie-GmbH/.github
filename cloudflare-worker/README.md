@@ -1,6 +1,6 @@
 # Cloudflare Worker — GitHub Issue Automation Bot
 
-A Cloudflare Worker that receives GitHub App webhooks (`issues` and `issue_comment` events) and enforces issue type policies, synchronizes the `Scope` Issue Field, re-formats titles with Conventional Commit prefixes, tracks required updates, and processes slash commands in comments across all repositories in the MCF Technologie GmbH organization.
+A Cloudflare Worker that receives GitHub App webhooks (`issues` and `issue_comment` events) and enforces issue type policies, synchronizes issue fields, tracks required updates, and processes slash commands in comments across all repositories in the MCF Technologie GmbH organization.
 
 ## What it Does
 
@@ -13,12 +13,12 @@ A Cloudflare Worker that receives GitHub App webhooks (`issues` and `issue_comme
 - **Dynamic Issue Type Enforcement:**
   - **On creation:** the Worker detects which template was used (via the `### Issue Type` section in the body) and corrects the type if it does not match.
   - **After creation:** any type change is detected and reverted back to the original type using the `IssueTypeChangedEvent` timeline history.
-- **Scope Field Syncing & Immutability:**
+- **Scope Field Syncing:**
   - **On creation:** the Worker reads the organization-level `Scope` Issue Field from GitHub metadata when it is set. Depending on the GitHub view, users may set Issue Fields in the issue sidebar or at the bottom of the create-issue popup.
-  - **On edits:** the Worker extracts the scope from the title `type(scope): description` and keeps the Issue Field in sync. If the user edits the title to change the scope tag, the Worker automatically reverts it back to the original scope value.
-- **Title Auto-Formatting:**
-  - The Worker automatically updates the issue title to match the Conventional Commit format: `type(scope): description`.
-  - For example, if a Bug template is used with scope `ui` and title `correct modal validation`, the Worker rewrites the title to `fix(ui): correct modal validation`.
+  - **On edits:** the Worker keeps issue fields synced from sidebar metadata without rewriting the issue title.
+- **Issue Titles:**
+  - The Worker leaves issue titles as written by users.
+  - It does not add Conventional Commit prefixes such as `fix:`, `feat:`, or `docs:` because the Issue Type is already visible in GitHub's issue badges.
 - **Required Updates Checklist & Label Syncing:**
   - The Worker manages the checklist under the `### Required updates` section in the issue body.
   - Sychronizes `requires/*` labels based ONLY on **pending** (unchecked, `[ ]`) checklist items. If an item is checked (`[x]`), its label is removed.
@@ -50,17 +50,16 @@ GitHub Issues / Comments
                                   Comment        Issue
                                   Command        Event
                                      │             │
-                                  Process     - Enforce Type & Scope Immutability
+                                  Process     - Enforce Issue Type policy
                                   Slash       - Sync Scope field (Sidebar)
-                                  Command     - Format Title
-                                              - Sync Checklist
+                                  Command     - Sync Checklist
 ```
 
 The codebase is modularized under `src/`:
 *   `src/index.js`: Webhook handler entrypoint and signature validator.
 *   `src/config.js`: Central configuration constants and whitelists.
 *   `src/utils/crypto.js`: App JWT authentication and signature helpers.
-*   `src/utils/text.js`: Title formatting and string parsing helpers.
+*   `src/utils/text.js`: Markdown section and issue field parsing helpers.
 *   `src/utils/checklist.js`: Checklist and labels syncing logic.
 *   `src/services/github.js`: GraphQL/REST API client wrapper.
 *   `src/handlers/`: Modular handlers for issue event policies and comment slash commands.
@@ -71,8 +70,8 @@ The codebase is modularized under `src/`:
 
 ### GitHub App
 - App ID: `3893672` (slug: `mcf-automation-bot`)
-- Required **repository permissions:** Issues (write), Metadata (read)
-- Required **webhook events:** Issues, Issue comment
+- Required **repository permissions:** Issues (write), Pull requests (write), Contents (write), Metadata (read)
+- Required **webhook events:** Issues, Issue comment, Create, Pull request
 - Webhook URL: your Cloudflare Worker URL
 - Webhook secret: a random string you choose (used to verify payloads)
 - Installed on: all repositories in the organization
@@ -93,7 +92,7 @@ When a webhook event occurs on GitHub, it notifies the Cloudflare Worker. To pre
     GitHub signs the payload with this secret before sending the webhook request. The Worker verifies this signature using Web Crypto API. If they match, the request is processed; otherwise, it is rejected with a `401 Unauthorized` error.
 
 ### 2. Outbound Flow (Cloudflare Worker ➔ GitHub API)
-When the Worker needs to write back to GitHub (e.g. updating issue titles, syncing labels, or posting comments), it must authenticate as a trusted GitHub App installation:
+When the Worker needs to write back to GitHub (e.g. updating issues, creating linked branches, opening draft pull requests, syncing labels, or posting comments), it must authenticate as a trusted GitHub App installation:
 *   **`GITHUB_APP_ID`** (Stored in **Cloudflare** as a Variable or Secret):
     The unique ID identifying your GitHub App (e.g., `3893672`).
 *   **`GITHUB_PRIVATE_KEY`** (Stored in **Cloudflare** as a Secret):

@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   bodyLinksIssue,
   buildIssueBranchName,
+  buildIssuePullRequestTitle,
   ensureAutomationState,
   extractIssueNumberFromBranch,
   parseAutomationState,
@@ -62,6 +63,25 @@ test("buildIssueBranchName uses issue type key, issue number, and title slug", (
       title: "feat(ui): Add login flow!",
     }),
     "feat/123-add-login-flow"
+  );
+});
+
+test("buildIssuePullRequestTitle uses conventional prefix and issue number", () => {
+  assert.equal(
+    buildIssuePullRequestTitle({
+      issueType: "Feature",
+      issueNumber: 123,
+      title: "Add login flow",
+    }),
+    "feat: Add login flow (#123)"
+  );
+  assert.equal(
+    buildIssuePullRequestTitle({
+      issueType: "Bug",
+      issueNumber: 50,
+      title: "fix(api): correct timeout",
+    }),
+    "fix: correct timeout (#50)"
   );
 });
 

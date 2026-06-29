@@ -55,12 +55,11 @@ Seven templates are available when creating issues across any repository in the 
 
 We enforce a strict **Type + Scope + Requires** semantic model using a Cloudflare Worker:
 
-### 1. Title Auto-Prefixing (Conventional Commits)
-Developers write normal titles when creating issues. The Worker automatically reads the issue type and selected `Scope` Issue Field, and rewrites the title to: `type(scope): description`.
-*Example: Creating a Bug issue with scope `ui` and title `fix login error` gets automatically renamed to `fix(ui): fix login error`.*
+### 1. Issue Titles
+Developers write normal issue titles. The Worker does not add Conventional Commit prefixes such as `fix:`, `feat:`, or `docs:` because the Issue Type is already visible in GitHub's issue badges.
 
-### 2. Scope Field Syncing & Immutability
-The selected `Scope` lives in the organization-level **`Scope`** single-select Issue Field. Depending on the GitHub view, Issue Fields may appear in the issue sidebar or at the bottom of the create-issue popup. The Scope is **immutable** after creation; subsequent edits to the scope tag in the title are automatically reverted to the original, and the Issue Field is kept in sync using the title's scope as the source of truth.
+### 2. Scope Field Syncing
+The selected `Scope` lives in the organization-level **`Scope`** single-select Issue Field. Depending on the GitHub view, Issue Fields may appear in the issue sidebar or at the bottom of the create-issue popup. The Worker keeps the Issue Field synced from the template/sidebar metadata without rewriting the issue title.
 
 ### 3. Required Updates Checklist
 Issues contain a **Required updates** checklist in their description body (Documentation, Tests, Release notes, Security review, etc.).

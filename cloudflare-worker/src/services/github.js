@@ -328,6 +328,33 @@ export class GitHubClient {
   }
 
   /**
+   * Creates a pull request.
+   *
+   * @param {object} params
+   * @param {string} params.owner - Repository owner login.
+   * @param {string} params.repo - Repository name.
+   * @param {string} params.title - Pull request title.
+   * @param {string} params.head - Source branch name.
+   * @param {string} params.base - Target branch name.
+   * @param {string} params.body - Pull request body.
+   * @param {boolean} [params.draft=false] - Whether to create the PR as draft.
+   * @returns {Promise<object>} Created pull request REST payload.
+   */
+  async createPullRequest({ owner, repo, title, head, base, body, draft = false }) {
+    return this.rest(
+      "POST",
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls`,
+      {
+        title,
+        head,
+        base,
+        body,
+        draft,
+      }
+    );
+  }
+
+  /**
    * Deletes a GitHub linked branch relationship from an issue.
    *
    * @param {string} linkedBranchId - GraphQL Node ID of the LinkedBranch.

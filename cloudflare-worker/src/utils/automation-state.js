@@ -32,11 +32,24 @@ export function issueTypeKey(issueType) {
  */
 export function buildIssueBranchName({ issueType, issueNumber, title }) {
   const prefix = issueTypeKey(issueType);
-  const cleanedTitle = String(title || "")
-    .replace(/^[a-zA-Z0-9_-]+\([^)]+\)\s*:\s*/, "")
-    .replace(/^[a-zA-Z0-9_-]+\s*:\s*/, "");
+  const cleanedTitle = stripConventionalTitlePrefix(title);
   const slug = slugify(cleanedTitle) || "work";
   return `${prefix}/${issueNumber}-${slug}`.slice(0, 240);
+}
+
+/**
+ * Builds the draft PR title for an issue branch.
+ *
+ * @param {object} params
+ * @param {string} params.issueType
+ * @param {number} params.issueNumber
+ * @param {string} params.title
+ * @returns {string}
+ */
+export function buildIssuePullRequestTitle({ issueType, issueNumber, title }) {
+  const prefix = issueTypeKey(issueType);
+  const cleanedTitle = stripConventionalTitlePrefix(title) || "Work";
+  return `${prefix}: ${cleanedTitle} (#${issueNumber})`;
 }
 
 /**
@@ -136,6 +149,13 @@ export function slugify(value) {
     .replace(/^-+|-+$/g, "")
     .replace(/-{2,}/g, "-")
     .slice(0, 80);
+}
+
+function stripConventionalTitlePrefix(value) {
+  return String(value || "")
+    .replace(/^[a-zA-Z0-9_-]+\([^)]+\)\s*:\s*/, "")
+    .replace(/^[a-zA-Z0-9_-]+\s*:\s*/, "")
+    .trim();
 }
 
 function normalizeAutomationState(state) {
