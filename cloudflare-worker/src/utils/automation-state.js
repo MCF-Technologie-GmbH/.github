@@ -97,6 +97,7 @@ export function ensureAutomationState(body, issueType, issueMeta = {}) {
   );
   const state = normalizeAutomationState({
     ...existing,
+    original_issue_type: existing?.original_issue_type || issueType || null,
     allowed_branch_name: allowedBranchName,
   });
   return replaceAutomationState(body, state);
@@ -110,7 +111,12 @@ export function ensureAutomationState(body, issueType, issueMeta = {}) {
  * @returns {string}
  */
 export function replaceAutomationState(body, state) {
-  const normalized = normalizeAutomationState(state);
+  const existing = parseAutomationState(body);
+  const normalized = normalizeAutomationState({
+    ...existing,
+    ...state,
+    original_issue_type: state?.original_issue_type ?? existing?.original_issue_type ?? null,
+  });
   const block = formatAutomationStateBlock(normalized);
   const text = String(body || "");
   const bodyWithoutState = text
@@ -161,9 +167,17 @@ function stripConventionalTitlePrefix(value) {
 function normalizeAutomationState(state) {
   const allowedBranchName = normalizeAllowedBranchName(state);
   return {
+    original_issue_type: normalizeOriginalIssueType(state),
     allowed_branch_name: allowedBranchName,
     branch: normalizeBranchState(state?.branch),
   };
+}
+
+function normalizeOriginalIssueType(state) {
+  if (typeof state?.original_issue_type === "string" && state.original_issue_type.trim()) {
+    return state.original_issue_type.trim();
+  }
+  return null;
 }
 
 function normalizeBranchState(branch) {

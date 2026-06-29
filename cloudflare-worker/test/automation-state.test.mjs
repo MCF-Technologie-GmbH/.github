@@ -25,6 +25,7 @@ test("ensureAutomationState inserts hidden JSON in a protected block at the bott
   const state = parseAutomationState(updated);
 
   assert.equal(state.allowed_branch_name, "feat/123-add-login-flow");
+  assert.equal(state.original_issue_type, "Feature");
   assert.equal(state.branch, null);
   assert.match(updated, /<!-- protected:end -->\n\n<!-- protected:start -->\n<!-- automation-state:start/);
   assert.match(updated, /automation-state:end -->\n<!-- protected:end -->$/);
@@ -45,6 +46,7 @@ test("replaceAutomationState updates branch metadata", () => {
   });
 
   assert.deepEqual(parseAutomationState(updated), {
+    original_issue_type: "Bug",
     allowed_branch_name: "fix/42-fix-login",
     branch: {
       exists: true,

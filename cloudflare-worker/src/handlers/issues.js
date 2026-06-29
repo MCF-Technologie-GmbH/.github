@@ -15,7 +15,7 @@ import {
   cleanChecklistOnCreation,
   getRequiresLabelsForChecklist
 } from "../utils/checklist.js";
-import { ensureAutomationState } from "../utils/automation-state.js";
+import { ensureAutomationState, parseAutomationState } from "../utils/automation-state.js";
 
 /**
  * Enforces organizational policies on GitHub Issues when they are opened, edited, or reopened.
@@ -82,6 +82,7 @@ export async function enforceIssueTypePolicy({
       currentIssue,
       currentType,
       isProjectType,
+      typeMap,
     });
   }
 
@@ -499,7 +500,50 @@ async function revertIssueTypeChangeInImplementationRepo({
   currentIssue,
   currentType,
   isProjectType,
+  typeMap,
 }) {
+  const recordedOriginalType = parseAutomationState(currentIssue.body || "")?.original_issue_type;
+  if (recordedOriginalType) {
+    if (currentType === recordedOriginalType) {
+      return {
+        enforced: false,
+        operation: "already_original_type",
+        reason: "issue type already matches recorded original type",
+        action,
+        repo: repoFullName,
+        issue: issueNumber,
+        currentType,
+      };
+    }
+
+    const recordedOriginalTypeId = typeMap.get(recordedOriginalType);
+    if (!recordedOriginalTypeId) {
+      throw new Error(`Recorded original issue type '${recordedOriginalType}' not found in organization types.`);
+    }
+
+    await gh.updateIssueType(currentIssue.id, recordedOriginalTypeId);
+
+    const comment = [
+      `The issue type was automatically reverted to \`${recordedOriginalType}\`.`,
+      "",
+      "Issue types cannot be changed after issue creation.",
+    ].join("\n");
+
+    await gh.createComment(owner, repo, issueNumber, comment);
+
+    return {
+      enforced: true,
+      operation: "reverted",
+      reason: "issue type changes are not allowed after creation",
+      action,
+      repo: repoFullName,
+      issue: issueNumber,
+      currentType,
+      revertedTo: recordedOriginalType,
+      source: "automation-state",
+    };
+  }
+
   const originalType = await gh.getOriginalIssueType(owner, repo, issueNumber);
 
   if (!originalType) {

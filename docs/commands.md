@@ -12,6 +12,7 @@ El estado de ramas se guarda en el body de la issue dentro de este bloque proteg
 <!-- protected:start -->
 <!-- automation-state:start
 {
+  "original_issue_type": "Feature",
   "allowed_branch_name": "feat/123-add-login",
   "branch": {
     "exists": true,
@@ -26,6 +27,7 @@ automation-state:end -->
 
 | Campo | Que significa | Cuando cambia |
 | --- | --- | --- |
+| `original_issue_type` | Issue Type original de la issue. Es la fuente estable para revertir cambios manuales de type sin depender del timeline de GitHub. | Se guarda cuando el Worker crea o normaliza el `automation-state`. |
 | `allowed_branch_name` | Unica rama permitida para la issue. Se genera desde tipo, numero y titulo, por ejemplo `feat/123-add-login`. | Se crea/normaliza al ejecutar `/branch create`, `/branch repair` o al aceptar una rama creada desde la sidebar de GitHub. |
 | `branch.exists` | Si el bot considera que la rama existe. | Pasa a `false` durante la reserva de `/branch create`; a `true` cuando la rama se crea o se acepta; a `false` si `/branch repair` detecta que la rama registrada no existe. |
 | `branch.linked` | Si GitHub reporta la rama como linked branch de la issue. | Pasa a `true` cuando se crea/repara/acepta el enlace; pasa a `false` cuando falla la creacion o reparacion, o cuando `/branch repair` detecta que la rama registrada no existe. |
@@ -77,7 +79,7 @@ Estos comandos no publican una respuesta visible cuando son validos. Actualizan 
 
 | Comando | Caso | Respuesta visible real | Cambio en `automation-state` |
 | --- | --- | --- | --- |
-| `/branch create` | Creacion correcta. | `Created linked branch:` + rama + `Base: dev` + `Created draft PR: #<pr>`. | Reserva primero `{ allowed_branch_name, branch: { exists: false, linked: false, error: null, pr } }`. Al crear la rama y el Draft PR, cambia a `{ exists: true, linked: true, error: null, pr: <pr> }`. |
+| `/branch create` | Creacion correcta, sin commits nuevos aun. | `Created linked branch:` + rama + `Base: dev` + `Draft PR not created yet: there are no commits between the branch and dev.` | Reserva primero `{ allowed_branch_name, branch: { exists: false, linked: false, error: null, pr } }`. Al crear la rama, cambia a `{ exists: true, linked: true, error: null, pr }`. |
 | `/branch create` | Ya existe `allowed_branch_name` distinto al esperado. | `This issue already has an assigned branch:` + rama registrada + `A second branch cannot be created for the same issue.` | Normaliza/inserta `allowed_branch_name` si faltaba, pero no crea otra rama. |
 | `/branch create` | Hay metadata de rama existente pero la rama no esta enlazada y no se puede recrear automaticamente. | `This issue has recorded branch metadata, but the branch is not currently linked.` + `Recorded branch: ...` + `Run /branch repair...` | No cambia la metadata de rama salvo normalizacion previa del bloque. |
 | `/branch create` | Ya hay rama autorizada. | `This issue already has an authorized branch:` + rama. | No cambia la metadata de rama salvo normalizacion previa del bloque. |
@@ -104,7 +106,7 @@ Created linked branch:
 
 Base: `dev`
 
-Created draft PR: #<prNumber>
+Draft PR not created yet: there are no commits between the branch and `dev`.
 ```
 
 `/branch create` con otra rama asignada:
@@ -169,7 +171,7 @@ Base: `dev`
 ```
 ````
 
-El Draft PR creado por `/branch create` usa:
+Cuando haya commits entre la rama y `dev`, el Draft PR debe usar:
 
 | Campo | Valor |
 | --- | --- |
@@ -278,8 +280,8 @@ Los mensajes de conflicto posibles son:
 | Creacion de rama | No es `ref_type: branch`. | No comenta. Devuelve `reason: "create ref_type=<tipo>"`. | Ninguno. |
 | Creacion de rama por el bot | Es rama temporal de reparacion `temp/...-YYYYMMDDHHMMSS`. | No comenta. Devuelve `reason: "temporary repair branch created by automation bot"`. | Ninguno. |
 | Creacion de rama por el bot | Coincide con `allowed_branch_name`. | No comenta. Devuelve `reason: "branch created by automation bot with matching reservation"`. | Ninguno en este handler; `/branch create` actualiza despues. |
-| Creacion manual de rama desde sidebar | Rama linked, basada en `dev`, nombre esperado y sin metadata conflictiva. | `Branch linked and recorded successfully.` + `Branch: ...` + `Base: dev` + `Draft PR: #<pr>` + `Created from GitHub's sidebar and accepted by automation.` | Guarda `{ allowed_branch_name: branchName, branch: { exists: true, linked: true, error: null, pr: <pr> } }`. |
-| Creacion manual de rama desde sidebar | Rama linked, basada en `dev`, nombre esperado y coincide con metadata previa. | `Branch manually linked and metadata repaired successfully.` + `Branch: ...` + `Base: dev` + `Draft PR: #<pr>` + `Created from GitHub's sidebar and accepted by automation.` | Guarda `{ allowed_branch_name: branchName, branch: { exists: true, linked: true, error: null, pr: <pr> } }`. |
+| Creacion manual de rama desde sidebar | Rama linked, basada en `dev`, nombre esperado y sin metadata conflictiva. | `Branch linked and recorded successfully.` + `Branch: ...` + `Base: dev` + `Draft PR not created yet...` + `Created from GitHub's sidebar and accepted by automation.` | Guarda `{ allowed_branch_name: branchName, branch: { exists: true, linked: true, error: null, pr } }`. |
+| Creacion manual de rama desde sidebar | Rama linked, basada en `dev`, nombre esperado y coincide con metadata previa. | `Branch manually linked and metadata repaired successfully.` + `Branch: ...` + `Base: dev` + `Draft PR not created yet...` + `Created from GitHub's sidebar and accepted by automation.` | Guarda `{ allowed_branch_name: branchName, branch: { exists: true, linked: true, error: null, pr } }`. |
 | Creacion manual de rama desde sidebar | La rama se acepta pero falla crear el Draft PR. | `Branch linked and recorded, but I could not create the draft PR.` + `Branch: ...` + `Base: dev` + bloque `text` con el error. | Guarda `{ allowed_branch_name: branchName, branch: { exists: true, linked: true, error: "<error>", pr } }`. |
 | Creacion manual de rama desde sidebar | Hay metadata apuntando a otra rama. | `Deleted manually linked branch <branch>.` + `This issue already has recorded branch metadata:` + rama registrada + `Run /branch repair before creating or linking a different branch manually.` | Borra la nueva rama. No cambia `automation-state`. |
 | Creacion manual de rama | Rama no aceptada por automation. | `Deleted branch <branch> because it was not accepted by automation.` + `Prefer /branch create for managed issue branches, or use the GitHub sidebar only when the generated branch name matches the issue convention and no branch is already recorded.` | Borra la rama. No cambia `automation-state`. |
@@ -297,7 +299,7 @@ Branch linked and recorded successfully.
 
 Branch: `<branchName>`
 Base: `dev`
-Draft PR: #<prNumber>
+Draft PR not created yet: there are no commits between the branch and `dev`.
 
 Created from GitHub's sidebar and accepted by automation.
 ```
@@ -309,7 +311,7 @@ Branch manually linked and metadata repaired successfully.
 
 Branch: `<branchName>`
 Base: `dev`
-Draft PR: #<prNumber>
+Draft PR not created yet: there are no commits between the branch and `dev`.
 
 Created from GitHub's sidebar and accepted by automation.
 ```

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { enforceIssueTypePolicy } from "../src/handlers/issues.js";
+import { ensureAutomationState } from "../src/utils/automation-state.js";
 
 function createIssue(overrides = {}) {
   return {
@@ -107,6 +108,49 @@ test("enforceIssueTypePolicy does not revert legacy scope prefixes in edited tit
   assert.equal(result.title, "feat(api): Add login flow");
   assert.equal(result.scope, null);
   assert.deepEqual(updates, []);
+});
+
+test("enforceIssueTypePolicy reverts typed issue changes from recorded original type", async () => {
+  const typeUpdates = [];
+  const comments = [];
+  const gh = {
+    async getOriginalIssueType() {
+      throw new Error("timeline should not be needed when original type is recorded");
+    },
+    async updateIssueType(issueId, issueTypeId) {
+      typeUpdates.push({ issueId, issueTypeId });
+    },
+    async createComment(_owner, _repo, issueNumber, body) {
+      comments.push({ issueNumber, body });
+    },
+  };
+
+  const result = await enforceIssueTypePolicy({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    repoFullName: "mcf-technologie-gmbh/app",
+    issueNumber: 123,
+    action: "typed",
+    currentIssue: createIssue({
+      body: ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug", {
+        issueNumber: 123,
+        title: "Add login flow",
+      }),
+    }),
+    currentType: "Feature",
+    changes: {},
+    typeMap: new Map([["Bug", "TYPE_bug"], ["Feature", "TYPE_feature"]]),
+    scopeField: null,
+    priorityField: null,
+    effortField: null,
+  });
+
+  assert.equal(result.operation, "reverted");
+  assert.equal(result.revertedTo, "Bug");
+  assert.equal(result.source, "automation-state");
+  assert.deepEqual(typeUpdates, [{ issueId: "ISSUE_id", issueTypeId: "TYPE_bug" }]);
+  assert.match(comments[0].body, /The issue type was automatically reverted to `Bug`/);
 });
 
 for (const changes of [

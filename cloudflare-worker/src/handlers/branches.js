@@ -113,6 +113,7 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
   }
 
   const reservedState = {
+    ...state,
     allowed_branch_name: branchName,
     branch: {
       exists: false,
@@ -228,7 +229,7 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
       branch: {
         ...linkedState.branch,
         error: null,
-        pr: draftPr.number,
+        pr: draftPr.number ?? linkedState.branch.pr,
       },
     };
     await gh.updateIssueTitleAndBody(
@@ -249,12 +250,21 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
         `\`${branchName}\``,
         "",
         `Base: \`${BASE_BRANCH}\``,
-        "",
-        `Created draft PR: #${draftPr.number}`,
+        ...(draftPr.number
+          ? ["", `Created draft PR: #${draftPr.number}`]
+          : ["", "Draft PR not created yet: there are no commits between the branch and `dev`."]
+        ),
       ].join("\n")
     );
 
-    return { processed: true, command: "branch", created: true, branch: branchName, pr: draftPr.number };
+    return {
+      processed: true,
+      command: "branch",
+      created: true,
+      branch: branchName,
+      prCreated: Boolean(draftPr.number),
+      pr: draftPr.number ?? null,
+    };
   } catch (err) {
     const failedState = {
       ...reservedState,
@@ -671,6 +681,7 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
         title: issue.title,
       });
       const linkedState = {
+        ...state,
         allowed_branch_name: branchName,
         branch: {
           exists: true,
@@ -749,7 +760,7 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
         branch: {
           ...linkedState.branch,
           error: null,
-          pr: draftPr.number,
+          pr: draftPr.number ?? linkedState.branch.pr,
         },
       };
 
@@ -775,7 +786,10 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
           "",
           `Branch: \`${branchName}\``,
           `Base: \`${BASE_BRANCH}\``,
-          `Draft PR: #${draftPr.number}`,
+          ...(draftPr.number
+            ? [`Draft PR: #${draftPr.number}`]
+            : ["Draft PR not created yet: there are no commits between the branch and `dev`."]
+          ),
           "",
           "Created from GitHub's sidebar and accepted by automation.",
         ].join("\n")
@@ -786,7 +800,8 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
         allowed: true,
         branch: branchName,
         issue: issueNumber,
-        pr: draftPr.number,
+        prCreated: Boolean(draftPr.number),
+        pr: draftPr.number ?? null,
         reason: "branch is linked to issue and based on dev",
       };
     }
@@ -960,6 +975,10 @@ async function createBranchEventComment(gh, owner, repo, issueNumber, payload, c
 async function createDraftPullRequestForIssue({ gh, owner, repo, issueNumber, issueType, issueTitle, branchName }) {
   if (typeof gh.createPullRequest !== "function") {
     throw new Error("GitHub client does not support pull request creation.");
+  }
+
+  if (await branchMatchesBase(gh, owner, repo, branchName, BASE_BRANCH)) {
+    return { number: null, skipped: true, reason: "no commits between branch and base" };
   }
 
   return gh.createPullRequest({
