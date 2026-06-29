@@ -1,6 +1,6 @@
 # Cloudflare Worker — GitHub Issue Automation Bot
 
-A Cloudflare Worker that receives GitHub App webhooks (`issues` and `issue_comment` events) and enforces issue type policies, synchronizes issue fields, tracks required updates, and processes slash commands in comments across all repositories in the MCF Technologie GmbH organization.
+A Cloudflare Worker that receives GitHub App webhooks (`issues`, `issue_comment`, `create`, `push`, and `pull_request` events) and enforces issue type policies, synchronizes issue fields, tracks required updates, creates managed draft PRs, and processes slash commands in comments across all repositories in the MCF Technologie GmbH organization.
 
 ## What it Does
 
@@ -71,7 +71,7 @@ The codebase is modularized under `src/`:
 ### GitHub App
 - App ID: `3893672` (slug: `mcf-automation-bot`)
 - Required **repository permissions:** Issues (write), Pull requests (write), Contents (write), Metadata (read)
-- Required **webhook events:** Issues, Issue comment, Create, Pull request
+- Required **webhook events:** Issues, Issue comment, Create, Push, Pull request
 - Webhook URL: your Cloudflare Worker URL
 - Webhook secret: a random string you choose (used to verify payloads)
 - Installed on: all repositories in the organization

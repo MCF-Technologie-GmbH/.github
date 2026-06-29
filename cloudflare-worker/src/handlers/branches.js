@@ -170,66 +170,12 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
       linkedIssueBody
     );
 
-    let draftPr;
-    try {
-      draftPr = await createDraftPullRequestForIssue({
-        gh,
-        owner,
-        repo,
-        issueNumber,
-        issueType,
-        issueTitle: currentIssue.title,
-        branchName,
-      });
-    } catch (prErr) {
-      const failedPrState = {
-        ...reservedState,
-        branch: {
-          ...reservedState.branch,
-          exists: true,
-          linked: true,
-          error: summarizeError(prErr),
-        },
-      };
-      await gh.updateIssueTitleAndBody(
-        owner,
-        repo,
-        issueNumber,
-        undefined,
-        replaceAutomationState(linkedIssueBody, failedPrState)
-      );
-      await gh.createComment(
-        owner,
-        repo,
-        issueNumber,
-        [
-          "Created linked branch, but I could not create the draft PR.",
-          "",
-          `Branch: \`${branchName}\``,
-          `Base: \`${BASE_BRANCH}\``,
-          "",
-          "```text",
-          failedPrState.branch.error,
-          "```",
-        ].join("\n")
-      );
-
-      return {
-        processed: true,
-        command: "branch",
-        created: true,
-        prCreated: false,
-        branch: branchName,
-        reason: "draft pull request creation failed",
-      };
-    }
-
     const createdState = {
       ...linkedState,
       branch: {
         ...linkedState.branch,
         error: null,
-        pr: draftPr.number ?? linkedState.branch.pr,
+        pr: linkedState.branch.pr,
       },
     };
     await gh.updateIssueTitleAndBody(
@@ -250,10 +196,8 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
         `\`${branchName}\``,
         "",
         `Base: \`${BASE_BRANCH}\``,
-        ...(draftPr.number
-          ? ["", `Created draft PR: #${draftPr.number}`]
-          : ["", "Draft PR not created yet: there are no commits between the branch and `dev`."]
-        ),
+        "",
+        "A draft PR will be created automatically after the first push with commits.",
       ].join("\n")
     );
 
@@ -262,8 +206,8 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
       command: "branch",
       created: true,
       branch: branchName,
-      prCreated: Boolean(draftPr.number),
-      pr: draftPr.number ?? null,
+      prCreated: false,
+      pr: linkedState.branch.pr,
     };
   } catch (err) {
     const failedState = {
@@ -496,13 +440,18 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
       baseOid: branchOid,
     });
 
-    const repairedIssue = await gh.getIssue(owner, repo, issueNumber);
+    const repairedIssue = await waitForLinkedBranch(gh, owner, repo, issueNumber, branchName);
     if (!isIssueLinkedBranch(repairedIssue, branchName)) {
       throw new Error("GitHub created the branch ref but did not report it as a linked branch for this issue.");
     }
 
     await deleteReferenceIfExists(gh, owner, repo, `heads/${temporaryBranchName}`);
   } catch (err) {
+    const originalRefExists = await branchRefExists(gh, owner, repo, branchName);
+    if (originalRefExists) {
+      await deleteReferenceIfExists(gh, owner, repo, `heads/${temporaryBranchName}`);
+    }
+
     const failedState = {
       ...state,
       branch: {
@@ -529,7 +478,9 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
         `Branch: \`${branchName}\``,
         `Temporary branch: \`${temporaryBranchName}\``,
         "",
-        "If the temporary branch still exists, the existing commits were preserved there.",
+        originalRefExists
+          ? "The temporary branch was removed because the original branch ref exists again."
+          : "If the temporary branch still exists, the existing commits were preserved there.",
         "",
         "```text",
         failedState.branch.error,
@@ -537,7 +488,13 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
       ].join("\n")
     );
 
-    return { processed: true, command: "branch repair", repaired: false, reason: "linked branch repair failed" };
+    return {
+      processed: true,
+      command: "branch repair",
+      repaired: false,
+      reason: "linked branch repair failed",
+      temporaryBranch: temporaryBranchName,
+    };
   }
 
   const repairedState = {
@@ -699,68 +656,12 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
         linkedBody
       );
 
-      let draftPr;
-      try {
-        draftPr = await createDraftPullRequestForIssue({
-          gh,
-          owner,
-          repo,
-          issueNumber,
-          issueType,
-          issueTitle: issue.title,
-          branchName,
-        });
-      } catch (prErr) {
-        const failedPrState = {
-          allowed_branch_name: branchName,
-          branch: {
-            exists: true,
-            linked: true,
-            error: summarizeError(prErr),
-            pr: state?.branch?.pr ?? null,
-          },
-        };
-        await gh.updateIssueTitleAndBody(
-          owner,
-          repo,
-          issueNumber,
-          undefined,
-          replaceAutomationState(linkedBody, failedPrState)
-        );
-        await createBranchEventComment(
-          gh,
-          owner,
-          repo,
-          issueNumber,
-          payload,
-          "/branch manual",
-          [
-            "Branch linked and recorded, but I could not create the draft PR.",
-            "",
-            `Branch: \`${branchName}\``,
-            `Base: \`${BASE_BRANCH}\``,
-            "",
-            "```text",
-            failedPrState.branch.error,
-            "```",
-          ].join("\n")
-        );
-
-        return {
-          processed: true,
-          allowed: true,
-          prCreated: false,
-          branch: branchName,
-          issue: issueNumber,
-          reason: "draft pull request creation failed",
-        };
-      }
       const updatedState = {
         ...linkedState,
         branch: {
           ...linkedState.branch,
           error: null,
-          pr: draftPr.number ?? linkedState.branch.pr,
+          pr: linkedState.branch.pr,
         },
       };
 
@@ -786,10 +687,7 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
           "",
           `Branch: \`${branchName}\``,
           `Base: \`${BASE_BRANCH}\``,
-          ...(draftPr.number
-            ? [`Draft PR: #${draftPr.number}`]
-            : ["Draft PR not created yet: there are no commits between the branch and `dev`."]
-          ),
+          "A draft PR will be created automatically after the first push with commits.",
           "",
           "Created from GitHub's sidebar and accepted by automation.",
         ].join("\n")
@@ -800,8 +698,8 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
         allowed: true,
         branch: branchName,
         issue: issueNumber,
-        prCreated: Boolean(draftPr.number),
-        pr: draftPr.number ?? null,
+        prCreated: false,
+        pr: linkedState.branch.pr,
         reason: "branch is linked to issue and based on dev",
       };
     }
@@ -830,6 +728,209 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
   }
 
   return { processed: true, allowed: false, deleted: true, branch: branchName, issue: issueNumber };
+}
+
+/**
+ * Creates the draft pull request after the first real push to an authorized issue branch.
+ *
+ * @param {object} params
+ * @returns {Promise<object>}
+ */
+export async function handlePushEvent({ gh, owner, repo, payload }) {
+  const ref = payload.ref || "";
+  if (!ref.startsWith("refs/heads/")) {
+    return { processed: false, reason: `push ref=${ref || "unknown"}` };
+  }
+
+  if (payload.deleted) {
+    return { processed: false, reason: "push deleted branch" };
+  }
+
+  const branchName = ref.slice("refs/heads/".length);
+  const issueNumber = extractIssueNumberFromBranch(branchName);
+  if (!issueNumber) {
+    return { processed: false, reason: "push branch is not issue-managed" };
+  }
+
+  let issue = await gh.getIssue(owner, repo, issueNumber);
+  issue = (await cleanupStaleLinkedBranchRecords({ gh, owner, repo, issueNumber, issue })).issue;
+
+  const issueType = issue.issueType?.name || "issue";
+  const expectedBranchName = buildIssueBranchName({
+    issueType,
+    issueNumber,
+    title: issue.title,
+  });
+  const state = parseAutomationState(issue.body || "");
+  const branchStatus = await inspectIssueBranchState({
+    gh,
+    owner,
+    repo,
+    issue,
+    issueNumber,
+    expectedBranchName,
+    state,
+  });
+  const blockingMessage = branchStateBlockingMessage(branchStatus);
+  if (blockingMessage) {
+    await createBranchEventComment(gh, owner, repo, issueNumber, payload, "/branch push", blockingMessage);
+    return {
+      processed: true,
+      prCreated: false,
+      branch: branchName,
+      issue: issueNumber,
+      reason: branchStatus.reason,
+    };
+  }
+
+  if (
+    branchName !== expectedBranchName ||
+    state?.allowed_branch_name !== branchName ||
+    state?.branch?.exists !== true ||
+    state?.branch?.linked !== true ||
+    !branchStatus.metadataLinked ||
+    !branchStatus.metadataRef.exists
+  ) {
+    await createBranchEventComment(
+      gh,
+      owner,
+      repo,
+      issueNumber,
+      payload,
+      "/branch push",
+      [
+        "I did not create a draft PR for this push because the branch is not registered as the authorized linked branch for the issue.",
+        "",
+        `Pushed branch: \`${branchName}\``,
+        `Expected branch: \`${expectedBranchName}\``,
+        `Recorded branch: \`${state?.allowed_branch_name || "none"}\``,
+        "",
+        "Run `/branch repair` if the branch should be managed by automation.",
+      ].join("\n")
+    );
+    return {
+      processed: true,
+      prCreated: false,
+      branch: branchName,
+      issue: issueNumber,
+      reason: "push branch is not authorized for issue",
+    };
+  }
+
+  if (state.branch.pr) {
+    return {
+      processed: true,
+      prCreated: false,
+      branch: branchName,
+      issue: issueNumber,
+      pr: state.branch.pr,
+      reason: "draft pull request already recorded",
+    };
+  }
+
+  let draftPr;
+  try {
+    draftPr = await createDraftPullRequestForIssue({
+      gh,
+      owner,
+      repo,
+      issueNumber,
+      issueType,
+      issueTitle: issue.title,
+      branchName,
+    });
+  } catch (err) {
+    const failedState = {
+      ...state,
+      branch: {
+        ...state.branch,
+        error: summarizeError(err),
+      },
+    };
+    await gh.updateIssueTitleAndBody(
+      owner,
+      repo,
+      issueNumber,
+      undefined,
+      replaceAutomationState(issue.body || "", failedState)
+    );
+    await createBranchEventComment(
+      gh,
+      owner,
+      repo,
+      issueNumber,
+      payload,
+      "/branch push",
+      [
+        "I could not create the draft PR for this branch push.",
+        "",
+        `Branch: \`${branchName}\``,
+        `Base: \`${BASE_BRANCH}\``,
+        "",
+        "```text",
+        failedState.branch.error,
+        "```",
+      ].join("\n")
+    );
+
+    return {
+      processed: true,
+      prCreated: false,
+      branch: branchName,
+      issue: issueNumber,
+      reason: "draft pull request creation failed",
+    };
+  }
+
+  if (draftPr.skipped) {
+    return {
+      processed: true,
+      prCreated: false,
+      branch: branchName,
+      issue: issueNumber,
+      reason: draftPr.reason,
+    };
+  }
+
+  const updatedState = {
+    ...state,
+    branch: {
+      ...state.branch,
+      error: null,
+      pr: draftPr.number,
+    },
+  };
+  await gh.updateIssueTitleAndBody(
+    owner,
+    repo,
+    issueNumber,
+    undefined,
+    replaceAutomationState(issue.body || "", updatedState)
+  );
+  await createBranchEventComment(
+    gh,
+    owner,
+    repo,
+    issueNumber,
+    payload,
+    "/branch push",
+    [
+      "Created draft PR:",
+      "",
+      `#${draftPr.number}`,
+      "",
+      `Branch: \`${branchName}\``,
+      `Base: \`${BASE_BRANCH}\``,
+    ].join("\n")
+  );
+
+  return {
+    processed: true,
+    prCreated: true,
+    branch: branchName,
+    issue: issueNumber,
+    pr: draftPr.number,
+  };
 }
 
 function isIssueLinkedBranch(issue, branchName) {
@@ -960,6 +1061,28 @@ async function getBranchRefInfo(gh, owner, repo, branchName) {
     }
     throw err;
   }
+}
+
+async function branchRefExists(gh, owner, repo, branchName) {
+  return (await getBranchRefInfo(gh, owner, repo, branchName)).exists === true;
+}
+
+async function waitForLinkedBranch(gh, owner, repo, issueNumber, branchName, attempts = 5, delayMs = 250) {
+  let issue = null;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    issue = await gh.getIssue(owner, repo, issueNumber);
+    if (isIssueLinkedBranch(issue, branchName)) {
+      return issue;
+    }
+    if (attempt < attempts - 1) {
+      await sleep(delayMs);
+    }
+  }
+  return issue;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function createBranchEventComment(gh, owner, repo, issueNumber, payload, command, body) {

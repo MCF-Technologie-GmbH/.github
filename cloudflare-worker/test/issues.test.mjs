@@ -8,9 +8,7 @@ function createIssue(overrides = {}) {
     id: "ISSUE_id",
     title: "Add login flow",
     body: [
-      "### Issue Type",
-      "",
-      "Feature",
+      "<!-- issue-template-type: Feature -->",
       "",
       "### Scope",
       "",
@@ -71,6 +69,7 @@ test("enforceIssueTypePolicy does not add conventional type prefixes on issue cr
   assert.equal(updates.length, 1);
   assert.equal(updates[0].title, undefined);
   assert.match(updates[0].body, /### Description/);
+  assert.doesNotMatch(updates[0].body, /issue-template-type/);
 });
 
 test("enforceIssueTypePolicy does not revert legacy scope prefixes in edited titles", async () => {

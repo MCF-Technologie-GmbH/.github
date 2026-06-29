@@ -2,16 +2,9 @@ name: Spike
 description: Timeboxed technical investigation to reduce uncertainty before implementation.
 type: Spike
 body:
-  - type: dropdown
-    id: template-type
+  - type: markdown
     attributes:
-      label: Issue Type
-      description: This is the only option for this template. GitHub does not allow
-        changing it here; it is kept as creation metadata for automation.
-      options:
-        - Spike
-    validations:
-      required: true
+      value: "<!-- issue-template-type: Spike -->"
 
   - type: markdown
     attributes:

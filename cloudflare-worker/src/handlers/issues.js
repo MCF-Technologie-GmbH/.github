@@ -386,7 +386,8 @@ async function closeReservedProjectTypeInImplementationRepo({
  */
 function detectTemplateFromIssue(body, typeMap) {
   if (!body) return null;
-  const match = body.match(/^### Issue Type\r?\n\r?\n([^\r\n]+)/m);
+  const hiddenMatch = body.match(/<!--\s*issue-template-type:\s*([^>]+?)\s*-->/i);
+  const match = hiddenMatch || body.match(/^### Issue Type\r?\n\r?\n([^\r\n]+)/m);
   if (!match) return null;
   const expectedType = match[1].trim();
   const expectedTypeId = typeMap.get(expectedType);
@@ -395,11 +396,13 @@ function detectTemplateFromIssue(body, typeMap) {
 }
 
 /**
- * Removes the temporary "### Issue Type" section from the markdown body.
+ * Removes temporary issue-type metadata from the markdown body.
  */
 function removeIssueTypeSection(body) {
   if (!body) return "";
-  return body.replace(/^### Issue Type\r?\n\r?\n[^\r\n]+(\r?\n)*/m, "");
+  return body
+    .replace(/<!--\s*issue-template-type:\s*[^>]+?\s*-->(\r?\n)*/gi, "")
+    .replace(/^### Issue Type\r?\n\r?\n[^\r\n]+(\r?\n)*/m, "");
 }
 
 /**

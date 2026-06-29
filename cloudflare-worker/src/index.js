@@ -8,10 +8,10 @@ import { normalizeRepo } from "./utils/text.js";
 import { GitHubClient, createInstallationAccessToken } from "./services/github.js";
 import { withCommandLog } from "./utils/comment-log.js";
 import { handleIssueCommentEvent, handleIssueCommentProtectionEvent } from "./handlers/comments.js";
-import { handleCreateEvent, handlePullRequestEvent } from "./handlers/branches.js";
+import { handleCreateEvent, handlePullRequestEvent, handlePushEvent } from "./handlers/branches.js";
 import { enforceIssueTypePolicy } from "./handlers/issues.js";
 
-const SUPPORTED_EVENTS = new Set(["issues", "issue_comment", "create", "pull_request"]);
+const SUPPORTED_EVENTS = new Set(["issues", "issue_comment", "create", "pull_request", "push"]);
 
 export default {
   /**
@@ -117,6 +117,11 @@ export default {
 
       if (event === "pull_request") {
         const result = await handlePullRequestEvent({ gh, owner, repo, payload });
+        return json({ ok: true, ...result }, 200);
+      }
+
+      if (event === "push") {
+        const result = await handlePushEvent({ gh, owner, repo, payload });
         return json({ ok: true, ...result }, 200);
       }
 

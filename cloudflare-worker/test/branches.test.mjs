@@ -5,6 +5,7 @@ import {
   handleBranchRepairCommand,
   handleCreateEvent,
   handlePullRequestEvent,
+  handlePushEvent,
 } from "../src/handlers/branches.js";
 import { ensureAutomationState, replaceAutomationState } from "../src/utils/automation-state.js";
 
@@ -66,7 +67,7 @@ test("handleBranchCommand reserves and records a linked branch", async () => {
   assert.match(updates.at(-1), /"linked": true/);
   assert.match(updates.at(-1), /"pr": null/);
   assert.match(comments.at(-1), /Created linked branch/);
-  assert.match(comments.at(-1), /Draft PR not created yet/);
+  assert.match(comments.at(-1), /draft PR will be created automatically after the first push/);
   assert.deepEqual(pullRequests, []);
 });
 
@@ -668,9 +669,13 @@ test("handleBranchRepairCommand fails if GitHub does not report the recreated br
 
   assert.equal(result.repaired, false);
   assert.equal(result.reason, "linked branch repair failed");
-  assert.deepEqual(deletedRefs, ["heads/fix/50-test-bug-issue"]);
+  assert.deepEqual(deletedRefs, [
+    "heads/fix/50-test-bug-issue",
+    `heads/${result.temporaryBranch}`,
+  ]);
   assert.match(latestBody, /"linked": false/);
   assert.match(latestBody, /did not report it as a linked branch/);
+  assert.match(comments.at(-1), /temporary branch was removed/);
   assert.match(comments.at(-1), /I could not repair the linked branch relationship/);
 });
 
@@ -799,7 +804,7 @@ test("handleCreateEvent records a sidebar-linked branch based on dev", async () 
   assert.match(updatedBody, /"pr": null/);
   assert.equal(comments[0].issueNumber, 123);
   assert.match(comments[0].body, /Branch linked and recorded successfully/);
-  assert.match(comments[0].body, /Draft PR not created yet/);
+  assert.match(comments[0].body, /draft PR will be created automatically after the first push/);
   assert.match(comments[0].body, /Created from GitHub's sidebar/);
   assert.deepEqual(pullRequests, []);
 });
@@ -876,7 +881,7 @@ test("handleCreateEvent repairs metadata when a manual linked branch matches rec
   assert.match(updatedBody, /"pr": null/);
   assert.equal(comments[0].issueNumber, 123);
   assert.match(comments[0].body, /Branch manually linked and metadata repaired successfully/);
-  assert.match(comments[0].body, /Draft PR not created yet/);
+  assert.match(comments[0].body, /draft PR will be created automatically after the first push/);
   assert.deepEqual(pullRequests, []);
 });
 
@@ -1214,6 +1219,187 @@ test("handleCreateEvent allows bot-created branches with matching legacy reserva
 
   assert.equal(result.allowed, true);
   assert.deepEqual(deleted, []);
+});
+
+test("handlePushEvent creates draft PR after first commit push", async () => {
+  const body = replaceAutomationState(
+    ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Feature"),
+    {
+      allowed_branch_name: "feat/123-add-login",
+      branch: {
+        exists: true,
+        linked: true,
+        error: null,
+        pr: null,
+      },
+    }
+  );
+  let updatedBody = null;
+  const comments = [];
+  const pullRequests = [];
+  const gh = {
+    async getIssue() {
+      return {
+        body,
+        title: "Add login",
+        issueType: { name: "Feature" },
+        linkedBranches: {
+          nodes: [{ ref: { name: "feat/123-add-login" } }],
+        },
+      };
+    },
+    async getReference(_owner, _repo, ref) {
+      if (ref === "heads/feat/123-add-login") return { object: { sha: "sha-branch" } };
+      if (ref === "heads/dev") return { object: { sha: "sha-dev" } };
+      throw new Error(`unexpected ref ${ref}`);
+    },
+    async createPullRequest(input) {
+      pullRequests.push(input);
+      return { number: 456 };
+    },
+    async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
+      updatedBody = nextBody;
+    },
+    async createComment(_owner, _repo, issueNumber, commentBody) {
+      comments.push({ issueNumber, body: commentBody });
+    },
+  };
+
+  const result = await handlePushEvent({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    payload: {
+      ref: "refs/heads/feat/123-add-login",
+      sender: { login: "mark" },
+    },
+  });
+
+  assert.equal(result.prCreated, true);
+  assert.equal(result.pr, 456);
+  assert.deepEqual(pullRequests, [{
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    title: "feat: Add login (#123)",
+    head: "feat/123-add-login",
+    base: "dev",
+    body: "Closes #123",
+    draft: true,
+  }]);
+  assert.match(updatedBody, /"pr": 456/);
+  assert.match(comments[0].body, /Created draft PR/);
+  assert.match(comments[0].body, /#456/);
+});
+
+test("handlePushEvent skips draft PR when branch still matches dev", async () => {
+  const body = replaceAutomationState(
+    ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Feature"),
+    {
+      allowed_branch_name: "feat/123-add-login",
+      branch: {
+        exists: true,
+        linked: true,
+        error: null,
+        pr: null,
+      },
+    }
+  );
+  const pullRequests = [];
+  const gh = {
+    async getIssue() {
+      return {
+        body,
+        title: "Add login",
+        issueType: { name: "Feature" },
+        linkedBranches: {
+          nodes: [{ ref: { name: "feat/123-add-login" } }],
+        },
+      };
+    },
+    async getReference(_owner, _repo, ref) {
+      if (ref === "heads/feat/123-add-login") return { object: { sha: "sha-dev" } };
+      if (ref === "heads/dev") return { object: { sha: "sha-dev" } };
+      throw new Error(`unexpected ref ${ref}`);
+    },
+    async createPullRequest(input) {
+      pullRequests.push(input);
+      return { number: 456 };
+    },
+    async updateIssueTitleAndBody() {
+      throw new Error("should not update issue when no PR is created");
+    },
+    async createComment() {
+      throw new Error("should not comment when no PR is created");
+    },
+  };
+
+  const result = await handlePushEvent({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    payload: {
+      ref: "refs/heads/feat/123-add-login",
+      sender: { login: "mark" },
+    },
+  });
+
+  assert.equal(result.prCreated, false);
+  assert.equal(result.reason, "no commits between branch and base");
+  assert.deepEqual(pullRequests, []);
+});
+
+test("handlePushEvent does not duplicate a recorded draft PR", async () => {
+  const body = replaceAutomationState(
+    ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Feature"),
+    {
+      allowed_branch_name: "feat/123-add-login",
+      branch: {
+        exists: true,
+        linked: true,
+        error: null,
+        pr: 456,
+      },
+    }
+  );
+  const gh = {
+    async getIssue() {
+      return {
+        body,
+        title: "Add login",
+        issueType: { name: "Feature" },
+        linkedBranches: {
+          nodes: [{ ref: { name: "feat/123-add-login" } }],
+        },
+      };
+    },
+    async getReference(_owner, _repo, ref) {
+      if (ref === "heads/feat/123-add-login") return { object: { sha: "sha-branch" } };
+      throw new Error(`unexpected ref ${ref}`);
+    },
+    async createPullRequest() {
+      throw new Error("should not create duplicate PR");
+    },
+    async updateIssueTitleAndBody() {
+      throw new Error("should not update duplicate PR metadata");
+    },
+    async createComment() {
+      throw new Error("should not comment for duplicate PR");
+    },
+  };
+
+  const result = await handlePushEvent({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    payload: {
+      ref: "refs/heads/feat/123-add-login",
+      sender: { login: "mark" },
+    },
+  });
+
+  assert.equal(result.prCreated, false);
+  assert.equal(result.pr, 456);
+  assert.equal(result.reason, "draft pull request already recorded");
 });
 
 test("handlePullRequestEvent records valid PR number", async () => {

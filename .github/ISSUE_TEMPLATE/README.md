@@ -16,19 +16,17 @@ Seven GitHub issue form templates are defined here for use across all repositori
 
 ## How Template Detection Works
 
-Each template contains a `type: dropdown` field with label **Issue Type** and a **single option** equal to the type name (e.g., `Bug`). This is the only option for that template and is kept as creation metadata so the automation can confirm the issue type.
+Each template sets the native GitHub issue form `type:` field and includes a hidden HTML marker with the same value. The visible single-option **Issue Type** dropdown is intentionally not used, because it adds noise without giving users a real choice.
 
-When a new issue is submitted, the Cloudflare Worker reads the rendered body section:
+When a new issue is submitted, the Cloudflare Worker reads the hidden marker:
 
-```markdown
-### Issue Type
-
-Bug
+```html
+<!-- issue-template-type: Bug -->
 ```
 
 It compares the value against the organization issue types retrieved dynamically using GraphQL and corrects the issue type if they do not match. This means:
 
-- Users **cannot** change the issue type before submitting (single-option dropdown).
+- Users do not see or edit the template issue type control during creation.
 - If a user changes the type after creation, the Worker **reverts** it using the `IssueTypeChangedEvent` timeline.
 
 ## Adding a New Template
@@ -37,18 +35,12 @@ It compares the value against the organization issue types retrieved dynamically
 
 2. Set the `type:` field in the YAML frontmatter to the intended issue type name (must match exactly what appears in the org's issue type list).
 
-3. Add the **Issue Type dropdown** to the form body (copy from an existing template and change the option value):
+3. Add the hidden issue template marker to the form body:
 
    ```yaml
-   - type: dropdown
-     id: template-type
+   - type: markdown
      attributes:
-       label: Issue Type
-       description: This is the only option for this template. GitHub does not allow changing it here; it is kept as creation metadata for automation.
-       options:
-         - YourTypeName
-     validations:
-       required: true
+       value: "<!-- issue-template-type: YourTypeName -->"
    ```
 
 4. Since the Cloudflare Worker dynamically resolves all types and fields by name, no code changes or ID configuration are needed in the worker when adding a new template. Just ensure the issue type name exists in `taxonomy/issue-types.yml` and is synchronized to the organization.

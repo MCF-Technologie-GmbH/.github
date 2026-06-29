@@ -2,16 +2,9 @@ name: Bug
 description: Unexpected error, defect, or incorrect behavior in the codebase.
 type: Bug
 body:
-  - type: dropdown
-    id: template-type
+  - type: markdown
     attributes:
-      label: Issue Type
-      description: This is the only option for this template. GitHub does not allow
-        changing it here; it is kept as creation metadata for automation.
-      options:
-        - Bug
-    validations:
-      required: true
+      value: "<!-- issue-template-type: Bug -->"
 
   - type: markdown
     attributes:
