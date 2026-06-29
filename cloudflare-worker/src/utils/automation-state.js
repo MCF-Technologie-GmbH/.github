@@ -62,10 +62,7 @@ export function parseAutomationState(body) {
   try {
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return null;
-    return {
-      issue_type: typeof parsed.issue_type === "string" ? parsed.issue_type : "issue",
-      branch: parsed.branch && typeof parsed.branch === "object" ? parsed.branch : null,
-    };
+    return normalizeAutomationState(parsed);
   } catch {
     return null;
   }
@@ -78,8 +75,17 @@ export function parseAutomationState(body) {
  * @param {string} issueType
  * @returns {string}
  */
-export function ensureAutomationState(body, issueType) {
-  const state = normalizeAutomationState(parseAutomationState(body), issueType);
+export function ensureAutomationState(body, issueType, issueMeta = {}) {
+  const existing = parseAutomationState(body);
+  const allowedBranchName = existing?.allowed_branch_name || (
+    issueMeta.issueNumber && issueMeta.title
+      ? buildIssueBranchName({ issueType, issueNumber: issueMeta.issueNumber, title: issueMeta.title })
+      : null
+  );
+  const state = normalizeAutomationState({
+    ...existing,
+    allowed_branch_name: allowedBranchName,
+  });
   return replaceAutomationState(body, state);
 }
 
@@ -91,7 +97,7 @@ export function ensureAutomationState(body, issueType) {
  * @returns {string}
  */
 export function replaceAutomationState(body, state) {
-  const normalized = normalizeAutomationState(state, state?.issue_type);
+  const normalized = normalizeAutomationState(state);
   const block = formatAutomationStateBlock(normalized);
   const text = String(body || "");
   const bodyWithoutState = text
@@ -132,10 +138,10 @@ export function slugify(value) {
     .slice(0, 80);
 }
 
-function normalizeAutomationState(state, issueType) {
-  const key = issueTypeKey(state?.issue_type || issueType);
+function normalizeAutomationState(state) {
+  const allowedBranchName = normalizeAllowedBranchName(state);
   return {
-    issue_type: key,
+    allowed_branch_name: allowedBranchName,
     branch: normalizeBranchState(state?.branch),
   };
 }
@@ -143,13 +149,21 @@ function normalizeAutomationState(state, issueType) {
 function normalizeBranchState(branch) {
   if (!branch || typeof branch !== "object") return null;
   return {
-    name: String(branch.name || ""),
-    base: String(branch.base || "dev"),
-    created: branch.created === true,
+    exists: branch.exists === true || branch.created === true,
     linked: branch.linked === true,
     error: branch.error == null ? null : String(branch.error),
     pr: branch.pr == null ? null : Number(branch.pr),
   };
+}
+
+function normalizeAllowedBranchName(state) {
+  if (typeof state?.allowed_branch_name === "string" && state.allowed_branch_name.trim()) {
+    return state.allowed_branch_name.trim();
+  }
+  if (typeof state?.branch?.name === "string" && state.branch.name.trim()) {
+    return state.branch.name.trim();
+  }
+  return null;
 }
 
 function extractAutomationStateJson(body) {

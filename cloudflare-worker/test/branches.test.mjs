@@ -52,7 +52,7 @@ test("handleBranchCommand reserves and records a linked branch", async () => {
   });
 
   assert.equal(result.created, true);
-  assert.match(updates.at(-1), /"created": true/);
+  assert.match(updates.at(-1), /"exists": true/);
   assert.match(updates.at(-1), /"linked": true/);
   assert.match(comments.at(-1), /Created linked branch/);
 });
@@ -95,7 +95,7 @@ test("handleBranchCommand stores creation errors and allows same-name retry", as
   });
 
   assert.equal(result.created, false);
-  assert.match(latestBody, /"created": false/);
+  assert.match(latestBody, /"exists": false/);
   assert.match(latestBody, /CreateLinkedBranchInput is not supported/);
 });
 
@@ -151,7 +151,7 @@ test("handleBranchCommand blocks old branch-name metadata without deleting it", 
   assert.equal(result.created, false);
   assert.equal(result.reason, "metadata branch does not match expected branch");
   assert.deepEqual(deleted, []);
-  assert.match(latestBody, /"name": "bug\/50-test-bug-issue"/);
+  assert.match(latestBody, /"allowed_branch_name": "bug\/50-test-bug-issue"/);
   assert.match(comments.at(-1), /Recorded branch metadata points to/);
 });
 
@@ -207,9 +207,70 @@ test("handleBranchCommand does not delete unlinked recorded branches", async () 
   assert.equal(result.created, false);
   assert.equal(result.reason, "branch metadata needs repair");
   assert.deepEqual(deleted, []);
-  assert.match(latestBody, /"name": "fix\/50-test-bug-issue"/);
+  assert.match(latestBody, /"allowed_branch_name": "fix\/50-test-bug-issue"/);
   assert.match(latestBody, /"linked": true/);
   assert.match(comments.at(-1), /Run `\/branch repair`/);
+});
+
+test("handleBranchCommand recreates recorded branch metadata when the git ref no longer exists", async () => {
+  const body = replaceAutomationState(
+    ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug"),
+    {
+      issue_type: "fix",
+      branch: {
+        name: "fix/52-test-bug-issue",
+        base: "dev",
+        created: true,
+        linked: false,
+        error: null,
+        pr: null,
+      },
+    }
+  );
+  let latestBody = body;
+  const comments = [];
+  const gh = {
+    async getIssue() {
+      return {
+        id: "ISSUE_id",
+        title: "fix: test-bug-issue",
+        body: latestBody,
+        repository: { id: "REPO_id" },
+        issueType: { name: "Bug" },
+        linkedBranches: { nodes: [] },
+      };
+    },
+    async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
+      latestBody = nextBody;
+    },
+    async getReference(_owner, _repo, ref) {
+      if (ref === "heads/fix/52-test-bug-issue") {
+        throw new Error("REST GET /git/ref/heads/fix/52-test-bug-issue -> HTTP 404: Not Found");
+      }
+      if (ref === "heads/dev") return { object: { sha: "sha-dev" } };
+      throw new Error(`unexpected ref ${ref}`);
+    },
+    async createLinkedBranch(input) {
+      assert.equal(input.branchName, "fix/52-test-bug-issue");
+      return {};
+    },
+    async createComment(_owner, _repo, _issueNumber, body) {
+      comments.push(body);
+    },
+  };
+
+  const result = await handleBranchCommand({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    issueNumber: 52,
+    comment: { id: 1 },
+  });
+
+  assert.equal(result.created, true);
+  assert.match(latestBody, /"exists": true/);
+  assert.match(latestBody, /"linked": true/);
+  assert.match(comments.at(-1), /Created linked branch/);
 });
 
 test("handleBranchCommand ignores stale linked branch reservations with null refs", async () => {
@@ -317,9 +378,9 @@ test("handleBranchRepairCommand resets metadata when the recorded branch no long
   });
 
   assert.equal(result.reset, true);
-  assert.match(latestBody, /"branch": null/);
-  assert.match(comments.at(-1), /Nothing to repair: the recorded branch no longer exists/);
-  assert.match(comments.at(-1), /Removed metadata for: `fix\/50-test-bug-issue`/);
+  assert.match(latestBody, /"exists": false/);
+  assert.match(comments.at(-1), /Nothing to repair: the recorded branch does not exist/);
+  assert.match(comments.at(-1), /Allowed branch: `fix\/50-test-bug-issue`/);
 });
 
 test("handleBranchRepairCommand blocks ghost linked branches without resetting metadata", async () => {
@@ -373,12 +434,12 @@ test("handleBranchRepairCommand blocks ghost linked branches without resetting m
 
   assert.equal(result.repaired, false);
   assert.equal(result.reason, "linked branch missing git ref");
-  assert.match(latestBody, /"name": "fix\/50-test-bug-issue"/);
+  assert.match(latestBody, /"allowed_branch_name": "fix\/50-test-bug-issue"/);
   assert.match(latestBody, /GitHub still reports/);
   assert.match(comments.at(-1), /Remove the stale linked branch from the issue sidebar/);
 });
 
-test("handleBranchRepairCommand ignores stale linked branch reservations when metadata is empty", async () => {
+test("handleBranchRepairCommand reports stale linked branch cleanup when metadata is empty", async () => {
   const body = ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug");
   const comments = [];
   const deletedLinkedBranches = [];
@@ -419,10 +480,12 @@ test("handleBranchRepairCommand ignores stale linked branch reservations when me
     issueNumber: 50,
   });
 
-  assert.equal(result.repaired, false);
-  assert.equal(result.reason, "no branch metadata");
+  assert.equal(result.repaired, true);
+  assert.equal(result.cleaned, true);
+  assert.equal(result.deletedLinkedBranches, 1);
   assert.deepEqual(deletedLinkedBranches, ["LB_1"]);
-  assert.match(comments.at(-1), /does not have recorded branch metadata/);
+  assert.match(comments.at(-1), /Cleaned up stale linked branch records/);
+  assert.match(comments.at(-1), /Removed records: `1`/);
 });
 
 test("handleBranchRepairCommand preserves an existing recorded branch and recreates it as linked", async () => {
@@ -690,8 +753,7 @@ test("handleCreateEvent records a sidebar-linked branch based on dev", async () 
 
   assert.equal(result.allowed, true);
   assert.deepEqual(deleted, []);
-  assert.match(updatedBody, /"name": "feat\/123-add-login"/);
-  assert.match(updatedBody, /"base": "dev"/);
+  assert.match(updatedBody, /"allowed_branch_name": "feat\/123-add-login"/);
   assert.match(updatedBody, /"linked": true/);
   assert.equal(comments[0].issueNumber, 123);
   assert.match(comments[0].body, /Branch linked and recorded successfully/);
@@ -759,7 +821,7 @@ test("handleCreateEvent repairs metadata when a manual linked branch matches rec
 
   assert.equal(result.allowed, true);
   assert.deepEqual(deleted, []);
-  assert.match(updatedBody, /"name": "feat\/123-add-login"/);
+  assert.match(updatedBody, /"allowed_branch_name": "feat\/123-add-login"/);
   assert.match(updatedBody, /"linked": true/);
   assert.match(updatedBody, /"error": null/);
   assert.equal(comments[0].issueNumber, 123);
@@ -1051,7 +1113,7 @@ test("handleCreateEvent deletes user-created temporary repair branches", async (
   assert.deepEqual(deleted, ["heads/temp/fix-50-test-bug-issue-20260624081137"]);
 });
 
-test("handleCreateEvent rejects bot-created branches reserved from a non-dev base", async () => {
+test("handleCreateEvent allows bot-created branches with matching legacy reservation", async () => {
   const body = replaceAutomationState(
     ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Feature"),
     {
@@ -1098,8 +1160,8 @@ test("handleCreateEvent rejects bot-created branches reserved from a non-dev bas
     },
   });
 
-  assert.equal(result.deleted, true);
-  assert.deepEqual(deleted, ["heads/feat/123-add-login"]);
+  assert.equal(result.allowed, true);
+  assert.deepEqual(deleted, []);
 });
 
 test("handlePullRequestEvent records valid PR number", async () => {

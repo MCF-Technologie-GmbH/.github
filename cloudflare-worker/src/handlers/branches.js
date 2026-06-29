@@ -30,14 +30,17 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
     title: currentIssue.title,
   });
 
-  let issueBody = ensureAutomationState(currentIssue.body || "", issueType);
+  let issueBody = ensureAutomationState(currentIssue.body || "", issueType, {
+    issueNumber,
+    title: currentIssue.title,
+  });
   let state = parseAutomationState(issueBody);
 
   if (issueBody !== (currentIssue.body || "")) {
     await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, issueBody);
   }
 
-  currentIssue = await cleanupStaleLinkedBranchRecords({ gh, owner, repo, issueNumber, issue: currentIssue });
+  currentIssue = (await cleanupStaleLinkedBranchRecords({ gh, owner, repo, issueNumber, issue: currentIssue })).issue;
 
   const branchStatus = await inspectIssueBranchState({
     gh,
@@ -55,7 +58,9 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
     return { processed: true, command: "branch", created: false, reason: branchStatus.reason };
   }
 
-  if (state?.branch?.name && state.branch.name !== branchName) {
+  const allowedBranchName = state?.allowed_branch_name;
+
+  if (allowedBranchName && allowedBranchName !== branchName) {
     await gh.createComment(
       owner,
       repo,
@@ -63,7 +68,7 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
       [
         "This issue already has an assigned branch:",
         "",
-        `\`${state.branch.name}\``,
+        `\`${allowedBranchName}\``,
         "",
         "A second branch cannot be created for the same issue.",
       ].join("\n")
@@ -71,7 +76,12 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
     return { processed: true, command: "branch", created: false, reason: "issue already has another branch" };
   }
 
-  if (state?.branch?.name && isStaleBranchState(currentIssue, state.branch.name)) {
+  const canRecreateRecordedBranch =
+    allowedBranchName === branchName &&
+    isStaleBranchState(currentIssue, allowedBranchName) &&
+    branchStatus.metadataRef.exists === false;
+
+  if (allowedBranchName && state?.branch?.exists === true && isStaleBranchState(currentIssue, allowedBranchName) && !canRecreateRecordedBranch) {
     await gh.createComment(
       owner,
       repo,
@@ -79,7 +89,7 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
       [
         "This issue has recorded branch metadata, but the branch is not currently linked.",
         "",
-        `Recorded branch: \`${state.branch.name}\``,
+        `Recorded branch: \`${allowedBranchName}\``,
         "",
         "Run `/branch repair` to repair the linked branch relationship or reset the metadata if the branch no longer exists.",
       ].join("\n")
@@ -87,7 +97,7 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
     return { processed: true, command: "branch", created: false, reason: "branch metadata needs repair" };
   }
 
-  if (state?.branch?.created === true) {
+  if (state?.branch?.exists === true && !canRecreateRecordedBranch) {
     await gh.createComment(
       owner,
       repo,
@@ -95,18 +105,16 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
       [
         "This issue already has an authorized branch:",
         "",
-        `\`${state.branch.name}\``,
+        `\`${allowedBranchName || branchName}\``,
       ].join("\n")
     );
     return { processed: true, command: "branch", created: false, reason: "branch already exists" };
   }
 
   const reservedState = {
-    issue_type: state.issue_type,
+    allowed_branch_name: branchName,
     branch: {
-      name: branchName,
-      base: BASE_BRANCH,
-      created: false,
+      exists: false,
       linked: false,
       error: null,
       pr: state?.branch?.pr ?? null,
@@ -118,7 +126,7 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
 
   const reloadedIssue = await gh.getIssue(owner, repo, issueNumber);
   const reloadedState = parseAutomationState(reloadedIssue.body || "");
-  if (reloadedState?.branch?.name !== branchName || reloadedState.branch.created === true) {
+  if (reloadedState?.allowed_branch_name !== branchName || reloadedState.branch?.exists === true) {
     await gh.createComment(
       owner,
       repo,
@@ -146,7 +154,7 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
       ...reservedState,
       branch: {
         ...reservedState.branch,
-        created: true,
+        exists: true,
         linked: true,
         error: null,
       },
@@ -178,7 +186,7 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
       ...reservedState,
       branch: {
         ...reservedState.branch,
-        created: false,
+        exists: false,
         linked: false,
         error: summarizeError(err),
       },
@@ -234,9 +242,12 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
 export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }) {
   let currentIssue = await gh.getIssue(owner, repo, issueNumber);
   const issueType = currentIssue.issueType?.name || "issue";
-  let issueBody = ensureAutomationState(currentIssue.body || "", issueType);
+  let issueBody = ensureAutomationState(currentIssue.body || "", issueType, {
+    issueNumber,
+    title: currentIssue.title,
+  });
   let state = parseAutomationState(issueBody);
-  const branchName = state?.branch?.name;
+  const branchName = state?.branch ? state.allowed_branch_name : null;
   const expectedBranchName = buildIssueBranchName({
     issueType,
     issueNumber,
@@ -247,7 +258,8 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
     await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, issueBody);
   }
 
-  currentIssue = await cleanupStaleLinkedBranchRecords({ gh, owner, repo, issueNumber, issue: currentIssue });
+  const staleCleanup = await cleanupStaleLinkedBranchRecords({ gh, owner, repo, issueNumber, issue: currentIssue });
+  currentIssue = staleCleanup.issue;
 
   let branchStatus = await inspectIssueBranchState({
     gh,
@@ -261,6 +273,28 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
   let blockingMessage = branchStateBlockingMessage(branchStatus);
 
   if (!branchName) {
+    if (staleCleanup.deletedCount > 0) {
+      await gh.createComment(
+        owner,
+        repo,
+        issueNumber,
+        [
+          "Cleaned up stale linked branch records.",
+          "",
+          `Removed records: \`${staleCleanup.deletedCount}\``,
+          "",
+          "No allowed branch metadata remains for this issue. You can now create the branch again.",
+        ].join("\n")
+      );
+      return {
+        processed: true,
+        command: "branch repair",
+        repaired: true,
+        cleaned: true,
+        deletedLinkedBranches: staleCleanup.deletedCount,
+      };
+    }
+
     if (blockingMessage) {
       await gh.createComment(owner, repo, issueNumber, blockingMessage);
       return { processed: true, command: "branch repair", repaired: false, reason: branchStatus.reason };
@@ -290,7 +324,7 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
       ...state,
       branch: {
         ...state.branch,
-        created: branchStatus.metadataRef.exists,
+        exists: branchStatus.metadataRef.exists,
         linked: branchStatus.metadataLinked,
         error: branchStatus.message,
       },
@@ -328,7 +362,15 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
       throw err;
     }
 
-    state = { ...state, branch: null };
+    state = {
+      ...state,
+      branch: {
+        exists: false,
+        linked: false,
+        error: null,
+        pr: state?.branch?.pr ?? null,
+      },
+    };
     issueBody = replaceAutomationState(issueBody, state);
     await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, issueBody);
     await gh.createComment(
@@ -336,11 +378,11 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
       repo,
       issueNumber,
       [
-        "Nothing to repair: the recorded branch no longer exists.",
+        "Nothing to repair: the recorded branch does not exist.",
         "",
-        "Resetting linked branch metadata so `/branch create` can be used again.",
+        "Marked the branch state as missing so `/branch create` can be used again.",
         "",
-        `Removed metadata for: \`${branchName}\``,
+        `Allowed branch: \`${branchName}\``,
       ].join("\n")
     );
 
@@ -381,7 +423,7 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
       ...state,
       branch: {
         ...state.branch,
-        created: true,
+        exists: true,
         linked: false,
         error: summarizeError(err),
       },
@@ -418,7 +460,7 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
     ...state,
     branch: {
       ...state.branch,
-      created: true,
+      exists: true,
       linked: true,
       error: null,
     },
@@ -469,14 +511,14 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
   if (issueNumber) {
     try {
       issue = await gh.getIssue(owner, repo, issueNumber);
-      issue = await cleanupStaleLinkedBranchRecords({ gh, owner, repo, issueNumber, issue });
+      issue = (await cleanupStaleLinkedBranchRecords({ gh, owner, repo, issueNumber, issue })).issue;
       state = parseAutomationState(issue.body || "");
     } catch (err) {
       console.error(`Failed to read issue #${issueNumber} for branch authorization: ${err.message}`);
     }
   }
 
-  const isReservedBranch = state?.branch?.name === branchName && state.branch.base === BASE_BRANCH;
+  const isReservedBranch = state?.allowed_branch_name === branchName;
   const isAutomationBot = payload.sender?.login === GITHUB_APP_BOT_LOGIN;
 
   if (isAutomationBot && isTemporaryRepairBranch(branchName)) {
@@ -489,7 +531,7 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
 
   if (issue && isIssueLinkedBranch(issue, branchName)) {
     const isFromDev = await branchMatchesBase(gh, owner, repo, branchName, BASE_BRANCH);
-    const issueType = issue.issueType?.name || state?.issue_type || "issue";
+    const issueType = issue.issueType?.name || "issue";
     const expectedBranchName = buildIssueBranchName({
       issueType,
       issueNumber,
@@ -519,7 +561,7 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
       };
     }
 
-    if (isFromDev && branchName === expectedBranchName && state?.branch?.name && state.branch.name !== branchName) {
+    if (isFromDev && branchName === expectedBranchName && state?.allowed_branch_name && state.allowed_branch_name !== branchName) {
       await gh.deleteReference(owner, repo, `heads/${branchName}`);
       await createBranchEventComment(
         gh,
@@ -533,7 +575,7 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
           "",
           "This issue already has recorded branch metadata:",
           "",
-          `\`${state.branch.name}\``,
+          `\`${state.allowed_branch_name}\``,
           "",
           "Run `/branch repair` before creating or linking a different branch manually.",
         ].join("\n")
@@ -550,13 +592,14 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
     }
 
     if (isFromDev && branchName === expectedBranchName) {
-      const body = ensureAutomationState(issue.body || "", issueType);
+      const body = ensureAutomationState(issue.body || "", issueType, {
+        issueNumber,
+        title: issue.title,
+      });
       const updatedState = {
-        issue_type: parseAutomationState(body)?.issue_type || state?.issue_type || "issue",
+        allowed_branch_name: branchName,
         branch: {
-          name: branchName,
-          base: BASE_BRANCH,
-          created: true,
+          exists: true,
           linked: true,
           error: null,
           pr: state?.branch?.pr ?? null,
@@ -579,7 +622,7 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
         payload,
         "/branch manual",
         [
-          state?.branch?.name === branchName
+          state?.allowed_branch_name === branchName
             ? "Branch manually linked and metadata repaired successfully."
             : "Branch linked and recorded successfully.",
           "",
@@ -637,20 +680,23 @@ function isStaleBranchState(issue, branchName) {
 async function cleanupStaleLinkedBranchRecords({ gh, owner, repo, issueNumber, issue }) {
   const staleRecords = (issue.linkedBranches?.nodes || []).filter((node) => node?.id && !node.ref);
   if (!staleRecords.length || typeof gh.deleteLinkedBranch !== "function") {
-    return issue;
+    return { issue, deletedCount: 0 };
   }
 
   for (const record of staleRecords) {
     await gh.deleteLinkedBranch(record.id);
   }
 
-  return gh.getIssue(owner, repo, issueNumber);
+  return {
+    issue: await gh.getIssue(owner, repo, issueNumber),
+    deletedCount: staleRecords.length,
+  };
 }
 
 async function inspectIssueBranchState({ gh, owner, repo, issue, expectedBranchName, state, checkExpectedRefOnly = false }) {
   const linkedNames = linkedBranchNames(issue);
   const staleLinkedRecordCount = staleLinkedBranchRecordCount(issue);
-  const metadataName = state?.branch?.name || null;
+  const metadataName = state?.allowed_branch_name || null;
   const metadataLinked = metadataName ? linkedNames.includes(metadataName) : false;
   const expectedLinked = expectedBranchName ? linkedNames.includes(expectedBranchName) : false;
   const shouldCheckExpectedRef = checkExpectedRefOnly || expectedLinked || metadataName === expectedBranchName;
@@ -799,7 +845,7 @@ export async function handlePullRequestEvent({ gh, owner, repo, payload }) {
   }
 
   let issue = await gh.getIssue(owner, repo, issueNumber);
-  issue = await cleanupStaleLinkedBranchRecords({ gh, owner, repo, issueNumber, issue });
+  issue = (await cleanupStaleLinkedBranchRecords({ gh, owner, repo, issueNumber, issue })).issue;
   const state = parseAutomationState(issue.body || "");
   const branchStatus = await inspectIssueBranchState({
     gh,
@@ -819,8 +865,8 @@ export async function handlePullRequestEvent({ gh, owner, repo, payload }) {
 
   if (
     !state?.branch ||
-    state.branch.name !== branchName ||
-    state.branch.created !== true ||
+    state.allowed_branch_name !== branchName ||
+    state.branch.exists !== true ||
     state.branch.linked !== true ||
     !branchStatus.metadataLinked ||
     !branchStatus.metadataRef.exists

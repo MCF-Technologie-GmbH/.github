@@ -180,7 +180,10 @@ export async function enforceIssueTypePolicy({
 
     // Inject protected/editable HTML comments programmatically.
     cleaned = injectZoningComments(cleaned);
-    cleaned = ensureAutomationState(cleaned, resolvedType);
+    cleaned = ensureAutomationState(cleaned, resolvedType, {
+      issueNumber,
+      title: currentIssue.title,
+    });
 
     if (cleaned !== issueBody) {
       updatedBody = cleaned;
@@ -209,7 +212,10 @@ export async function enforceIssueTypePolicy({
     healed = removeScopeSection(healed);
     healed = removePrioritySection(healed);
     healed = removeEffortSection(healed);
-    healed = ensureAutomationState(healed, resolvedType);
+    healed = ensureAutomationState(healed, resolvedType, {
+      issueNumber,
+      title: currentIssue.title,
+    });
 
     if (healed !== issueBody) {
       updatedBody = healed;

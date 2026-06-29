@@ -17,10 +17,13 @@ test("ensureAutomationState inserts hidden JSON in a protected block at the bott
     "<!-- protected:end -->",
   ].join("\n");
 
-  const updated = ensureAutomationState(body, "Feature");
+  const updated = ensureAutomationState(body, "Feature", {
+    issueNumber: 123,
+    title: "Add login flow",
+  });
   const state = parseAutomationState(updated);
 
-  assert.equal(state.issue_type, "feat");
+  assert.equal(state.allowed_branch_name, "feat/123-add-login-flow");
   assert.equal(state.branch, null);
   assert.match(updated, /<!-- protected:end -->\n\n<!-- protected:start -->\n<!-- automation-state:start/);
   assert.match(updated, /automation-state:end -->\n<!-- protected:end -->$/);
@@ -40,13 +43,14 @@ test("replaceAutomationState updates branch metadata", () => {
     },
   });
 
-  assert.deepEqual(parseAutomationState(updated).branch, {
-    name: "fix/42-fix-login",
-    base: "dev",
-    created: true,
-    linked: true,
-    error: null,
-    pr: null,
+  assert.deepEqual(parseAutomationState(updated), {
+    allowed_branch_name: "fix/42-fix-login",
+    branch: {
+      exists: true,
+      linked: true,
+      error: null,
+      pr: null,
+    },
   });
 });
 
