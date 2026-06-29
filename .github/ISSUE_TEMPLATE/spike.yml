@@ -2,9 +2,14 @@ name: Spike
 description: Timeboxed technical investigation to reduce uncertainty before implementation.
 type: Spike
 body:
-  - type: markdown
+  - type: dropdown
+    id: issue-type
     attributes:
-      value: "<!-- issue-template-type: Spike -->"
+      label: Issue Type
+      options:
+        - Spike
+    validations:
+      required: true
 
   - type: markdown
     attributes:

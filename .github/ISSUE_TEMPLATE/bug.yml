@@ -2,9 +2,14 @@ name: Bug
 description: Unexpected error, defect, or incorrect behavior in the codebase.
 type: Bug
 body:
-  - type: markdown
+  - type: dropdown
+    id: issue-type
     attributes:
-      value: "<!-- issue-template-type: Bug -->"
+      label: Issue Type
+      options:
+        - Bug
+    validations:
+      required: true
 
   - type: markdown
     attributes:

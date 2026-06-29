@@ -2,9 +2,14 @@ name: Chore
 description: Routine task, tooling update, dependency work, CI/CD configuration, or repository maintenance.
 type: Chore
 body:
-  - type: markdown
+  - type: dropdown
+    id: issue-type
     attributes:
-      value: "<!-- issue-template-type: Chore -->"
+      label: Issue Type
+      options:
+        - Chore
+    validations:
+      required: true
 
   - type: markdown
     attributes:

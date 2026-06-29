@@ -86,8 +86,18 @@ export async function enforceIssueTypePolicy({
     });
   }
 
+  let issueBody = currentIssue.body || "";
+  let updatedBody = issueBody;
+  let hasBodyChanges = false;
+  let resolvedType = currentType;
+  const creationTemplate = action === "opened" || action === "reopened"
+    ? detectTemplateFromIssue(issueBody, typeMap)
+    : null;
+
   // 3. Codebase repositories: Prevent "Project" (Epic) types from being assigned.
-  if (isProjectType) {
+  // On creation, a form template is the stronger signal because users can change
+  // the Issue Type field before submit.
+  if (isProjectType && !creationTemplate) {
     return closeReservedProjectTypeInImplementationRepo({
       gh,
       owner,
@@ -98,11 +108,6 @@ export async function enforceIssueTypePolicy({
       currentType,
     });
   }
-
-  let issueBody = currentIssue.body || "";
-  let updatedBody = issueBody;
-  let hasBodyChanges = false;
-  let resolvedType = currentType;
 
   // Extract custom field values currently set in the sidebar
   const currentSidebarScope = getCurrentSingleSelectIssueFieldValue(currentIssue, "Scope");
@@ -139,7 +144,7 @@ export async function enforceIssueTypePolicy({
   // 5. Handling issue creation: Extract configuration fields and clean templates.
   if (action === "opened" || action === "reopened") {
     // Correct issue type if it doesn't match the form template used.
-    const template = detectTemplateFromIssue(issueBody, typeMap);
+    const template = creationTemplate;
     if (template && currentType !== template.expectedType) {
       await gh.updateIssueType(currentIssue.id, template.expectedTypeId);
       resolvedType = template.expectedType;
@@ -386,8 +391,7 @@ async function closeReservedProjectTypeInImplementationRepo({
  */
 function detectTemplateFromIssue(body, typeMap) {
   if (!body) return null;
-  const hiddenMatch = body.match(/<!--\s*issue-template-type:\s*([^>]+?)\s*-->/i);
-  const match = hiddenMatch || body.match(/^### Issue Type\r?\n\r?\n([^\r\n]+)/m);
+  const match = body.match(/^### Issue Type\r?\n\r?\n([^\r\n]+)/m);
   if (!match) return null;
   const expectedType = match[1].trim();
   const expectedTypeId = typeMap.get(expectedType);
@@ -400,9 +404,7 @@ function detectTemplateFromIssue(body, typeMap) {
  */
 function removeIssueTypeSection(body) {
   if (!body) return "";
-  return body
-    .replace(/<!--\s*issue-template-type:\s*[^>]+?\s*-->(\r?\n)*/gi, "")
-    .replace(/^### Issue Type\r?\n\r?\n[^\r\n]+(\r?\n)*/m, "");
+  return body.replace(/^### Issue Type\r?\n\r?\n[^\r\n]+(\r?\n)*/m, "");
 }
 
 /**

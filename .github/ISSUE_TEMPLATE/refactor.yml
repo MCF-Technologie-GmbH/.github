@@ -2,9 +2,14 @@ name: Refactor
 description: Internal code restructuring, cleanup, or optimization without changing external behavior.
 type: Refactor
 body:
-  - type: markdown
+  - type: dropdown
+    id: issue-type
     attributes:
-      value: "<!-- issue-template-type: Refactor -->"
+      label: Issue Type
+      options:
+        - Refactor
+    validations:
+      required: true
 
   - type: markdown
     attributes:

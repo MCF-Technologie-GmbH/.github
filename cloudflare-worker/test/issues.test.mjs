@@ -8,7 +8,9 @@ function createIssue(overrides = {}) {
     id: "ISSUE_id",
     title: "Add login flow",
     body: [
-      "<!-- issue-template-type: Feature -->",
+      "### Issue Type",
+      "",
+      "Feature",
       "",
       "### Scope",
       "",
@@ -30,6 +32,34 @@ function createIssue(overrides = {}) {
     issueFieldValues: { nodes: [] },
     ...overrides,
   };
+}
+
+function createBugIssueWithIssueTypeDropdown(overrides = {}) {
+  return createIssue({
+    title: "Crash after reconnect",
+    body: [
+      "### Issue Type",
+      "",
+      "Bug",
+      "",
+      "### Current Behavior",
+      "",
+      "The device stays offline.",
+      "",
+      "### Expected Behavior",
+      "",
+      "The device becomes online.",
+      "",
+      "### Frequency",
+      "",
+      "Always reproducible",
+      "",
+      "### Steps to Reproduce",
+      "",
+      "Reconnect the device.",
+    ].join("\n"),
+    ...overrides,
+  });
 }
 
 test("enforceIssueTypePolicy does not add conventional type prefixes on issue creation", async () => {
@@ -69,7 +99,90 @@ test("enforceIssueTypePolicy does not add conventional type prefixes on issue cr
   assert.equal(updates.length, 1);
   assert.equal(updates[0].title, undefined);
   assert.match(updates[0].body, /### Description/);
-  assert.doesNotMatch(updates[0].body, /issue-template-type/);
+  assert.doesNotMatch(updates[0].body, /### Issue Type/);
+});
+
+test("enforceIssueTypePolicy corrects changed issue type from issue type dropdown on creation", async () => {
+  const typeUpdates = [];
+  const comments = [];
+  const updates = [];
+  const gh = {
+    async updateIssueType(issueId, issueTypeId) {
+      typeUpdates.push({ issueId, issueTypeId });
+    },
+    async createComment(_owner, _repo, issueNumber, body) {
+      comments.push({ issueNumber, body });
+    },
+    async updateIssueTitleAndBody(_owner, _repo, _issueNumber, title, body) {
+      updates.push({ title, body });
+    },
+    async addLabels() {},
+    async removeLabel() {},
+    async updateIssueFieldValue() {},
+  };
+
+  const result = await enforceIssueTypePolicy({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    repoFullName: "mcf-technologie-gmbh/app",
+    issueNumber: 123,
+    action: "opened",
+    currentIssue: createBugIssueWithIssueTypeDropdown(),
+    currentType: "Feature",
+    changes: {},
+    typeMap: new Map([["Bug", "TYPE_bug"], ["Feature", "TYPE_feature"]]),
+    scopeField: null,
+    priorityField: null,
+    effortField: null,
+  });
+
+  assert.equal(result.currentType, "Bug");
+  assert.deepEqual(typeUpdates, [{ issueId: "ISSUE_id", issueTypeId: "TYPE_bug" }]);
+  assert.match(comments[0].body, /automatically corrected to `Bug`/);
+  assert.match(updates[0].body, /"original_issue_type": "Bug"/);
+});
+
+test("enforceIssueTypePolicy corrects project type from issue type dropdown instead of closing on creation", async () => {
+  const typeUpdates = [];
+  const comments = [];
+  const closed = [];
+  const gh = {
+    async updateIssueType(issueId, issueTypeId) {
+      typeUpdates.push({ issueId, issueTypeId });
+    },
+    async createComment(_owner, _repo, issueNumber, body) {
+      comments.push({ issueNumber, body });
+    },
+    async updateIssueTitleAndBody() {},
+    async closeIssue(issueId) {
+      closed.push(issueId);
+    },
+    async addLabels() {},
+    async removeLabel() {},
+    async updateIssueFieldValue() {},
+  };
+
+  const result = await enforceIssueTypePolicy({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    repoFullName: "mcf-technologie-gmbh/app",
+    issueNumber: 123,
+    action: "opened",
+    currentIssue: createBugIssueWithIssueTypeDropdown(),
+    currentType: "Project",
+    changes: {},
+    typeMap: new Map([["Bug", "TYPE_bug"], ["Project", "TYPE_project"]]),
+    scopeField: null,
+    priorityField: null,
+    effortField: null,
+  });
+
+  assert.equal(result.currentType, "Bug");
+  assert.deepEqual(typeUpdates, [{ issueId: "ISSUE_id", issueTypeId: "TYPE_bug" }]);
+  assert.deepEqual(closed, []);
+  assert.match(comments[0].body, /automatically corrected to `Bug`/);
 });
 
 test("enforceIssueTypePolicy does not revert legacy scope prefixes in edited titles", async () => {

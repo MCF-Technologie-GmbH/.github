@@ -2,9 +2,14 @@ name: Documentation
 description: Writing or modifying docs, guides, API specs, release notes, or operational documentation.
 type: Documentation
 body:
-  - type: markdown
+  - type: dropdown
+    id: issue-type
     attributes:
-      value: "<!-- issue-template-type: Documentation -->"
+      label: Issue Type
+      options:
+        - Documentation
+    validations:
+      required: true
 
   - type: markdown
     attributes:

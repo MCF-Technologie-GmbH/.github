@@ -2,9 +2,14 @@ name: Feature
 description: New functional or technical capability, enhancement, or user-facing addition.
 type: Feature
 body:
-  - type: markdown
+  - type: dropdown
+    id: issue-type
     attributes:
-      value: "<!-- issue-template-type: Feature -->"
+      label: Issue Type
+      options:
+        - Feature
+    validations:
+      required: true
 
   - type: markdown
     attributes:

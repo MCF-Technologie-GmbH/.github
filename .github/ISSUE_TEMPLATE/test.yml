@@ -2,9 +2,14 @@ name: Test
 description: Addition, improvement, or repair of unit, integration, end-to-end, or smoke tests.
 type: Test
 body:
-  - type: markdown
+  - type: dropdown
+    id: issue-type
     attributes:
-      value: "<!-- issue-template-type: Test -->"
+      label: Issue Type
+      options:
+        - Test
+    validations:
+      required: true
 
   - type: markdown
     attributes:
