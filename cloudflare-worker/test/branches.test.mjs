@@ -1263,14 +1263,14 @@ test("handleCreateEvent restores a branch from a closed PR and creates a new dra
           number: 77,
           state: "closed",
           title: "feat: Add login",
-          body: "Closes #123",
+          body: "Branch: [`feat/123-add-login`](https://github.com/MCF-Technologie-GmbH/app/tree/feat/123-add-login)\n\nCloses #123",
           head: { ref: "feat/123-add-login" },
         },
         {
           number: 55,
           state: "closed",
           title: "feat: Add login",
-          body: "Closes #123",
+          body: "Branch: [`feat/123-add-login`](https://github.com/MCF-Technologie-GmbH/app/tree/feat/123-add-login)\n\nCloses #123",
           head: { ref: "feat/123-add-login" },
         },
       ];
@@ -1326,8 +1326,8 @@ test("handleCreateEvent restores a branch from a closed PR and creates a new dra
     draft: true,
   }]);
   assert.deepEqual(pullUpdates, [
-    { pullNumber: 77, update: { body: "" } },
-    { pullNumber: 55, update: { body: "" } },
+    { pullNumber: 77, update: { body: "This PR was archived by automation." } },
+    { pullNumber: 55, update: { body: "This PR was archived by automation." } },
   ]);
   assert.match(updatedBody, /"pr": 88/);
   assert.match(comments.find((comment) => comment.issueNumber === 123).body, /New draft PR: #88/);
@@ -2034,7 +2034,7 @@ test("handlePullRequestEvent records valid PR number", async () => {
         number: 455,
         state: "closed",
         title: "feat: Add login",
-        body: "Old PR body\n\nFixes #123",
+        body: "Branch: [`feat/123-add-login`](https://github.com/MCF-Technologie-GmbH/app/tree/feat/123-add-login)\n\nOld PR body\n\nFixes #123",
         head: { ref: "feat/123-add-login" },
       }];
     },
