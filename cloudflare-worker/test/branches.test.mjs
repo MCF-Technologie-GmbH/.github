@@ -558,7 +558,7 @@ test("handleBranchDeleteCommand deletes the visible linked branch before expecte
   assert.match(latestBody, /"linked": false/);
 });
 
-test("handleBranchDeleteCommand closes an associated PR before deleting the branch", async () => {
+test("handleBranchDeleteCommand unlinks an associated PR before closing it and deleting the branch", async () => {
   const body = replaceAutomationState(
     ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug"),
     {
@@ -574,9 +574,13 @@ test("handleBranchDeleteCommand closes an associated PR before deleting the bran
   let latestBody = body;
   const closedPrs = [];
   const deletedRefs = [];
+  const pullUpdates = [];
   const comments = [];
+  const operations = [];
+  let pullBody = "Branch: [`fix/50-test-bug-issue`](https://github.com/MCF-Technologie-GmbH/app/tree/fix/50-test-bug-issue)\n\nCloses #50";
 
   const gh = {
+    pullRequestIssueUnlinkPollDelayMs: 0,
     async getIssue() {
       return {
         id: "ISSUE_id",
@@ -591,9 +595,20 @@ test("handleBranchDeleteCommand closes an associated PR before deleting the bran
     },
     async getPullRequest(_owner, _repo, pullNumber) {
       assert.equal(pullNumber, 321);
-      return { number: 321, state: "open" };
+      return { number: 321, state: "open", body: pullBody };
+    },
+    async updatePullRequest(_owner, _repo, pullNumber, update) {
+      operations.push("update-pr");
+      assert.equal(pullNumber, 321);
+      pullBody = update.body;
+      pullUpdates.push(update);
+    },
+    async getPullRequestClosingIssueNumbers(_owner, _repo, pullNumber) {
+      assert.equal(pullNumber, 321);
+      return pullBody.includes("#50") ? [50] : [];
     },
     async closePullRequest(_owner, _repo, pullNumber) {
+      operations.push("close-pr");
       assert.match(latestBody, /"pr": null/);
       closedPrs.push(pullNumber);
     },
@@ -602,6 +617,7 @@ test("handleBranchDeleteCommand closes an associated PR before deleting the bran
       return { object: { sha: "branch-sha" } };
     },
     async deleteReference(_owner, _repo, ref) {
+      operations.push("delete-ref");
       deletedRefs.push(ref);
     },
     async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
@@ -620,11 +636,97 @@ test("handleBranchDeleteCommand closes an associated PR before deleting the bran
   });
 
   assert.equal(result.prClosed, 321);
+  assert.deepEqual(operations, ["update-pr", "close-pr", "delete-ref"]);
+  assert.deepEqual(pullUpdates, [{ body: "This PR was archived by automation." }]);
   assert.deepEqual(closedPrs, [321]);
   assert.deepEqual(deletedRefs, ["heads/fix/50-test-bug-issue"]);
   assert.match(latestBody, /"pr": null/);
   assert.match(comments.find((comment) => comment.issueNumber === 321).body, /closed because the managed branch was deleted/);
-  assert.match(comments.find((comment) => comment.issueNumber === 50).body, /Closed associated PR: #321/);
+  assert.doesNotMatch(comments.find((comment) => comment.issueNumber === 321).body, /#50/);
+  assert.match(comments.find((comment) => comment.issueNumber === 321).body, /Issue number: 50/);
+  assert.match(comments.find((comment) => comment.issueNumber === 50).body, /Closed associated pull request: 321/);
+  assert.doesNotMatch(comments.find((comment) => comment.issueNumber === 50).body, /#321/);
+});
+
+test("handleBranchDeleteCommand blocks deletion when the associated PR still closes the issue", async () => {
+  const body = replaceAutomationState(
+    ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug"),
+    {
+      allowed_branch_name: "fix/50-test-bug-issue",
+      branch: {
+        exists: true,
+        linked: true,
+        error: null,
+        pr: 321,
+      },
+    }
+  );
+  let latestBody = body;
+  const closedPrs = [];
+  const deletedRefs = [];
+  const comments = [];
+  let pullBody = "Branch: [`fix/50-test-bug-issue`](https://github.com/MCF-Technologie-GmbH/app/tree/fix/50-test-bug-issue)\n\nCloses #50";
+
+  const gh = {
+    pullRequestIssueUnlinkPollAttempts: 2,
+    pullRequestIssueUnlinkPollDelayMs: 0,
+    async getIssue() {
+      return {
+        id: "ISSUE_id",
+        title: "test bug issue",
+        body: latestBody,
+        repository: { id: "REPO_id" },
+        issueType: { name: "Bug" },
+        linkedBranches: {
+          nodes: [{ id: "LB_1", ref: { name: "fix/50-test-bug-issue" } }],
+        },
+      };
+    },
+    async getPullRequest(_owner, _repo, pullNumber) {
+      assert.equal(pullNumber, 321);
+      return { number: 321, state: "open", body: pullBody };
+    },
+    async updatePullRequest(_owner, _repo, pullNumber, update) {
+      assert.equal(pullNumber, 321);
+      pullBody = update.body;
+    },
+    async getPullRequestClosingIssueNumbers() {
+      return [50];
+    },
+    async closePullRequest(_owner, _repo, pullNumber) {
+      closedPrs.push(pullNumber);
+    },
+    async getReference(_owner, _repo, ref) {
+      assert.equal(ref, "heads/fix/50-test-bug-issue");
+      return { object: { sha: "branch-sha" } };
+    },
+    async deleteReference(_owner, _repo, ref) {
+      deletedRefs.push(ref);
+    },
+    async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
+      latestBody = nextBody;
+    },
+    async createComment(_owner, _repo, issueNumber, commentBody) {
+      comments.push({ issueNumber, body: commentBody });
+    },
+  };
+
+  const result = await handleBranchDeleteCommand({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    issueNumber: 50,
+  });
+
+  assert.equal(result.deleted, false);
+  assert.equal(result.reason, "pull request still linked to issue");
+  assert.deepEqual(closedPrs, []);
+  assert.deepEqual(deletedRefs, []);
+  assert.equal(pullBody, "This PR was archived by automation.");
+  assert.match(latestBody, /"pr": 321/);
+  assert.match(comments[0].body, /could not safely delete/);
+  assert.match(comments[0].body, /Pull request number: 321/);
+  assert.doesNotMatch(comments[0].body, /#321/);
 });
 
 test("handleBranchRepairCommand blocks ghost linked branches without resetting metadata", async () => {
