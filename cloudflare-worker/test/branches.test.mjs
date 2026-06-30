@@ -1100,6 +1100,233 @@ test("handleCreateEvent records a sidebar-linked branch based on dev", async () 
   assert.deepEqual(pullRequests, []);
 });
 
+test("handleCreateEvent reports invalid name for the newly linked manual branch", async () => {
+  const deleted = [];
+  const comments = [];
+  const gh = {
+    async getIssue() {
+      return {
+        body: "",
+        title: "test",
+        issueType: { name: "Bug" },
+        linkedBranches: {
+          nodes: [{ ref: { name: "64-test" } }],
+        },
+      };
+    },
+    async deleteReference(_owner, _repo, ref) {
+      deleted.push(ref);
+    },
+    async createComment(_owner, _repo, issueNumber, body) {
+      comments.push({ issueNumber, body });
+    },
+  };
+
+  const result = await handleCreateEvent({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    payload: {
+      ref_type: "branch",
+      ref: "64-test",
+      sender: { login: "mark" },
+    },
+  });
+
+  assert.equal(result.allowed, false);
+  assert.equal(result.reason, "invalid manual branch name");
+  assert.deepEqual(deleted, ["heads/64-test"]);
+  assert.match(comments[0].body, /This branch name is not valid for this issue, so it could not be created manually/);
+  assert.match(comments[0].body, /Expected branch:\n\n`fix\/64-test`/);
+  assert.match(comments[0].body, /Received branch:\n\n`64-test`/);
+  assert.doesNotMatch(comments[0].body, /already has a linked branch/);
+});
+
+test("handleCreateEvent restores a branch from a closed PR and reopens the PR", async () => {
+  const body = replaceAutomationState(
+    ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Feature"),
+    {
+      allowed_branch_name: "feat/123-add-login",
+      branch: {
+        exists: false,
+        linked: false,
+        error: null,
+        pr: null,
+      },
+    }
+  );
+  let updatedBody = null;
+  const listedPullRequests = [];
+  const reopened = [];
+  const pullUpdates = [];
+  const comments = [];
+  const gh = {
+    async getIssue() {
+      return {
+        body,
+        title: "Add login",
+        issueType: { name: "Feature" },
+        linkedBranches: { nodes: [] },
+      };
+    },
+    async listPullRequests(_owner, _repo, query) {
+      listedPullRequests.push(query);
+      return [{
+        number: 77,
+        state: "closed",
+        title: "feat: Add login (#123)",
+        body: "Closes #123",
+        head: { ref: "feat/123-add-login" },
+      }];
+    },
+    async reopenPullRequest(_owner, _repo, pullNumber) {
+      reopened.push(pullNumber);
+      return { number: pullNumber, state: "open" };
+    },
+    async updatePullRequest(_owner, _repo, pullNumber, update) {
+      pullUpdates.push({ pullNumber, update });
+    },
+    async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
+      updatedBody = nextBody;
+    },
+    async createComment(_owner, _repo, issueNumber, commentBody) {
+      comments.push({ issueNumber, body: commentBody });
+    },
+    async deleteReference() {
+      throw new Error("should not delete restored branch");
+    },
+  };
+
+  const result = await handleCreateEvent({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    payload: {
+      ref_type: "branch",
+      ref: "feat/123-add-login",
+      sender: { login: "mark" },
+    },
+  });
+
+  assert.equal(result.restored, true);
+  assert.equal(result.reopened, true);
+  assert.equal(result.pr, 77);
+  assert.deepEqual(listedPullRequests, [{
+    state: "closed",
+    head: "MCF-Technologie-GmbH:feat/123-add-login",
+    sort: "updated",
+    direction: "desc",
+    perPage: 10,
+  }]);
+  assert.deepEqual(reopened, [77]);
+  assert.deepEqual(pullUpdates, [{
+    pullNumber: 77,
+    update: {
+      body: "Branch: [`feat/123-add-login`](https://github.com/MCF-Technologie-GmbH/app/tree/feat/123-add-login)\n\nCloses #123",
+    },
+  }]);
+  assert.match(updatedBody, /"pr": 77/);
+  assert.match(updatedBody, /^<!-- protected:start -->\n<!-- managed-branch:start -->/);
+  assert.match(comments.find((comment) => comment.issueNumber === 123).body, /reopened the PR/);
+  assert.match(comments.find((comment) => comment.issueNumber === 77).body, /This PR was reopened/);
+});
+
+test("handleCreateEvent restores a branch from a closed PR and creates a new draft PR when reopen fails", async () => {
+  const body = replaceAutomationState(
+    ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Feature"),
+    {
+      allowed_branch_name: "feat/123-add-login",
+      branch: {
+        exists: false,
+        linked: false,
+        error: null,
+        pr: null,
+      },
+    }
+  );
+  let updatedBody = null;
+  const pullRequests = [];
+  const comments = [];
+  const gh = {
+    async getIssue() {
+      return {
+        body,
+        title: "Add login",
+        issueType: { name: "Feature" },
+        linkedBranches: { nodes: [] },
+      };
+    },
+    async listPullRequests() {
+      return [
+        {
+          number: 77,
+          state: "closed",
+          title: "feat: Add login (#123)",
+          body: "Closes #123",
+          head: { ref: "feat/123-add-login" },
+        },
+        {
+          number: 55,
+          state: "closed",
+          title: "feat: Add login (#123)",
+          body: "Closes #123",
+          head: { ref: "feat/123-add-login" },
+        },
+      ];
+    },
+    async reopenPullRequest() {
+      throw new Error("REST PATCH /pulls/77 -> HTTP 422: Validation Failed");
+    },
+    async getReference(_owner, _repo, ref) {
+      if (ref === "heads/feat/123-add-login") return { object: { sha: "sha-branch" } };
+      if (ref === "heads/dev") return { object: { sha: "sha-dev" } };
+      throw new Error(`unexpected ref ${ref}`);
+    },
+    async createPullRequest(input) {
+      pullRequests.push(input);
+      return { number: 88 };
+    },
+    async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
+      updatedBody = nextBody;
+    },
+    async createComment(_owner, _repo, issueNumber, commentBody) {
+      comments.push({ issueNumber, body: commentBody });
+    },
+    async deleteReference() {
+      throw new Error("should not delete restored branch");
+    },
+  };
+
+  const result = await handleCreateEvent({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    payload: {
+      ref_type: "branch",
+      ref: "feat/123-add-login",
+      sender: { login: "mark" },
+    },
+  });
+
+  assert.equal(result.restored, true);
+  assert.equal(result.reopened, false);
+  assert.equal(result.previousPr, 77);
+  assert.equal(result.pr, 88);
+  assert.deepEqual(pullRequests, [{
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    title: "feat: Add login (#123)",
+    head: "feat/123-add-login",
+    base: "dev",
+    body: "Branch: [`feat/123-add-login`](https://github.com/MCF-Technologie-GmbH/app/tree/feat/123-add-login)\n\nCloses #123",
+    draft: true,
+  }]);
+  assert.match(updatedBody, /"pr": 88/);
+  assert.match(comments.find((comment) => comment.issueNumber === 123).body, /New draft PR: #88/);
+  assert.match(comments.find((comment) => comment.issueNumber === 77).body, /could not be reopened/);
+  assert.match(comments.find((comment) => comment.issueNumber === 55).body, /cannot restore its branch while the managed branch already exists/);
+});
+
 test("handleCreateEvent repairs metadata when a manual linked branch matches expected metadata", async () => {
   const body = replaceAutomationState(
     ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Feature"),

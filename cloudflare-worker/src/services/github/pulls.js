@@ -20,6 +20,21 @@ export const pullMethods = {
     );
   },
 
+  async listPullRequests(owner, repo, { state, head, base, sort, direction, perPage } = {}) {
+    const params = new URLSearchParams();
+    if (state !== undefined) params.set("state", state);
+    if (head !== undefined) params.set("head", head);
+    if (base !== undefined) params.set("base", base);
+    if (sort !== undefined) params.set("sort", sort);
+    if (direction !== undefined) params.set("direction", direction);
+    if (perPage !== undefined) params.set("per_page", String(perPage));
+    const query = params.toString();
+    return this.rest(
+      "GET",
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls${query ? `?${query}` : ""}`
+    );
+  },
+
   async updatePullRequest(owner, repo, pullNumber, { title, body, state } = {}) {
     const update = {};
     if (title !== undefined) update.title = title;
@@ -34,5 +49,9 @@ export const pullMethods = {
 
   async closePullRequest(owner, repo, pullNumber) {
     return this.updatePullRequest(owner, repo, pullNumber, { state: "closed" });
+  },
+
+  async reopenPullRequest(owner, repo, pullNumber) {
+    return this.updatePullRequest(owner, repo, pullNumber, { state: "open" });
   },
 };

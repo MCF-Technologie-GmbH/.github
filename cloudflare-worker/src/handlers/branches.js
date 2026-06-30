@@ -714,14 +714,49 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
     return { processed: true, allowed: true, reason: "branch created by automation bot with matching reservation" };
   }
 
+  const restoreResult = issue
+    ? await handleRestoredPullRequestBranch({ gh, owner, repo, payload, issue, issueNumber, branchName, state })
+    : null;
+  if (restoreResult) {
+    return restoreResult;
+  }
+
   if (issue && isIssueLinkedBranch(issue, branchName)) {
-    const isFromDev = await branchMatchesBase(gh, owner, repo, branchName, BASE_BRANCH);
     const issueType = issue.issueType?.name || "issue";
     const expectedBranchName = buildIssueBranchName({
       issueType,
       issueNumber,
       title: issue.title,
     });
+    const otherLinkedBranchNames = linkedBranchNames(issue).filter((name) => name !== branchName);
+    if (branchName !== expectedBranchName) {
+      await gh.deleteReference(owner, repo, `heads/${branchName}`);
+      await createBranchEventComment(
+        gh,
+        owner,
+        repo,
+        issueNumber,
+        payload,
+        "/branch manual",
+        otherLinkedBranchNames.length
+          ? branchStateBlockingMessage({
+            reason: "unexpected linked branch",
+            unexpectedLinkedNames: otherLinkedBranchNames,
+          })
+          : invalidManualBranchNameMessage({ expectedBranchName, branchName })
+      );
+
+      return {
+        processed: true,
+        allowed: false,
+        deleted: true,
+        branch: branchName,
+        issue: issueNumber,
+        reason: otherLinkedBranchNames.length ? "unexpected linked branch" : "invalid manual branch name",
+      };
+    }
+
+    const isFromDev = await branchMatchesBase(gh, owner, repo, branchName, BASE_BRANCH);
     const branchStatus = await inspectIssueBranchState({
       gh,
       owner,
@@ -861,19 +896,7 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
         })
         : null;
       const invalidBranchNameMessage = expectedBranchName && branchName !== expectedBranchName
-        ? [
-          "This branch name is not valid for this issue.",
-          "",
-          "Expected branch:",
-          "",
-          `\`${expectedBranchName}\``,
-          "",
-          "Received branch:",
-          "",
-          `\`${branchName}\``,
-          "",
-          "Use `/branch create` to create the correct branch automatically.",
-        ].join("\n")
+        ? invalidManualBranchNameMessage({ expectedBranchName, branchName })
         : null;
       await createBranchEventComment(
         gh,
@@ -894,6 +917,208 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
   }
 
   return { processed: true, allowed: false, deleted: true, branch: branchName, issue: issueNumber };
+}
+
+async function handleRestoredPullRequestBranch({ gh, owner, repo, payload, issue, issueNumber, branchName, state }) {
+  if (state?.branch?.pr) return null;
+  if (typeof gh.listPullRequests !== "function") return null;
+
+  const issueType = issue.issueType?.name || state?.original_issue_type || "issue";
+  const expectedBranchName = buildIssueBranchName({
+    issueType,
+    issueNumber,
+    title: issue.title,
+  });
+  if (branchName !== expectedBranchName) return null;
+
+  const closedPullRequests = await gh.listPullRequests(owner, repo, {
+    state: "closed",
+    head: `${owner}:${branchName}`,
+    sort: "updated",
+    direction: "desc",
+    perPage: 10,
+  });
+  const restoredFromPr = (closedPullRequests || []).find((pr) => pullRequestMatchesIssue(pr, issueNumber, branchName));
+  if (!restoredFromPr) return null;
+
+  const body = ensureAutomationState(issue.body || "", issueType, {
+    issueNumber,
+    title: issue.title,
+  });
+  let activePr = null;
+  let reopened = false;
+  let reopenError = null;
+
+  try {
+    activePr = {
+      ...restoredFromPr,
+      ...(await gh.reopenPullRequest(owner, repo, restoredFromPr.number)),
+      number: restoredFromPr.number,
+    };
+    reopened = true;
+    await normalizePullRequestForIssue({
+      gh,
+      owner,
+      repo,
+      pr: activePr,
+      issue,
+      issueNumber,
+      issueType,
+      branchName,
+    });
+  } catch (err) {
+    reopenError = err;
+  }
+
+  if (!activePr) {
+    activePr = await createDraftPullRequestForIssue({
+      gh,
+      owner,
+      repo,
+      issueNumber,
+      issueType,
+      issueTitle: issue.title,
+      branchName,
+    });
+    if (activePr.skipped) {
+      const failedState = {
+        ...state,
+        allowed_branch_name: branchName,
+        branch: {
+          exists: true,
+          linked: true,
+          error: `Restored branch but could not create a draft PR: ${activePr.reason}`,
+          pr: null,
+        },
+      };
+      await gh.updateIssueTitleAndBody(
+        owner,
+        repo,
+        issueNumber,
+        undefined,
+        setManagedBranchBodyLink(replaceAutomationState(body, failedState), { owner, repo, branchName })
+      );
+      await createBranchEventComment(
+        gh,
+        owner,
+        repo,
+        issueNumber,
+        payload,
+        "/branch restore",
+        [
+          "Restored the managed branch from a closed PR, but I could not create a new draft PR.",
+          "",
+          `Branch: \`${branchName}\``,
+          `Previous PR: #${restoredFromPr.number}`,
+          `Reason: ${activePr.reason}`,
+        ].join("\n")
+      );
+      return {
+        processed: true,
+        allowed: true,
+        restored: true,
+        branch: branchName,
+        issue: issueNumber,
+        pr: null,
+        reason: activePr.reason,
+      };
+    }
+    await gh.createComment(
+      owner,
+      repo,
+      restoredFromPr.number,
+      [
+        "This branch was restored, but this PR could not be reopened.",
+        "",
+        `A new draft PR was created instead: #${activePr.number}`,
+      ].join("\n")
+    );
+  }
+
+  const restoredState = {
+    ...state,
+    allowed_branch_name: branchName,
+    branch: {
+      exists: true,
+      linked: true,
+      error: null,
+      pr: activePr.number,
+    },
+  };
+  await gh.updateIssueTitleAndBody(
+    owner,
+    repo,
+    issueNumber,
+    undefined,
+    setManagedBranchBodyLink(replaceAutomationState(body, restoredState), { owner, repo, branchName })
+  );
+
+  if (reopened) {
+    await createBranchEventComment(
+      gh,
+      owner,
+      repo,
+      issueNumber,
+      payload,
+      "/branch restore",
+      [
+        "Restored the managed branch from a closed PR and reopened the PR.",
+        "",
+        `Branch: \`${branchName}\``,
+        `PR: #${activePr.number}`,
+      ].join("\n")
+    );
+    await gh.createComment(
+      owner,
+      repo,
+      restoredFromPr.number,
+      [
+        "This PR was reopened after its branch was restored.",
+        "",
+        `Branch: \`${branchName}\``,
+        `Issue: #${issueNumber}`,
+      ].join("\n")
+    );
+  } else {
+    await createBranchEventComment(
+      gh,
+      owner,
+      repo,
+      issueNumber,
+      payload,
+      "/branch restore",
+      [
+        "Restored the managed branch from a closed PR.",
+        "",
+        `Branch: \`${branchName}\``,
+        `Previous PR: #${restoredFromPr.number}`,
+        `New draft PR: #${activePr.number}`,
+      ].join("\n")
+    );
+  }
+
+  await notifyClosedPullRequestsBlockedByActiveBranch({
+    gh,
+    owner,
+    repo,
+    branchName,
+    activePrNumber: activePr.number,
+    ignorePullNumber: restoredFromPr.number,
+    closedPullRequests,
+  });
+
+  return {
+    processed: true,
+    allowed: true,
+    restored: true,
+    reopened,
+    branch: branchName,
+    issue: issueNumber,
+    pr: activePr.number,
+    previousPr: restoredFromPr.number,
+    reopenError: reopenError ? summarizeError(reopenError) : null,
+    reason: reopened ? "restored branch and reopened pull request" : "restored branch and created new draft pull request",
+  };
 }
 
 /**
@@ -1341,13 +1566,15 @@ function branchStateBlockingMessage(status) {
 
   if (status.reason === "unlinked git ref already exists") {
     return [
-      "The expected branch already exists, but GitHub does not report it as linked to this issue.",
+      "This issue can only manage one branch.",
       "",
-      "Expected branch:",
+      "A managed branch already exists, but GitHub does not report it as linked to this issue.",
       "",
       `\`${status.expectedBranchName}\``,
       "",
       "Run `/branch repair` to relink it.",
+      "",
+      "Run `/branch delete` only if you want to permanently delete it. This cannot be undone by automation.",
     ].join("\n");
   }
 
@@ -1378,6 +1605,22 @@ function branchStateBlockingMessage(status) {
     status.reason === "linked branch missing git ref"
       ? "Remove the stale linked branch from the issue sidebar, then run `/branch repair` again."
       : "Run `/branch repair` or clean up the conflicting branch/link before retrying.",
+  ].join("\n");
+}
+
+function invalidManualBranchNameMessage({ expectedBranchName, branchName }) {
+  return [
+    "This branch name is not valid for this issue, so it could not be created manually.",
+    "",
+    "Expected branch:",
+    "",
+    `\`${expectedBranchName}\``,
+    "",
+    "Received branch:",
+    "",
+    `\`${branchName}\``,
+    "",
+    "Use `/branch create` to create the correct branch automatically.",
   ].join("\n");
 }
 
@@ -1661,6 +1904,57 @@ async function handlePullRequestClosedEvent({ gh, owner, repo, payload }) {
     branchDeleted: branchName,
     cleanedLinkedBranches: staleCleanup.deletedCount,
   };
+}
+
+async function normalizePullRequestForIssue({ gh, owner, repo, pr, issue, issueNumber, issueType, branchName }) {
+  const expectedTitle = buildIssuePullRequestTitle({
+    issueType,
+    issueNumber,
+    title: issue.title,
+  });
+  const expectedBody = formatPullRequestBody({
+    owner,
+    repo,
+    branchName,
+    body: pr.body || "",
+    issueNumber,
+  });
+  const nextTitle = pr.title === expectedTitle ? undefined : expectedTitle;
+  const nextBody = pr.body === expectedBody ? undefined : expectedBody;
+  if (nextTitle !== undefined || nextBody !== undefined) {
+    const update = {};
+    if (nextTitle !== undefined) update.title = nextTitle;
+    if (nextBody !== undefined) update.body = nextBody;
+    await gh.updatePullRequest(owner, repo, pr.number, update);
+  }
+  return { title: expectedTitle, body: expectedBody, titleUpdated: nextTitle !== undefined, bodyUpdated: nextBody !== undefined };
+}
+
+function pullRequestMatchesIssue(pr, issueNumber, branchName) {
+  if (extractIssueNumberFromBranch(pr?.head?.ref) === issueNumber) return true;
+  if (String(pr?.title || "").includes(`(#${issueNumber})`)) return true;
+  if (bodyClosesIssue(pr?.body || "", issueNumber)) return true;
+  return pr?.head?.ref === branchName;
+}
+
+async function notifyClosedPullRequestsBlockedByActiveBranch({ gh, owner, repo, branchName, activePrNumber, ignorePullNumber, closedPullRequests }) {
+  if (!Array.isArray(closedPullRequests) || !activePrNumber) return;
+  for (const pr of closedPullRequests) {
+    if (!pr?.number || pr.number === ignorePullNumber) continue;
+    await gh.createComment(
+      owner,
+      repo,
+      pr.number,
+      [
+        "This PR cannot restore its branch while the managed branch already exists.",
+        "",
+        `Active branch: \`${branchName}\``,
+        `Active PR: #${activePrNumber}`,
+        "",
+        "Delete the active branch with `/branch delete` before restoring this PR's branch.",
+      ].join("\n")
+    );
+  }
 }
 
 function summarizeError(err) {
