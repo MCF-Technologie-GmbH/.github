@@ -648,7 +648,7 @@ test("handleBranchDeleteCommand unlinks an associated PR before closing it and d
   assert.doesNotMatch(comments.find((comment) => comment.issueNumber === 50).body, /#321/);
 });
 
-test("handleBranchDeleteCommand blocks deletion when the associated PR still closes the issue", async () => {
+test("handleBranchDeleteCommand does not block when GitHub retains the PR issue relationship", async () => {
   const body = replaceAutomationState(
     ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug"),
     {
@@ -662,14 +662,12 @@ test("handleBranchDeleteCommand blocks deletion when the associated PR still clo
     }
   );
   let latestBody = body;
-  const closedPrs = [];
   const deletedRefs = [];
+  const closedPrs = [];
   const comments = [];
   let pullBody = "Branch: [`fix/50-test-bug-issue`](https://github.com/MCF-Technologie-GmbH/app/tree/fix/50-test-bug-issue)\n\nCloses #50";
 
   const gh = {
-    pullRequestIssueUnlinkPollAttempts: 2,
-    pullRequestIssueUnlinkPollDelayMs: 0,
     async getIssue() {
       return {
         id: "ISSUE_id",
@@ -689,9 +687,6 @@ test("handleBranchDeleteCommand blocks deletion when the associated PR still clo
     async updatePullRequest(_owner, _repo, pullNumber, update) {
       assert.equal(pullNumber, 321);
       pullBody = update.body;
-    },
-    async getPullRequestClosingIssueNumbers() {
-      return [50];
     },
     async closePullRequest(_owner, _repo, pullNumber) {
       closedPrs.push(pullNumber);
@@ -718,15 +713,13 @@ test("handleBranchDeleteCommand blocks deletion when the associated PR still clo
     issueNumber: 50,
   });
 
-  assert.equal(result.deleted, false);
-  assert.equal(result.reason, "pull request still linked to issue");
-  assert.deepEqual(closedPrs, []);
-  assert.deepEqual(deletedRefs, []);
+  assert.equal(result.deleted, true);
+  assert.equal(result.prClosed, 321);
+  assert.deepEqual(closedPrs, [321]);
+  assert.deepEqual(deletedRefs, ["heads/fix/50-test-bug-issue"]);
   assert.equal(pullBody, "This PR was archived by automation.");
-  assert.match(latestBody, /"pr": 321/);
-  assert.match(comments[0].body, /could not safely delete/);
-  assert.match(comments[0].body, /Pull request number: 321/);
-  assert.doesNotMatch(comments[0].body, /#321/);
+  assert.match(latestBody, /"pr": null/);
+  assert.doesNotMatch(comments.find((comment) => comment.issueNumber === 50).body, /#321/);
 });
 
 test("handleBranchRepairCommand blocks ghost linked branches without resetting metadata", async () => {
@@ -1869,7 +1862,6 @@ test("handlePushEvent creates draft PR after first commit push", async () => {
   let updatedBody = null;
   const comments = [];
   const pullRequests = [];
-  const pullUpdates = [];
   const gh = {
     async getIssue() {
       return {
@@ -1898,16 +1890,7 @@ test("handlePushEvent creates draft PR after first commit push", async () => {
         direction: "desc",
         perPage: 10,
       });
-      return [{
-        number: 1230,
-        state: "closed",
-        title: "feat: Add login",
-        body: "Old context\n\nCloses #123",
-        head: { ref: "feat/123-add-login" },
-      }];
-    },
-    async updatePullRequest(_owner, _repo, pullNumber, update) {
-      pullUpdates.push({ pullNumber, update });
+      return [];
     },
     async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
       updatedBody = nextBody;
@@ -1928,6 +1911,7 @@ test("handlePushEvent creates draft PR after first commit push", async () => {
   });
 
   assert.equal(result.prCreated, true);
+  assert.equal(result.prReopened, false);
   assert.equal(result.pr, 456);
   assert.deepEqual(pullRequests, [{
     owner: "MCF-Technologie-GmbH",
@@ -1938,16 +1922,107 @@ test("handlePushEvent creates draft PR after first commit push", async () => {
     body: "Branch: [`feat/123-add-login`](https://github.com/MCF-Technologie-GmbH/app/tree/feat/123-add-login)\n\nCloses #123",
     draft: true,
   }]);
-  assert.deepEqual(pullUpdates, [{
-    pullNumber: 1230,
-    update: {
-      body: "Old context",
-    },
-  }]);
   assert.match(updatedBody, /^<!-- protected:start -->\n<!-- managed-branch:start -->\nBranch: \[`feat\/123-add-login`\]\(https:\/\/github.com\/MCF-Technologie-GmbH\/app\/tree\/feat\/123-add-login\)/);
   assert.match(updatedBody, /"pr": 456/);
   assert.match(comments[0].body, /Created draft PR/);
-  assert.match(comments[0].body, /#456/);
+  assert.match(comments[0].body, /Pull request number: 456/);
+  assert.doesNotMatch(comments[0].body, /#456/);
+});
+
+test("handlePushEvent reopens a closed PR for the managed branch before creating a new one", async () => {
+  const body = replaceAutomationState(
+    ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Feature"),
+    {
+      allowed_branch_name: "feat/123-add-login",
+      branch: {
+        exists: true,
+        linked: true,
+        error: null,
+        pr: null,
+      },
+    }
+  );
+  let updatedBody = null;
+  const pullRequests = [];
+  const reopened = [];
+  const pullUpdates = [];
+  const comments = [];
+  const gh = {
+    async getIssue() {
+      return {
+        body,
+        title: "Add login",
+        issueType: { name: "Feature" },
+        linkedBranches: {
+          nodes: [{ ref: { name: "feat/123-add-login" } }],
+        },
+      };
+    },
+    async getReference(_owner, _repo, ref) {
+      if (ref === "heads/feat/123-add-login") return { object: { sha: "sha-branch" } };
+      if (ref === "heads/dev") return { object: { sha: "sha-dev" } };
+      throw new Error(`unexpected ref ${ref}`);
+    },
+    async listPullRequests(_owner, _repo, query) {
+      assert.deepEqual(query, {
+        state: "closed",
+        head: "MCF-Technologie-GmbH:feat/123-add-login",
+        sort: "updated",
+        direction: "desc",
+        perPage: 10,
+      });
+      return [{
+        number: 1230,
+        state: "closed",
+        title: "feat: Add login",
+        body: "This PR was archived by automation.",
+        head: { ref: "feat/123-add-login" },
+      }];
+    },
+    async reopenPullRequest(_owner, _repo, pullNumber) {
+      reopened.push(pullNumber);
+      return { number: pullNumber, state: "open" };
+    },
+    async updatePullRequest(_owner, _repo, pullNumber, update) {
+      pullUpdates.push({ pullNumber, update });
+    },
+    async createPullRequest(input) {
+      pullRequests.push(input);
+      return { number: 456 };
+    },
+    async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
+      updatedBody = nextBody;
+    },
+    async createComment(_owner, _repo, issueNumber, commentBody) {
+      comments.push({ issueNumber, body: commentBody });
+    },
+  };
+
+  const result = await handlePushEvent({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    payload: {
+      ref: "refs/heads/feat/123-add-login",
+      sender: { login: "mark" },
+    },
+  });
+
+  assert.equal(result.prCreated, false);
+  assert.equal(result.prReopened, true);
+  assert.equal(result.pr, 1230);
+  assert.deepEqual(reopened, [1230]);
+  assert.deepEqual(pullRequests, []);
+  assert.deepEqual(pullUpdates, [{
+    pullNumber: 1230,
+    update: {
+      body: "Branch: [`feat/123-add-login`](https://github.com/MCF-Technologie-GmbH/app/tree/feat/123-add-login)\n\nCloses #123",
+    },
+  }]);
+  assert.match(updatedBody, /"pr": 1230/);
+  assert.match(comments[0].body, /Reopened draft PR/);
+  assert.match(comments[0].body, /Pull request number: 1230/);
+  assert.doesNotMatch(comments[0].body, /#1230/);
 });
 
 test("handlePushEvent ignores branch creation push events", async () => {

@@ -20,29 +20,6 @@ export const pullMethods = {
     );
   },
 
-  async getPullRequestClosingIssueNumbers(owner, repo, pullNumber) {
-    const data = await this.graphql(
-      `
-        query PullRequestClosingIssues($owner: String!, $repo: String!, $pullNumber: Int!) {
-          repository(owner: $owner, name: $repo) {
-            pullRequest(number: $pullNumber) {
-              closingIssuesReferences(first: 20) {
-                nodes {
-                  number
-                }
-              }
-            }
-          }
-        }
-      `,
-      { owner, repo, pullNumber }
-    );
-
-    return (data.repository?.pullRequest?.closingIssuesReferences?.nodes || [])
-      .map((issue) => issue?.number)
-      .filter((number) => Number.isInteger(number));
-  },
-
   async listPullRequests(owner, repo, { state, head, base, sort, direction, perPage } = {}) {
     const params = new URLSearchParams();
     if (state !== undefined) params.set("state", state);
