@@ -104,14 +104,14 @@ test("buildIssueBranchName uses issue type key, issue number, and title slug", (
   );
 });
 
-test("buildIssuePullRequestTitle uses conventional prefix and issue number", () => {
+test("buildIssuePullRequestTitle uses conventional prefix without issue number", () => {
   assert.equal(
     buildIssuePullRequestTitle({
       issueType: "Feature",
       issueNumber: 123,
       title: "Add login flow",
     }),
-    "feat: Add login flow (#123)"
+    "feat: Add login flow"
   );
   assert.equal(
     buildIssuePullRequestTitle({
@@ -119,7 +119,7 @@ test("buildIssuePullRequestTitle uses conventional prefix and issue number", () 
       issueNumber: 50,
       title: "fix(api): correct timeout",
     }),
-    "fix: correct timeout (#50)"
+    "fix: correct timeout"
   );
 });
 

@@ -1843,6 +1843,14 @@ export async function handlePullRequestEvent({ gh, owner, repo, payload }) {
     );
   }
 
+  await unlinkClosedPullRequestsFromIssueForBranch({
+    gh,
+    owner,
+    repo,
+    issueNumber,
+    branchName,
+  });
+
   const updatedState = {
     ...state,
     branch: {
@@ -1943,7 +1951,7 @@ function pullRequestMatchesIssue(pr, issueNumber, branchName) {
   if (extractIssueNumberFromBranch(pr?.head?.ref) === issueNumber) return true;
   if (String(pr?.title || "").includes(`(#${issueNumber})`)) return true;
   if (bodyClosesIssue(pr?.body || "", issueNumber)) return true;
-  return pr?.head?.ref === branchName;
+  return false;
 }
 
 async function notifyClosedPullRequestsBlockedByActiveBranch({ gh, owner, repo, branchName, activePrNumber, ignorePullNumber, closedPullRequests }) {
@@ -2001,7 +2009,7 @@ function summarizeError(err) {
 
 function bodyClosesIssue(body, issueNumber) {
   const escaped = String(issueNumber).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`\\bclose[sd]?\\s+#${escaped}\\b`, "i").test(String(body || ""));
+  return new RegExp(`\\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\\s+#${escaped}\\b`, "i").test(String(body || ""));
 }
 
 function removeClosingIssueLinks(body, issueNumber) {

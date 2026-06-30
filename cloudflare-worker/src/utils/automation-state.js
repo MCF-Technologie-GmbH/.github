@@ -44,14 +44,13 @@ export function buildIssueBranchName({ issueType, issueNumber, title }) {
  *
  * @param {object} params
  * @param {string} params.issueType
- * @param {number} params.issueNumber
  * @param {string} params.title
  * @returns {string}
  */
-export function buildIssuePullRequestTitle({ issueType, issueNumber, title }) {
+export function buildIssuePullRequestTitle({ issueType, title }) {
   const prefix = issueTypeKey(issueType);
   const cleanedTitle = stripConventionalTitlePrefix(title) || "Work";
-  return `${prefix}: ${cleanedTitle} (#${issueNumber})`;
+  return `${prefix}: ${cleanedTitle}`;
 }
 
 /**

@@ -1174,7 +1174,7 @@ test("handleCreateEvent restores a branch from a closed PR and reopens the PR", 
       return [{
         number: 77,
         state: "closed",
-        title: "feat: Add login (#123)",
+        title: "feat: Add login",
         body: "Closes #123",
         head: { ref: "feat/123-add-login" },
       }];
@@ -1262,14 +1262,14 @@ test("handleCreateEvent restores a branch from a closed PR and creates a new dra
         {
           number: 77,
           state: "closed",
-          title: "feat: Add login (#123)",
+          title: "feat: Add login",
           body: "Closes #123",
           head: { ref: "feat/123-add-login" },
         },
         {
           number: 55,
           state: "closed",
-          title: "feat: Add login (#123)",
+          title: "feat: Add login",
           body: "Closes #123",
           head: { ref: "feat/123-add-login" },
         },
@@ -1319,7 +1319,7 @@ test("handleCreateEvent restores a branch from a closed PR and creates a new dra
   assert.deepEqual(pullRequests, [{
     owner: "MCF-Technologie-GmbH",
     repo: "app",
-    title: "feat: Add login (#123)",
+    title: "feat: Add login",
     head: "feat/123-add-login",
     base: "dev",
     body: "Branch: [`feat/123-add-login`](https://github.com/MCF-Technologie-GmbH/app/tree/feat/123-add-login)\n\nCloses #123",
@@ -1799,7 +1799,7 @@ test("handlePushEvent creates draft PR after first commit push", async () => {
       return [{
         number: 1230,
         state: "closed",
-        title: "feat: Add login (#123)",
+        title: "feat: Add login",
         body: "Old context\n\nCloses #123",
         head: { ref: "feat/123-add-login" },
       }];
@@ -1830,7 +1830,7 @@ test("handlePushEvent creates draft PR after first commit push", async () => {
   assert.deepEqual(pullRequests, [{
     owner: "MCF-Technologie-GmbH",
     repo: "app",
-    title: "feat: Add login (#123)",
+    title: "feat: Add login",
     head: "feat/123-add-login",
     base: "dev",
     body: "Branch: [`feat/123-add-login`](https://github.com/MCF-Technologie-GmbH/app/tree/feat/123-add-login)\n\nCloses #123",
@@ -2022,6 +2022,22 @@ test("handlePullRequestEvent records valid PR number", async () => {
     async updatePullRequest(_owner, _repo, pullNumber, update) {
       pullUpdates.push({ pullNumber, update });
     },
+    async listPullRequests(_owner, _repo, query) {
+      assert.deepEqual(query, {
+        state: "closed",
+        head: "MCF-Technologie-GmbH:feat/123-add-login",
+        sort: "updated",
+        direction: "desc",
+        perPage: 10,
+      });
+      return [{
+        number: 455,
+        state: "closed",
+        title: "feat: Add login",
+        body: "Old PR body\n\nFixes #123",
+        head: { ref: "feat/123-add-login" },
+      }];
+    },
     async getReference(_owner, _repo, ref) {
       if (ref === "heads/feat/123-add-login") return { object: { sha: "sha-dev" } };
       throw new Error(`unexpected ref ${ref}`);
@@ -2049,13 +2065,21 @@ test("handlePullRequestEvent records valid PR number", async () => {
 
   assert.equal(result.valid, true);
   assert.match(updatedBody, /"pr": 456/);
-  assert.deepEqual(pullUpdates, [{
-    pullNumber: 456,
-    update: {
-      title: "feat: Add login (#123)",
-      body: "Branch: [`feat/123-add-login`](https://github.com/MCF-Technologie-GmbH/app/tree/feat/123-add-login)\n\nRefs #123\n\nCloses #123",
+  assert.deepEqual(pullUpdates, [
+    {
+      pullNumber: 456,
+      update: {
+        title: "feat: Add login",
+        body: "Branch: [`feat/123-add-login`](https://github.com/MCF-Technologie-GmbH/app/tree/feat/123-add-login)\n\nRefs #123\n\nCloses #123",
+      },
     },
-  }]);
+    {
+      pullNumber: 455,
+      update: {
+        body: "Old PR body",
+      },
+    },
+  ]);
   assert.match(updatedBody, /^<!-- protected:start -->\n<!-- managed-branch:start -->\nBranch: \[`feat\/123-add-login`\]\(https:\/\/github.com\/MCF-Technologie-GmbH\/app\/tree\/feat\/123-add-login\)/);
   assert.match(comments[0].body, /adopted by automation/);
 });
