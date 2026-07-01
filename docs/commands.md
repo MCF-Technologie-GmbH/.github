@@ -190,8 +190,8 @@ Cuando se reciba el primer push con commits entre la rama y `dev`, el Draft PR d
 
 | Campo | Valor |
 | --- | --- |
-| Title | `<type>: <titulo original de la issue sin prefijo conventional previo> (#<issueNumber>)` |
-| Body | `Closes #<issueNumber>` |
+| Title | `<type>: <titulo original de la issue sin prefijo conventional previo>` |
+| Body | `Refs #<issueNumber>` |
 | Base | `dev` |
 | Head | `<branchName>` |
 | Draft | `true` |

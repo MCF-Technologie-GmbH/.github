@@ -643,36 +643,6 @@ export async function handleBranchDeleteCommand({ gh, owner, repo, issueNumber }
       branchName: branchToDelete,
       emptyFallback: "This PR was detached from its issue before branch deletion.",
     });
-    const prUnlinked = await waitForPullRequestIssueUnlink({
-      gh,
-      owner,
-      repo,
-      issueNumber,
-      prNumber: associatedPr.number,
-    });
-    if (!prUnlinked) {
-      await gh.createComment(
-        owner,
-        repo,
-        issueNumber,
-        [
-          "I could not safely delete the managed branch because GitHub still reports the associated PR as closing this issue.",
-          "",
-          `Pull request number: ${associatedPr.number}`,
-          `Branch: \`${branchToDelete}\``,
-          "",
-          "I removed the PR body links while the PR is still open. Run `/branch delete` again after GitHub finishes updating the PR relationship.",
-        ].join("\n")
-      );
-      return {
-        processed: true,
-        command: "branch delete",
-        deleted: false,
-        branch: branchToDelete,
-        prClosed: null,
-        reason: "pull request still linked to issue",
-      };
-    }
 
     state = {
       ...state,
@@ -1508,7 +1478,10 @@ async function syncIssueBranchMetadata({ gh, owner, repo, issueNumber, issue, is
       exists: branchStatus.metadataRef.exists == null
         ? state.branch.exists === true
         : branchStatus.metadataRef.exists === true,
-      linked: branchStatus.metadataLinked === true,
+      linked: branchStatus.metadataLinked === true || (
+        Boolean(state.branch.pr) &&
+        branchStatus.metadataRef.exists === true
+      ),
       error: branchStatus.reason ? branchStatus.message : null,
     },
   };
@@ -1758,7 +1731,7 @@ async function createDraftPullRequestForIssue({ gh, owner, repo, issueNumber, is
       owner,
       repo,
       branchName,
-      body: `Closes #${issueNumber}`,
+      body: `Refs #${issueNumber}`,
       issueNumber,
     }),
     draft: true,
@@ -1828,8 +1801,6 @@ export async function handlePullRequestEvent({ gh, owner, repo, payload }) {
     !state?.branch ||
     state.allowed_branch_name !== branchName ||
     state.branch.exists !== true ||
-    state.branch.linked !== true ||
-    !branchStatus.metadataLinked ||
     !branchStatus.metadataRef.exists
   ) {
     problems.push("the source branch is not registered as an authorized linked branch for this issue");
@@ -1862,7 +1833,7 @@ export async function handlePullRequestEvent({ gh, owner, repo, payload }) {
     issueNumber,
     title: issue.title,
   });
-  const expectedBodyLink = `Closes #${issueNumber}`;
+  const expectedBodyLink = `Refs #${issueNumber}`;
   const nextTitle = pr.title === expectedTitle ? undefined : expectedTitle;
   const expectedBody = formatPullRequestBody({
     owner,
@@ -1931,6 +1902,7 @@ async function handlePullRequestClosedEvent({ gh, owner, repo, payload }) {
 
   if (pr.merged === true) {
     const updatedState = resetBranchState(state);
+    await gh.closeIssue(owner, repo, issueNumber, "completed");
     await gh.updateIssueTitleAndBody(owner, repo, issueNumber, undefined, removeManagedBranchBodyLink(replaceAutomationState(issue.body || "", updatedState)));
     return { processed: true, merged: true, issue: issueNumber, pr: pr.number, metadataCleaned: true };
   }
@@ -2087,25 +2059,6 @@ async function unlinkPullRequestFromIssue({
   return true;
 }
 
-async function waitForPullRequestIssueUnlink({ gh, owner, repo, issueNumber, prNumber, attempts = 6, delayMs = 1000 }) {
-  if (typeof gh.listIssueClosingPullRequests !== "function") return true;
-  const maxAttempts = gh.pullRequestIssueUnlinkWaitAttempts || attempts;
-  const waitDelayMs = gh.pullRequestIssueUnlinkWaitDelayMs ?? delayMs;
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const pullRequests = await gh.listIssueClosingPullRequests(owner, repo, issueNumber, {
-      includeClosedPrs: true,
-      first: 20,
-    });
-    if (!(pullRequests || []).some((pr) => pr?.number === prNumber)) {
-      return true;
-    }
-    if (attempt < maxAttempts - 1) {
-      await sleep(waitDelayMs);
-    }
-  }
-  return false;
-}
-
 function summarizeError(err) {
   const message = err?.message || String(err);
   return message.length > 1200 ? `${message.slice(0, 1200)}...` : message;
@@ -2113,7 +2066,7 @@ function summarizeError(err) {
 
 function bodyClosesIssue(body, issueNumber) {
   const escaped = String(issueNumber).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`\\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\\s+#${escaped}\\b`, "i").test(String(body || ""));
+  return new RegExp(`\\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\\s+(?:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#${escaped}\\b`, "i").test(String(body || ""));
 }
 
 function removePullRequestIssueLinks(body, issueNumber, branchName, { emptyFallback = "This PR was archived by automation." } = {}) {
@@ -2155,18 +2108,33 @@ function isPullRequestBranchLinkLine(line, branchName) {
 }
 
 function formatPullRequestBody({ owner, repo, branchName, body, issueNumber }) {
-  const cleanedBody = String(body || "")
+  const cleanedBody = removeClosingIssueLinkLines(String(body || "")
     .replace(/^Branch: \[`[^`]+`\]\(https:\/\/github\.com\/[^)]+\)\s*/i, "")
     .replace(/^This PR was archived by automation\.\s*/i, "")
-    .trim();
-  const bodyWithIssueLink = bodyClosesIssue(cleanedBody, issueNumber)
+    .trim(), issueNumber);
+  const bodyWithIssueLink = bodyReferencesIssue(cleanedBody, issueNumber)
     ? cleanedBody
-    : [cleanedBody, `Closes #${issueNumber}`].filter(Boolean).join("\n\n");
+    : [cleanedBody, `Refs #${issueNumber}`].filter(Boolean).join("\n\n");
   return [
     `Branch: ${branchMarkdownLink(owner, repo, branchName)}`,
     "",
     bodyWithIssueLink,
   ].join("\n").trim();
+}
+
+function removeClosingIssueLinkLines(body, issueNumber) {
+  return String(body || "")
+    .split(/\r?\n/)
+    .filter((line) => !bodyClosesIssue(line, issueNumber))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function bodyReferencesIssue(body, issueNumber) {
+  const escaped = String(issueNumber).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`\\brefs?\\s+(?:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#${escaped}\\b`, "i").test(String(body || ""))
+    || new RegExp(`(^|\\s)(?:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#${escaped}\\b`, "i").test(String(body || ""));
 }
 
 function branchMarkdownLink(owner, repo, branchName) {
