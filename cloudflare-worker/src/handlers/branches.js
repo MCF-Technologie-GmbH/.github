@@ -201,6 +201,14 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
       replaceAutomationState(linkedIssueBody, createdState)
     );
 
+    await unlinkClosedPullRequestsFromIssueForBranch({
+      gh,
+      owner,
+      repo,
+      issueNumber,
+      branchName,
+    });
+
     await gh.createComment(
       owner,
       repo,
@@ -618,15 +626,6 @@ export async function handleBranchDeleteCommand({ gh, owner, repo, issueNumber }
   const branchToDelete = linkedBranchName || branchName;
   const associatedPr = state?.branch?.pr ? await getOpenPullRequestOrNull(gh, owner, repo, state.branch.pr) : null;
   if (associatedPr) {
-    await preparePullRequestForBranchDeletion({
-      gh,
-      owner,
-      repo,
-      issueNumber,
-      pr: associatedPr,
-      branchName: branchToDelete,
-    });
-
     state = {
       ...state,
       branch: {
@@ -1234,30 +1233,16 @@ export async function handlePushEvent({ gh, owner, repo, payload }) {
   }
 
   let draftPr;
-  let reopenedPr = false;
   try {
-    draftPr = await reopenClosedPullRequestForIssue({
+    draftPr = await createDraftPullRequestForIssue({
       gh,
       owner,
       repo,
       issueNumber,
       issueType,
-      issue,
+      issueTitle: issue.title,
       branchName,
     });
-    if (draftPr) {
-      reopenedPr = true;
-    } else {
-      draftPr = await createDraftPullRequestForIssue({
-        gh,
-        owner,
-        repo,
-        issueNumber,
-        issueType,
-        issueTitle: issue.title,
-        branchName,
-      });
-    }
   } catch (err) {
     const failedState = {
       ...state,
@@ -1311,14 +1296,6 @@ export async function handlePushEvent({ gh, owner, repo, payload }) {
     };
   }
 
-  await unlinkClosedPullRequestsFromIssueForBranch({
-    gh,
-    owner,
-    repo,
-    issueNumber,
-    branchName,
-  });
-
   const updatedState = {
     ...state,
     branch: {
@@ -1346,7 +1323,7 @@ export async function handlePushEvent({ gh, owner, repo, payload }) {
     payload,
     "/branch push",
     [
-      reopenedPr ? "Reopened draft PR:" : "Created draft PR:",
+      "Created draft PR:",
       "",
       `Pull request number: ${draftPr.number}`,
       "",
@@ -1357,8 +1334,7 @@ export async function handlePushEvent({ gh, owner, repo, payload }) {
 
   return {
     processed: true,
-    prCreated: !reopenedPr,
-    prReopened: reopenedPr,
+    prCreated: true,
     branch: branchName,
     issue: issueNumber,
     pr: draftPr.number,
@@ -1741,42 +1717,6 @@ async function createDraftPullRequestForIssue({ gh, owner, repo, issueNumber, is
   });
 }
 
-async function reopenClosedPullRequestForIssue({ gh, owner, repo, issueNumber, issueType, issue, branchName }) {
-  if (typeof gh.listPullRequests !== "function" || typeof gh.reopenPullRequest !== "function") return null;
-
-  const closedPullRequests = await gh.listPullRequests(owner, repo, {
-    state: "closed",
-    head: `${owner}:${branchName}`,
-    sort: "updated",
-    direction: "desc",
-    perPage: 10,
-  });
-  const closedPr = (closedPullRequests || []).find((pr) => pullRequestMatchesIssue(pr, issueNumber, branchName));
-  if (!closedPr?.number) return null;
-
-  try {
-    const reopenedPr = {
-      ...closedPr,
-      ...(await gh.reopenPullRequest(owner, repo, closedPr.number)),
-      number: closedPr.number,
-    };
-    await normalizePullRequestForIssue({
-      gh,
-      owner,
-      repo,
-      pr: reopenedPr,
-      issue,
-      issueNumber,
-      issueType,
-      branchName,
-    });
-    return { ...reopenedPr, reopened: true };
-  } catch (err) {
-    console.error(`Failed to reopen closed PR #${closedPr.number} for ${branchName}: ${err.message}`);
-    return null;
-  }
-}
-
 async function deleteReferenceIfExists(gh, owner, repo, ref) {
   try {
     await gh.deleteReference(owner, repo, ref);
@@ -1902,14 +1842,6 @@ export async function handlePullRequestEvent({ gh, owner, repo, payload }) {
       ].filter(Boolean).join("\n")
     );
   }
-
-  await unlinkClosedPullRequestsFromIssueForBranch({
-    gh,
-    owner,
-    repo,
-    issueNumber,
-    branchName,
-  });
 
   const updatedState = {
     ...state,
@@ -2154,16 +2086,6 @@ async function getPullRequestOrNull(gh, owner, repo, pullNumber) {
 async function getOpenPullRequestOrNull(gh, owner, repo, pullNumber) {
   const pr = await getPullRequestOrNull(gh, owner, repo, pullNumber);
   return pr?.state === "open" ? pr : null;
-}
-
-async function preparePullRequestForBranchDeletion({ gh, owner, repo, issueNumber, pr, branchName }) {
-  const currentBody = String(pr?.body || "");
-  const nextBody = removePullRequestIssueLinks(currentBody, issueNumber, branchName);
-  if (nextBody !== currentBody && typeof gh.updatePullRequest === "function") {
-    await gh.updatePullRequest(owner, repo, pr.number, { body: nextBody });
-    return { bodyUpdated: true };
-  }
-  return { bodyUpdated: false };
 }
 
 async function closePullRequestForBranchDeletion({ gh, owner, repo, issueNumber, prNumber, branchName }) {
