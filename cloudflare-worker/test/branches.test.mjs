@@ -77,11 +77,10 @@ test("handleBranchCommand reserves and records a linked branch", async () => {
   assert.deepEqual(pullRequests, []);
 });
 
-test("handleBranchCommand cleans closed PR links when creating a new branch", async () => {
+test("handleBranchCommand reopens a closed PR when creating a new branch", async () => {
   const body = ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Feature");
   let latestBody = body;
   let branchCreated = false;
-  const pullUpdates = [];
   const operations = [];
 
   const gh = {
@@ -128,9 +127,13 @@ test("handleBranchCommand cleans closed PR links when creating a new branch", as
         head: { ref: "feat/123-add-login" },
       }];
     },
-    async updatePullRequest(_owner, _repo, pullNumber, update) {
-      operations.push("archive-old-pr");
-      pullUpdates.push({ pullNumber, update });
+    async reopenPullRequest(_owner, _repo, pullNumber) {
+      operations.push("reopen-old-pr");
+      assert.equal(pullNumber, 455);
+      return { number: 455, state: "open" };
+    },
+    async updatePullRequest() {
+      throw new Error("PR body is already normalized");
     },
     async createComment() {},
   };
@@ -144,16 +147,12 @@ test("handleBranchCommand cleans closed PR links when creating a new branch", as
   });
 
   assert.equal(result.created, true);
-  assert.deepEqual(operations, ["archive-old-pr", "create-linked-branch"]);
-  assert.deepEqual(pullUpdates, [{
-    pullNumber: 455,
-    update: {
-      body: "This PR was archived by automation before recreating the managed branch.",
-    },
-  }]);
+  assert.equal(result.pr, 455);
+  assert.match(latestBody, /"pr": 455/);
+  assert.deepEqual(operations, ["create-linked-branch", "reopen-old-pr"]);
 });
 
-test("handleBranchCommand force archives already archived closed PRs before creating the linked branch", async () => {
+test("handleBranchCommand normalizes an archived PR when reopening it from branch create", async () => {
   const body = ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Feature");
   let latestBody = body;
   let branchCreated = false;
@@ -207,8 +206,13 @@ test("handleBranchCommand force archives already archived closed PRs before crea
     async listIssueClosingPullRequests() {
       throw new Error("branch create cleanup must not query issue closing PR references");
     },
+    async reopenPullRequest(_owner, _repo, pullNumber) {
+      operations.push("reopen-old-pr");
+      assert.equal(pullNumber, 455);
+      return { number: 455, state: "open" };
+    },
     async updatePullRequest(_owner, _repo, pullNumber, update) {
-      operations.push("archive-old-pr");
+      operations.push("normalize-old-pr");
       pullUpdates.push({ pullNumber, update });
     },
     async createComment() {},
@@ -223,11 +227,13 @@ test("handleBranchCommand force archives already archived closed PRs before crea
   });
 
   assert.equal(result.created, true);
-  assert.deepEqual(operations, ["archive-old-pr", "create-linked-branch"]);
+  assert.equal(result.pr, 455);
+  assert.match(latestBody, /"pr": 455/);
+  assert.deepEqual(operations, ["create-linked-branch", "reopen-old-pr", "normalize-old-pr"]);
   assert.deepEqual(pullUpdates, [{
     pullNumber: 455,
     update: {
-      body: "This PR was archived by automation before recreating the managed branch.",
+      body: "Branch: [`feat/123-add-login`](https://github.com/MCF-Technologie-GmbH/app/tree/feat/123-add-login)\n\nRefs #123",
     },
   }]);
 });
@@ -1013,6 +1019,7 @@ test("handleBranchRepairCommand preserves an existing expected branch and recrea
   const linkedBranches = [];
   const createdRefs = [];
   const deletedRefs = [];
+  const reopened = [];
   let issueReads = 0;
 
   const gh = {
@@ -1048,6 +1055,29 @@ test("handleBranchRepairCommand preserves an existing expected branch and recrea
       linkedBranches.push(input);
       return {};
     },
+    async listPullRequests(_owner, _repo, query) {
+      assert.deepEqual(query, {
+        state: "closed",
+        head: "MCF-Technologie-GmbH:fix/50-test-bug-issue",
+        sort: "updated",
+        direction: "desc",
+        perPage: 10,
+      });
+      return [{
+        number: 321,
+        state: "closed",
+        title: "fix: test-bug-issue",
+        body: "Branch: [`fix/50-test-bug-issue`](https://github.com/MCF-Technologie-GmbH/app/tree/fix/50-test-bug-issue)\n\nRefs #50",
+        head: { ref: "fix/50-test-bug-issue" },
+      }];
+    },
+    async reopenPullRequest(_owner, _repo, pullNumber) {
+      reopened.push(pullNumber);
+      return { number: pullNumber, state: "open" };
+    },
+    async updatePullRequest() {
+      throw new Error("PR body is already normalized");
+    },
     async createComment(_owner, _repo, _issueNumber, body) {
       comments.push(body);
     },
@@ -1078,7 +1108,10 @@ test("handleBranchRepairCommand preserves an existing expected branch and recrea
   }]);
   assert.match(latestBody, /"linked": true/);
   assert.match(latestBody, /"error": null/);
+  assert.match(latestBody, /"pr": 321/);
+  assert.deepEqual(reopened, [321]);
   assert.match(comments.at(-1), /Relinked branch successfully/);
+  assert.match(comments.at(-1), /Reopened associated draft PR: 321/);
   assert.doesNotMatch(comments.at(-1), /temporary/i);
 });
 
@@ -2094,7 +2127,7 @@ test("handlePushEvent creates draft PR after first commit push", async () => {
   assert.doesNotMatch(comments[0].body, /#456/);
 });
 
-test("handlePushEvent creates a new draft PR and archives replaced closed PR links", async () => {
+test("handlePushEvent reopens a closed PR for a recreated branch", async () => {
   const body = replaceAutomationState(
     ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Feature"),
     {
@@ -2108,8 +2141,8 @@ test("handlePushEvent creates a new draft PR and archives replaced closed PR lin
     }
   );
   let updatedBody = null;
-  const pullRequests = [];
   const pullUpdates = [];
+  const reopened = [];
   const comments = [];
   const gh = {
     async getIssue() {
@@ -2143,15 +2176,15 @@ test("handlePushEvent creates a new draft PR and archives replaced closed PR lin
         head: { ref: "feat/123-add-login" },
       }];
     },
-    async reopenPullRequest() {
-      throw new Error("push should not reopen closed PRs");
+    async reopenPullRequest(_owner, _repo, pullNumber) {
+      reopened.push(pullNumber);
+      return { number: pullNumber, state: "open" };
     },
     async updatePullRequest(_owner, _repo, pullNumber, update) {
       pullUpdates.push({ pullNumber, update });
     },
-    async createPullRequest(input) {
-      pullRequests.push(input);
-      return { number: 456 };
+    async createPullRequest() {
+      throw new Error("push should reuse the closed PR");
     },
     async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
       updatedBody = nextBody;
@@ -2171,27 +2204,15 @@ test("handlePushEvent creates a new draft PR and archives replaced closed PR lin
     },
   });
 
-  assert.equal(result.prCreated, true);
-  assert.equal(result.pr, 456);
-  assert.deepEqual(pullRequests, [{
-    owner: "MCF-Technologie-GmbH",
-    repo: "app",
-    title: "feat: Add login",
-    head: "feat/123-add-login",
-    base: "dev",
-    body: "Branch: [`feat/123-add-login`](https://github.com/MCF-Technologie-GmbH/app/tree/feat/123-add-login)\n\nRefs #123",
-    draft: true,
-  }]);
-  assert.deepEqual(pullUpdates, [{
-    pullNumber: 455,
-    update: {
-      body: "This PR was archived by automation.",
-    },
-  }]);
-  assert.match(updatedBody, /"pr": 456/);
-  assert.match(comments[0].body, /Created draft PR/);
-  assert.match(comments[0].body, /Pull request number: 456/);
-  assert.doesNotMatch(comments[0].body, /#456/);
+  assert.equal(result.prCreated, false);
+  assert.equal(result.prReopened, true);
+  assert.equal(result.pr, 455);
+  assert.deepEqual(reopened, [455]);
+  assert.deepEqual(pullUpdates, []);
+  assert.match(updatedBody, /"pr": 455/);
+  assert.match(comments[0].body, /Reopened draft PR/);
+  assert.match(comments[0].body, /Pull request number: 455/);
+  assert.doesNotMatch(comments[0].body, /#455/);
 });
 
 test("handlePushEvent ignores branch creation push events", async () => {
@@ -2417,12 +2438,6 @@ test("handlePullRequestEvent records valid PR number", async () => {
       update: {
         title: "feat: Add login",
         body: "Branch: [`feat/123-add-login`](https://github.com/MCF-Technologie-GmbH/app/tree/feat/123-add-login)\n\nRefs #123",
-      },
-    },
-    {
-      pullNumber: 455,
-      update: {
-        body: "This PR was archived by automation.",
       },
     },
   ]);
