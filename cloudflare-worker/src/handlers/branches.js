@@ -634,6 +634,46 @@ export async function handleBranchDeleteCommand({ gh, owner, repo, issueNumber }
   const branchToDelete = linkedBranchName || branchName;
   const associatedPr = state?.branch?.pr ? await getOpenPullRequestOrNull(gh, owner, repo, state.branch.pr) : null;
   if (associatedPr) {
+    await unlinkPullRequestFromIssue({
+      gh,
+      owner,
+      repo,
+      pr: associatedPr,
+      issueNumber,
+      branchName: branchToDelete,
+      emptyFallback: "This PR was detached from its issue before branch deletion.",
+    });
+    const prUnlinked = await waitForPullRequestIssueUnlink({
+      gh,
+      owner,
+      repo,
+      issueNumber,
+      prNumber: associatedPr.number,
+    });
+    if (!prUnlinked) {
+      await gh.createComment(
+        owner,
+        repo,
+        issueNumber,
+        [
+          "I could not safely delete the managed branch because GitHub still reports the associated PR as closing this issue.",
+          "",
+          `Pull request number: ${associatedPr.number}`,
+          `Branch: \`${branchToDelete}\``,
+          "",
+          "I removed the PR body links while the PR is still open. Run `/branch delete` again after GitHub finishes updating the PR relationship.",
+        ].join("\n")
+      );
+      return {
+        processed: true,
+        command: "branch delete",
+        deleted: false,
+        branch: branchToDelete,
+        prClosed: null,
+        reason: "pull request still linked to issue",
+      };
+    }
+
     state = {
       ...state,
       branch: {
@@ -1039,7 +1079,7 @@ async function handleRestoredPullRequestBranch({ gh, owner, repo, payload, issue
         reason: activePr.reason,
       };
     }
-    await unlinkClosedPullRequestFromIssue({ gh, owner, repo, pr: restoredFromPr, issueNumber, branchName });
+    await unlinkPullRequestFromIssue({ gh, owner, repo, pr: restoredFromPr, issueNumber, branchName });
     await gh.createComment(
       owner,
       repo,
@@ -1963,7 +2003,7 @@ async function notifyClosedPullRequestsBlockedByActiveBranch({ gh, owner, repo, 
   if (!Array.isArray(closedPullRequests) || !activePrNumber) return;
   for (const pr of closedPullRequests) {
     if (!pr?.number || pr.number === ignorePullNumber) continue;
-    await unlinkClosedPullRequestFromIssue({ gh, owner, repo, pr, issueNumber: extractIssueNumberFromBranch(branchName), branchName });
+    await unlinkPullRequestFromIssue({ gh, owner, repo, pr, issueNumber: extractIssueNumberFromBranch(branchName), branchName });
     await gh.createComment(
       owner,
       repo,
@@ -1991,7 +2031,7 @@ async function unlinkClosedPullRequestsFromIssueForBranch({ gh, owner, repo, iss
   let unlinked = 0;
   for (const pr of closedPullRequests || []) {
     if (!pullRequestMatchesIssue(pr, issueNumber, branchName)) continue;
-    if (await unlinkClosedPullRequestFromIssue({ gh, owner, repo, pr, issueNumber, branchName })) {
+    if (await unlinkPullRequestFromIssue({ gh, owner, repo, pr, issueNumber, branchName })) {
       unlinked += 1;
     }
   }
@@ -2029,14 +2069,41 @@ async function listClosedPullRequestsForIssueBranch({ gh, owner, repo, issueNumb
   return [...pullRequests.values()];
 }
 
-async function unlinkClosedPullRequestFromIssue({ gh, owner, repo, pr, issueNumber, branchName }) {
+async function unlinkPullRequestFromIssue({
+  gh,
+  owner,
+  repo,
+  pr,
+  issueNumber,
+  branchName,
+  emptyFallback = "This PR was archived by automation.",
+}) {
   if (!pr?.number) return false;
-  const nextBody = removePullRequestIssueLinks(pr.body || "", issueNumber, branchName);
+  const nextBody = removePullRequestIssueLinks(pr.body || "", issueNumber, branchName, { emptyFallback });
   if (nextBody === String(pr.body || "")) return false;
   await gh.updatePullRequest(owner, repo, pr.number, {
     body: nextBody,
   });
   return true;
+}
+
+async function waitForPullRequestIssueUnlink({ gh, owner, repo, issueNumber, prNumber, attempts = 6, delayMs = 1000 }) {
+  if (typeof gh.listIssueClosingPullRequests !== "function") return true;
+  const maxAttempts = gh.pullRequestIssueUnlinkWaitAttempts || attempts;
+  const waitDelayMs = gh.pullRequestIssueUnlinkWaitDelayMs ?? delayMs;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const pullRequests = await gh.listIssueClosingPullRequests(owner, repo, issueNumber, {
+      includeClosedPrs: true,
+      first: 20,
+    });
+    if (!(pullRequests || []).some((pr) => pr?.number === prNumber)) {
+      return true;
+    }
+    if (attempt < maxAttempts - 1) {
+      await sleep(waitDelayMs);
+    }
+  }
+  return false;
 }
 
 function summarizeError(err) {
@@ -2049,7 +2116,7 @@ function bodyClosesIssue(body, issueNumber) {
   return new RegExp(`\\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\\s+#${escaped}\\b`, "i").test(String(body || ""));
 }
 
-function removePullRequestIssueLinks(body, issueNumber, branchName) {
+function removePullRequestIssueLinks(body, issueNumber, branchName, { emptyFallback = "This PR was archived by automation." } = {}) {
   const escaped = String(issueNumber).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const originalBody = String(body || "");
   let changed = false;
@@ -2070,7 +2137,7 @@ function removePullRequestIssueLinks(body, issueNumber, branchName) {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
   if (!changed) return originalBody;
-  return cleanedBody || "This PR was archived by automation.";
+  return cleanedBody || emptyFallback;
 }
 
 function lineReferencesIssue(line, escapedIssueNumber) {

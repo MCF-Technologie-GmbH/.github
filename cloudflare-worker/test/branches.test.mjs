@@ -711,7 +711,7 @@ test("handleBranchDeleteCommand deletes the visible linked branch before expecte
   assert.match(latestBody, /"linked": false/);
 });
 
-test("handleBranchDeleteCommand closes an associated PR without unlinking it", async () => {
+test("handleBranchDeleteCommand unlinks an associated PR before closing it", async () => {
   const body = replaceAutomationState(
     ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug"),
     {
@@ -748,8 +748,18 @@ test("handleBranchDeleteCommand closes an associated PR without unlinking it", a
       assert.equal(pullNumber, 321);
       return { number: 321, state: "open", body: pullBody };
     },
-    async updatePullRequest() {
-      throw new Error("branch delete should not unlink PR body");
+    async updatePullRequest(_owner, _repo, pullNumber, update) {
+      operations.push("unlink-pr");
+      assert.equal(pullNumber, 321);
+      pullBody = update.body;
+    },
+    async listIssueClosingPullRequests(_owner, _repo, issueNumber, query) {
+      assert.equal(issueNumber, 50);
+      assert.deepEqual(query, {
+        includeClosedPrs: true,
+        first: 20,
+      });
+      return [];
     },
     async closePullRequest(_owner, _repo, pullNumber) {
       operations.push("close-pr");
@@ -780,10 +790,10 @@ test("handleBranchDeleteCommand closes an associated PR without unlinking it", a
   });
 
   assert.equal(result.prClosed, 321);
-  assert.deepEqual(operations, ["close-pr", "delete-ref"]);
+  assert.deepEqual(operations, ["unlink-pr", "close-pr", "delete-ref"]);
   assert.deepEqual(closedPrs, [321]);
   assert.deepEqual(deletedRefs, ["heads/fix/50-test-bug-issue"]);
-  assert.equal(pullBody, "Branch: [`fix/50-test-bug-issue`](https://github.com/MCF-Technologie-GmbH/app/tree/fix/50-test-bug-issue)\n\nCloses #50");
+  assert.equal(pullBody, "This PR was detached from its issue before branch deletion.");
   assert.match(latestBody, /"pr": null/);
   assert.match(comments.find((comment) => comment.issueNumber === 321).body, /closed because the managed branch was deleted/);
   assert.doesNotMatch(comments.find((comment) => comment.issueNumber === 321).body, /#50/);
@@ -792,7 +802,7 @@ test("handleBranchDeleteCommand closes an associated PR without unlinking it", a
   assert.doesNotMatch(comments.find((comment) => comment.issueNumber === 50).body, /#321/);
 });
 
-test("handleBranchDeleteCommand preserves PR body even when GitHub retains the issue relationship", async () => {
+test("handleBranchDeleteCommand blocks deletion when GitHub retains the PR issue relationship", async () => {
   const body = replaceAutomationState(
     ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug"),
     {
@@ -812,6 +822,7 @@ test("handleBranchDeleteCommand preserves PR body even when GitHub retains the i
   let pullBody = "Branch: [`fix/50-test-bug-issue`](https://github.com/MCF-Technologie-GmbH/app/tree/fix/50-test-bug-issue)\n\nCloses #50";
 
   const gh = {
+    pullRequestIssueUnlinkWaitAttempts: 1,
     async getIssue() {
       return {
         id: "ISSUE_id",
@@ -828,18 +839,27 @@ test("handleBranchDeleteCommand preserves PR body even when GitHub retains the i
       assert.equal(pullNumber, 321);
       return { number: 321, state: "open", body: pullBody };
     },
-    async updatePullRequest() {
-      throw new Error("branch delete should not unlink PR body");
+    async updatePullRequest(_owner, _repo, pullNumber, update) {
+      assert.equal(pullNumber, 321);
+      pullBody = update.body;
     },
-    async closePullRequest(_owner, _repo, pullNumber) {
-      closedPrs.push(pullNumber);
+    async listIssueClosingPullRequests(_owner, _repo, issueNumber, query) {
+      assert.equal(issueNumber, 50);
+      assert.deepEqual(query, {
+        includeClosedPrs: true,
+        first: 20,
+      });
+      return [{ number: 321, state: "OPEN", headRefName: "fix/50-test-bug-issue" }];
+    },
+    async closePullRequest() {
+      throw new Error("branch delete should wait before closing a still-linked PR");
     },
     async getReference(_owner, _repo, ref) {
       assert.equal(ref, "heads/fix/50-test-bug-issue");
       return { object: { sha: "branch-sha" } };
     },
-    async deleteReference(_owner, _repo, ref) {
-      deletedRefs.push(ref);
+    async deleteReference() {
+      throw new Error("branch delete should not delete branch until PR relationship clears");
     },
     async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
       latestBody = nextBody;
@@ -856,13 +876,14 @@ test("handleBranchDeleteCommand preserves PR body even when GitHub retains the i
     issueNumber: 50,
   });
 
-  assert.equal(result.deleted, true);
-  assert.equal(result.prClosed, 321);
-  assert.deepEqual(closedPrs, [321]);
-  assert.deepEqual(deletedRefs, ["heads/fix/50-test-bug-issue"]);
-  assert.equal(pullBody, "Branch: [`fix/50-test-bug-issue`](https://github.com/MCF-Technologie-GmbH/app/tree/fix/50-test-bug-issue)\n\nCloses #50");
-  assert.match(latestBody, /"pr": null/);
-  assert.doesNotMatch(comments.find((comment) => comment.issueNumber === 50).body, /#321/);
+  assert.equal(result.deleted, false);
+  assert.equal(result.prClosed, null);
+  assert.equal(result.reason, "pull request still linked to issue");
+  assert.deepEqual(closedPrs, []);
+  assert.deepEqual(deletedRefs, []);
+  assert.equal(pullBody, "This PR was detached from its issue before branch deletion.");
+  assert.match(latestBody, /"pr": 321/);
+  assert.match(comments.find((comment) => comment.issueNumber === 50).body, /still reports the associated PR as closing this issue/);
 });
 
 test("handleBranchRepairCommand blocks ghost linked branches without resetting metadata", async () => {
