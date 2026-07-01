@@ -195,7 +195,7 @@ test("handleBranchCommand cleans closed PRs reported by issue closing references
         number: 455,
         state: "CLOSED",
         title: "feat: Add login",
-        body: "Branch: [`feat/123-add-login`](https://github.com/MCF-Technologie-GmbH/app/tree/feat/123-add-login)\n\nCloses MCF-Technologie-GmbH/app#123",
+        body: "This PR was detached from its issue before branch deletion.",
         headRefName: "feat/123-add-login",
       }];
     },
@@ -711,7 +711,7 @@ test("handleBranchDeleteCommand deletes the visible linked branch before expecte
   assert.match(latestBody, /"linked": false/);
 });
 
-test("handleBranchDeleteCommand unlinks an associated PR before closing it", async () => {
+test("handleBranchDeleteCommand closes an associated PR without unlinking it", async () => {
   const body = replaceAutomationState(
     ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug"),
     {
@@ -748,10 +748,8 @@ test("handleBranchDeleteCommand unlinks an associated PR before closing it", asy
       assert.equal(pullNumber, 321);
       return { number: 321, state: "open", body: pullBody };
     },
-    async updatePullRequest(_owner, _repo, pullNumber, update) {
-      operations.push("unlink-pr");
-      assert.equal(pullNumber, 321);
-      pullBody = update.body;
+    async updatePullRequest() {
+      throw new Error("branch delete should preserve PR body links for restore");
     },
     async listIssueClosingPullRequests(_owner, _repo, issueNumber, query) {
       assert.equal(issueNumber, 50);
@@ -790,10 +788,10 @@ test("handleBranchDeleteCommand unlinks an associated PR before closing it", asy
   });
 
   assert.equal(result.prClosed, 321);
-  assert.deepEqual(operations, ["unlink-pr", "close-pr", "delete-ref"]);
+  assert.deepEqual(operations, ["close-pr", "delete-ref"]);
   assert.deepEqual(closedPrs, [321]);
   assert.deepEqual(deletedRefs, ["heads/fix/50-test-bug-issue"]);
-  assert.equal(pullBody, "This PR was detached from its issue before branch deletion.");
+  assert.equal(pullBody, "Branch: [`fix/50-test-bug-issue`](https://github.com/MCF-Technologie-GmbH/app/tree/fix/50-test-bug-issue)\n\nCloses #50");
   assert.match(latestBody, /"pr": null/);
   assert.match(comments.find((comment) => comment.issueNumber === 321).body, /closed because the managed branch was deleted/);
   assert.doesNotMatch(comments.find((comment) => comment.issueNumber === 321).body, /#50/);
@@ -802,7 +800,7 @@ test("handleBranchDeleteCommand unlinks an associated PR before closing it", asy
   assert.doesNotMatch(comments.find((comment) => comment.issueNumber === 50).body, /#321/);
 });
 
-test("handleBranchDeleteCommand continues when GitHub retains the PR issue relationship", async () => {
+test("handleBranchDeleteCommand does not wait for PR issue relationship cleanup", async () => {
   const body = replaceAutomationState(
     ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Bug"),
     {
@@ -839,9 +837,8 @@ test("handleBranchDeleteCommand continues when GitHub retains the PR issue relat
       assert.equal(pullNumber, 321);
       return { number: 321, state: "open", body: pullBody };
     },
-    async updatePullRequest(_owner, _repo, pullNumber, update) {
-      assert.equal(pullNumber, 321);
-      pullBody = update.body;
+    async updatePullRequest() {
+      throw new Error("branch delete should not cleanup PR links");
     },
     async closePullRequest(_owner, _repo, pullNumber) {
       operations.push("close-pr");
@@ -876,7 +873,7 @@ test("handleBranchDeleteCommand continues when GitHub retains the PR issue relat
   assert.deepEqual(operations, ["close-pr", "delete-ref"]);
   assert.deepEqual(closedPrs, [321]);
   assert.deepEqual(deletedRefs, ["heads/fix/50-test-bug-issue"]);
-  assert.equal(pullBody, "This PR was detached from its issue before branch deletion.");
+  assert.equal(pullBody, "Branch: [`fix/50-test-bug-issue`](https://github.com/MCF-Technologie-GmbH/app/tree/fix/50-test-bug-issue)\n\nCloses #50");
   assert.match(latestBody, /"pr": null/);
   assert.match(comments.find((comment) => comment.issueNumber === 50).body, /Closed associated pull request: 321/);
 });
@@ -2087,7 +2084,7 @@ test("handlePushEvent creates draft PR after first commit push", async () => {
   assert.doesNotMatch(comments[0].body, /#456/);
 });
 
-test("handlePushEvent creates a new draft PR without touching closed PR history", async () => {
+test("handlePushEvent creates a new draft PR and archives replaced closed PR links", async () => {
   const body = replaceAutomationState(
     ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Feature"),
     {
@@ -2102,6 +2099,7 @@ test("handlePushEvent creates a new draft PR without touching closed PR history"
   );
   let updatedBody = null;
   const pullRequests = [];
+  const pullUpdates = [];
   const comments = [];
   const gh = {
     async getIssue() {
@@ -2119,14 +2117,27 @@ test("handlePushEvent creates a new draft PR without touching closed PR history"
       if (ref === "heads/dev") return { object: { sha: "sha-dev" } };
       throw new Error(`unexpected ref ${ref}`);
     },
-    async listPullRequests() {
-      throw new Error("push should not cleanup closed PRs");
+    async listPullRequests(_owner, _repo, query) {
+      assert.deepEqual(query, {
+        state: "closed",
+        head: "MCF-Technologie-GmbH:feat/123-add-login",
+        sort: "updated",
+        direction: "desc",
+        perPage: 10,
+      });
+      return [{
+        number: 455,
+        state: "closed",
+        title: "feat: Add login",
+        body: "Branch: [`feat/123-add-login`](https://github.com/MCF-Technologie-GmbH/app/tree/feat/123-add-login)\n\nRefs #123",
+        head: { ref: "feat/123-add-login" },
+      }];
     },
     async reopenPullRequest() {
       throw new Error("push should not reopen closed PRs");
     },
-    async updatePullRequest() {
-      throw new Error("push should not update closed PRs");
+    async updatePullRequest(_owner, _repo, pullNumber, update) {
+      pullUpdates.push({ pullNumber, update });
     },
     async createPullRequest(input) {
       pullRequests.push(input);
@@ -2160,6 +2171,12 @@ test("handlePushEvent creates a new draft PR without touching closed PR history"
     base: "dev",
     body: "Branch: [`feat/123-add-login`](https://github.com/MCF-Technologie-GmbH/app/tree/feat/123-add-login)\n\nRefs #123",
     draft: true,
+  }]);
+  assert.deepEqual(pullUpdates, [{
+    pullNumber: 455,
+    update: {
+      body: "This PR was archived by automation.",
+    },
   }]);
   assert.match(updatedBody, /"pr": 456/);
   assert.match(comments[0].body, /Created draft PR/);
@@ -2341,8 +2358,21 @@ test("handlePullRequestEvent records valid PR number", async () => {
     async updatePullRequest(_owner, _repo, pullNumber, update) {
       pullUpdates.push({ pullNumber, update });
     },
-    async listPullRequests() {
-      throw new Error("manual PR adoption should not cleanup closed PRs");
+    async listPullRequests(_owner, _repo, query) {
+      assert.deepEqual(query, {
+        state: "closed",
+        head: "MCF-Technologie-GmbH:feat/123-add-login",
+        sort: "updated",
+        direction: "desc",
+        perPage: 10,
+      });
+      return [{
+        number: 455,
+        state: "closed",
+        title: "feat: Add login",
+        body: "Branch: [`feat/123-add-login`](https://github.com/MCF-Technologie-GmbH/app/tree/feat/123-add-login)\n\nRefs #123",
+        head: { ref: "feat/123-add-login" },
+      }];
     },
     async getReference(_owner, _repo, ref) {
       if (ref === "heads/feat/123-add-login") return { object: { sha: "sha-dev" } };
@@ -2377,6 +2407,12 @@ test("handlePullRequestEvent records valid PR number", async () => {
       update: {
         title: "feat: Add login",
         body: "Branch: [`feat/123-add-login`](https://github.com/MCF-Technologie-GmbH/app/tree/feat/123-add-login)\n\nRefs #123",
+      },
+    },
+    {
+      pullNumber: 455,
+      update: {
+        body: "This PR was archived by automation.",
       },
     },
   ]);

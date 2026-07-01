@@ -114,6 +114,14 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
   }
 
   if (state?.branch?.exists === true && !canRecreateRecordedBranch) {
+    await unlinkClosedPullRequestsFromIssueForBranch({
+      gh,
+      owner,
+      repo,
+      issueNumber,
+      branchName: allowedBranchName || branchName,
+    });
+
     await gh.createComment(
       owner,
       repo,
@@ -634,16 +642,6 @@ export async function handleBranchDeleteCommand({ gh, owner, repo, issueNumber }
   const branchToDelete = linkedBranchName || branchName;
   const associatedPr = state?.branch?.pr ? await getOpenPullRequestOrNull(gh, owner, repo, state.branch.pr) : null;
   if (associatedPr) {
-    await unlinkPullRequestFromIssue({
-      gh,
-      owner,
-      repo,
-      pr: associatedPr,
-      issueNumber,
-      branchName: branchToDelete,
-      emptyFallback: "This PR was detached from its issue before branch deletion.",
-    });
-
     state = {
       ...state,
       branch: {
@@ -877,6 +875,14 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
         undefined,
         replaceAutomationState(linkedBody, updatedState)
       );
+
+      await unlinkClosedPullRequestsFromIssueForBranch({
+        gh,
+        owner,
+        repo,
+        issueNumber,
+        branchName,
+      });
 
       await createBranchEventComment(
         gh,
@@ -1313,6 +1319,14 @@ export async function handlePushEvent({ gh, owner, repo, payload }) {
       reason: draftPr.reason,
     };
   }
+
+  await unlinkClosedPullRequestsFromIssueForBranch({
+    gh,
+    owner,
+    repo,
+    issueNumber,
+    branchName,
+  });
 
   const updatedState = {
     ...state,
@@ -1862,6 +1876,14 @@ export async function handlePullRequestEvent({ gh, owner, repo, payload }) {
     );
   }
 
+  await unlinkClosedPullRequestsFromIssueForBranch({
+    gh,
+    owner,
+    repo,
+    issueNumber,
+    branchName,
+  });
+
   const updatedState = {
     ...state,
     branch: {
@@ -1993,7 +2015,7 @@ async function notifyClosedPullRequestsBlockedByActiveBranch({ gh, owner, repo, 
 }
 
 async function unlinkClosedPullRequestsFromIssueForBranch({ gh, owner, repo, issueNumber, branchName }) {
-  const closedPullRequests = await listClosedPullRequestsForIssueBranch({
+  const closedPullRequestRecords = await listClosedPullRequestsForIssueBranch({
     gh,
     owner,
     repo,
@@ -2001,9 +2023,18 @@ async function unlinkClosedPullRequestsFromIssueForBranch({ gh, owner, repo, iss
     branchName,
   });
   let unlinked = 0;
-  for (const pr of closedPullRequests || []) {
+  for (const record of closedPullRequestRecords || []) {
+    const pr = record?.pr || record;
     if (!pullRequestMatchesIssue(pr, issueNumber, branchName)) continue;
-    if (await unlinkPullRequestFromIssue({ gh, owner, repo, pr, issueNumber, branchName })) {
+    if (await unlinkPullRequestFromIssue({
+      gh,
+      owner,
+      repo,
+      pr,
+      issueNumber,
+      branchName,
+      forceArchive: record?.source === "issue-closing-reference",
+    })) {
       unlinked += 1;
     }
   }
@@ -2022,7 +2053,7 @@ async function listClosedPullRequestsForIssueBranch({ gh, owner, repo, issueNumb
       perPage: 10,
     });
     for (const pr of closedByHead || []) {
-      if (pr?.number) pullRequests.set(pr.number, pr);
+      if (pr?.number) pullRequests.set(pr.number, { pr, source: "head" });
     }
   }
 
@@ -2034,7 +2065,7 @@ async function listClosedPullRequestsForIssueBranch({ gh, owner, repo, issueNumb
     for (const pr of closingPullRequests || []) {
       if (!pr?.number || String(pr.state || "").toUpperCase() !== "CLOSED") continue;
       if (pullRequestHeadRefName(pr) !== branchName && !pullRequestMatchesIssue(pr, issueNumber, branchName)) continue;
-      pullRequests.set(pr.number, pr);
+      pullRequests.set(pr.number, { pr, source: "issue-closing-reference" });
     }
   }
 
@@ -2049,9 +2080,16 @@ async function unlinkPullRequestFromIssue({
   issueNumber,
   branchName,
   emptyFallback = "This PR was archived by automation.",
+  forceArchive = false,
 }) {
   if (!pr?.number) return false;
   const nextBody = removePullRequestIssueLinks(pr.body || "", issueNumber, branchName, { emptyFallback });
+  if (forceArchive && nextBody === String(pr.body || "") && nextBody !== emptyFallback) {
+    await gh.updatePullRequest(owner, repo, pr.number, {
+      body: emptyFallback,
+    });
+    return true;
+  }
   if (nextBody === String(pr.body || "")) return false;
   await gh.updatePullRequest(owner, repo, pr.number, {
     body: nextBody,

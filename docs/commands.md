@@ -32,7 +32,7 @@ automation-state:end -->
 | `branch.exists` | Si el bot considera que la rama existe. | Pasa a `false` durante la reserva de `/branch create`; a `true` cuando la rama se crea o se acepta; a `false` si `/branch repair` detecta que la rama registrada no existe o si `/branch delete` la borra/resetea. |
 | `branch.linked` | Si GitHub reporta la rama como linked branch de la issue. | Pasa a `true` cuando se crea/repara/acepta el enlace; pasa a `false` cuando falla la creacion o reparacion, o cuando `/branch repair` detecta que la rama registrada no existe. |
 | `branch.error` | Ultimo error registrado para la rama. | Se limpia a `null` en reservas, creaciones, reparaciones y resets correctos. Se llena con el error resumido cuando falla crear o reparar, o con el mensaje del conflicto de estado. |
-| `branch.pr` | Numero de PR asociado a la rama. | Se conserva al recrear/reparar ramas. Se actualiza al abrir un PR valido desde la rama autorizada. |
+| `branch.pr` | Numero de PR activo asociado a la rama. | Se actualiza al abrir un PR valido desde la rama autorizada. Pasa a `null` cuando `/branch delete` cierra el PR o cuando se limpia metadata. |
 
 ### `command-log:meta`
 
@@ -79,7 +79,7 @@ Estos comandos no publican una respuesta visible cuando son validos. Actualizan 
 
 | Comando | Caso | Respuesta visible real | Cambio en `automation-state` |
 | --- | --- | --- | --- |
-| `/branch create` | Creacion correcta. | `Created linked branch:` + rama + `Base: dev` + `A draft PR will be created automatically after the first push with commits.` | Reserva primero `{ allowed_branch_name, branch: { exists: false, linked: false, error: null, pr } }`. Al crear la rama, cambia a `{ exists: true, linked: true, error: null, pr }`. |
+| `/branch create` | Creacion correcta. | `Created linked branch:` + rama + `Base: dev` + `A draft PR will be created automatically after the first push with commits.` | Reserva primero `{ allowed_branch_name, branch: { exists: false, linked: false, error: null, pr } }`. Al crear la rama, cambia a `{ exists: true, linked: true, error: null, pr }`. Si habia PRs cerrados viejos para esa misma rama/issue, archiva sus links del body para que queden solo como historial. |
 | `/branch create` | Ya existe una linked branch. | `This issue already has a linked branch:` + rama + `Each issue can only manage one branch.` + instrucciones para usar `/branch delete`. | Sincroniza metadata con el estado real antes de responder. |
 | `/branch create` | La expected branch existe, pero GitHub no la reporta como linked. | `The expected branch exists, but GitHub no longer reports it as linked to this issue.` + expected branch + `Run /branch repair...` + `Run /branch delete... This cannot be undone.` | Sincroniza metadata a `{ exists: true, linked: false, error: null }`. |
 | `/branch create` | Ya hay expected branch linkeada. | `This issue already has an authorized branch:` + rama. | No cambia la metadata de rama salvo normalizacion previa del bloque. |
@@ -93,7 +93,7 @@ Estos comandos no publican una respuesta visible cuando son validos. Actualizan 
 | `/branch repair` | La expected branch no existe. | `Nothing to repair: the expected branch does not exist.` + `Marked the branch state as missing so /branch create can be used again.` + `Expected branch: ...`. | Guarda `{ branch: { exists: false, linked: false, error: null, pr } }` y conserva `allowed_branch_name`. |
 | `/branch repair` | Reparacion correcta. | `Relinked branch successfully.` + `Branch: ...`. | Guarda `{ branch: { exists: true, linked: true, error: null, pr } }`. Durante el proceso crea una rama temporal `temp/...`, recrea la linked branch y borra la temporal. |
 | `/branch repair` | Falla reparar la relacion linked branch despues de crear la temporal. | `I could not repair the linked branch relationship.` + `Branch: ...` + `Temporary branch: ...` + mensaje indicando si la rama original existe otra vez o si la temporal conserva el backup + bloque `text` con el error. | Si el ref original existe otra vez, borra `temp/...` y guarda `{ branch: { exists: true, linked: false, error: "<error>", pr } }`. Si no existe, conserva `temp/...` como backup y guarda `exists: false`. |
-| `/branch delete` | Hay linked branch visible o expected branch existente. | `Deleted the branch managed for this issue.` + `Branch: ...` + `This cannot be undone by automation.` | Borra la linked branch visible si existe; si no, borra `heads/<allowed_branch_name>`. Limpia linked branch records obsoletos y guarda `{ branch: { exists: false, linked: false, error: null, pr } }`. |
+| `/branch delete` | Hay linked branch visible o expected branch existente. | `Deleted the branch managed for this issue.` + `Branch: ...` + `This cannot be undone by automation.` | Si hay PR activo, lo cierra pero conserva su body/link para permitir `Restore branch` desde el PR cerrado. Borra la linked branch visible si existe; si no, borra `heads/<allowed_branch_name>`. Limpia linked branch records obsoletos y guarda `{ branch: { exists: false, linked: false, error: null, pr: null } }`. |
 | `/branch delete` | Hay metadata pero el ref ya no existe. | `The managed branch did not exist, so I only reset the branch metadata.` + `Branch: ...` + `This cannot be undone by automation.` | Limpia linked branch records obsoletos y guarda `{ branch: { exists: false, linked: false, error: null, pr } }`. |
 | `/branch delete` | No hay metadata de rama. | `Nothing to delete: this issue does not have branch metadata.` | Puede normalizar el bloque, pero no crea `branch`. |
 
@@ -260,8 +260,12 @@ Deleted the branch managed for this issue.
 
 Branch: `<branchName>`
 
+Closed associated pull request: <prNumber>
+
 This cannot be undone by automation.
 ```
+
+La linea `Closed associated pull request` solo aparece si habia un PR activo asociado.
 
 `/branch delete` cuando el ref ya no existe:
 
@@ -337,18 +341,18 @@ Los mensajes de conflicto posibles son:
 | Creacion de rama | No es `ref_type: branch`. | No comenta. Devuelve `reason: "create ref_type=<tipo>"`. | Ninguno. |
 | Creacion de rama por el bot | Es rama temporal de reparacion `temp/...-YYYYMMDDHHMMSS`. | No comenta. Devuelve `reason: "temporary repair branch created by automation bot"`. | Ninguno. |
 | Creacion de rama por el bot | Coincide con `allowed_branch_name`. | No comenta. Devuelve `reason: "branch created by automation bot with matching reservation"`. | Ninguno en este handler; `/branch create` actualiza despues. |
-| Creacion manual de rama desde sidebar | Rama linked, basada en `dev`, nombre esperado y sin metadata conflictiva. | `Branch linked and recorded successfully.` + `Branch: ...` + `Base: dev` + `A draft PR will be created automatically after the first push with commits.` + `Created from GitHub's sidebar and accepted by automation.` | Guarda `{ allowed_branch_name: branchName, branch: { exists: true, linked: true, error: null, pr } }`. |
-| Creacion manual de rama desde sidebar | Rama linked, basada en `dev`, nombre esperado y coincide con metadata previa. | `Branch manually linked and metadata repaired successfully.` + `Branch: ...` + `Base: dev` + `A draft PR will be created automatically after the first push with commits.` + `Created from GitHub's sidebar and accepted by automation.` | Guarda `{ allowed_branch_name: branchName, branch: { exists: true, linked: true, error: null, pr } }`. |
+| Creacion manual de rama desde sidebar | Rama linked, basada en `dev`, nombre esperado y sin metadata conflictiva. | `Branch linked and recorded successfully.` + `Branch: ...` + `Base: dev` + `A draft PR will be created automatically after the first push with commits.` + `Created from GitHub's sidebar and accepted by automation.` | Guarda `{ allowed_branch_name: branchName, branch: { exists: true, linked: true, error: null, pr } }`. Si habia PRs cerrados viejos para esa misma rama/issue, archiva sus links del body. |
+| Creacion manual de rama desde sidebar | Rama linked, basada en `dev`, nombre esperado y coincide con metadata previa. | `Branch manually linked and metadata repaired successfully.` + `Branch: ...` + `Base: dev` + `A draft PR will be created automatically after the first push with commits.` + `Created from GitHub's sidebar and accepted by automation.` | Guarda `{ allowed_branch_name: branchName, branch: { exists: true, linked: true, error: null, pr } }`. Si habia PRs cerrados viejos para esa misma rama/issue, archiva sus links del body. |
 | Creacion manual de rama desde sidebar | Hay metadata apuntando a otra rama. | `Deleted manually linked branch <branch>.` + `This issue already has expected branch metadata:` + expected branch + `Run /branch repair before creating or linking a different branch manually.` | Borra la nueva rama. No cambia `automation-state`. |
 | Creacion manual de rama | Rama no aceptada por automation. | `Deleted branch <branch> because it was not accepted by automation.` + `Prefer /branch create for managed issue branches, or use the GitHub sidebar only when the generated branch name matches the issue convention and no branch is already managed.` | Borra la rama. No cambia `automation-state`. |
-| Push a rama gestionada | La rama autorizada ya tiene commits contra `dev` y no hay PR registrado. | `Created draft PR:` + numero de PR + `Branch: ...` + `Base: dev`. | Actualiza `branch.pr` con el numero del PR y limpia `branch.error`. |
+| Push a rama gestionada | La rama autorizada ya tiene commits contra `dev` y no hay PR registrado. | `Created draft PR:` + numero de PR + `Branch: ...` + `Base: dev`. | Crea el Draft PR, actualiza `branch.pr` con el numero del PR y limpia `branch.error`. Tambien archiva links de PRs cerrados viejos para esa rama/issue. |
 | Push a rama gestionada | La rama todavia apunta al mismo commit que `dev`. | No comenta. Devuelve `reason: "no commits between branch and base"`. | No cambia metadata. |
 | Push a rama gestionada | Ya hay PR registrado en metadata. | No comenta. Devuelve `reason: "draft pull request already recorded"`. | No cambia metadata. |
 | Push a rama con numero de issue | La rama no esta autorizada para esa issue. | `I did not create a draft PR for this push because the branch is not registered as the authorized linked branch for the issue.` + expected branch y metadata branch. | No cambia metadata. |
 | Push a rama gestionada | Falla crear el Draft PR. | `I could not create the draft PR for this branch push.` + `Branch: ...` + `Base: dev` + bloque `text` con el error. | Guarda `branch.error` con el error y conserva `branch.pr`. |
 | Apertura de PR | Action distinta de `opened`. | No comenta. Devuelve `reason: "pull_request action=<action>"`. | Ninguno. |
 | Apertura de PR | La rama del PR no parece gestionada por issue. | No comenta. Devuelve `reason: "PR branch is not issue-managed"`. | Ninguno. |
-| Apertura de PR | PR valido. | No comenta. Devuelve `{ processed: true, valid: true, issue, pr }`. | Actualiza `branch.pr` con el numero del PR. |
+| Apertura de PR | PR valido. | No comenta. Devuelve `{ processed: true, valid: true, issue, pr }`. | Normaliza title/body, actualiza `branch.pr` con el numero del PR y archiva links de PRs cerrados viejos para esa rama/issue. |
 | Apertura de PR | PR invalido. | `This PR is not fully linked to its issue yet:` seguido de una lista de problemas. | No actualiza `branch.pr`. |
 
 ### Plantillas exactas de eventos automaticos
