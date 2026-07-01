@@ -71,6 +71,7 @@ test("handleBranchCommand reserves and records a linked branch", async () => {
   assert.match(updates.at(-1), /"exists": true/);
   assert.match(updates.at(-1), /"linked": true/);
   assert.match(updates.at(-1), /"pr": null/);
+  assert.match(updates.at(-1), /^<!-- protected:start -->\n<!-- managed-branch:start -->\nBranch: \[`feat\/123-add-login`\]\(https:\/\/github.com\/MCF-Technologie-GmbH\/app\/tree\/feat\/123-add-login\)/);
   assert.match(comments.at(-1), /Created linked branch/);
   assert.match(comments.at(-1), /draft PR will be created automatically after the first push/);
   assert.deepEqual(pullRequests, []);
@@ -123,6 +124,79 @@ test("handleBranchCommand cleans closed PR links when creating a new branch", as
         title: "feat: Add login",
         body: "Branch: [`feat/123-add-login`](https://github.com/MCF-Technologie-GmbH/app/tree/feat/123-add-login)\n\nCloses #123",
         head: { ref: "feat/123-add-login" },
+      }];
+    },
+    async updatePullRequest(_owner, _repo, pullNumber, update) {
+      pullUpdates.push({ pullNumber, update });
+    },
+    async createComment() {},
+  };
+
+  const result = await handleBranchCommand({
+    gh,
+    owner: "MCF-Technologie-GmbH",
+    repo: "app",
+    issueNumber: 123,
+    comment: { id: 1 },
+  });
+
+  assert.equal(result.created, true);
+  assert.deepEqual(pullUpdates, [{
+    pullNumber: 455,
+    update: {
+      body: "This PR was archived by automation.",
+    },
+  }]);
+});
+
+test("handleBranchCommand cleans closed PRs reported by issue closing references", async () => {
+  const body = ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Feature");
+  let latestBody = body;
+  let branchCreated = false;
+  const pullUpdates = [];
+
+  const gh = {
+    async getIssue() {
+      return {
+        id: "ISSUE_id",
+        title: "Add login",
+        body: latestBody,
+        repository: { id: "REPO_id" },
+        issueType: { name: "Feature" },
+        linkedBranches: {
+          nodes: branchCreated ? [{ ref: { name: "feat/123-add-login" } }] : [],
+        },
+      };
+    },
+    async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
+      latestBody = nextBody;
+    },
+    async getReference(_owner, _repo, ref) {
+      if (ref === "heads/feat/123-add-login") {
+        if (branchCreated) return { object: { sha: "abc123" } };
+        throw new Error("REST GET /git/ref/heads/feat/123-add-login -> HTTP 404: Not Found");
+      }
+      return { object: { sha: "abc123" } };
+    },
+    async createLinkedBranch() {
+      branchCreated = true;
+      return {};
+    },
+    async listPullRequests() {
+      return [];
+    },
+    async listIssueClosingPullRequests(_owner, _repo, issueNumber, query) {
+      assert.equal(issueNumber, 123);
+      assert.deepEqual(query, {
+        includeClosedPrs: true,
+        first: 20,
+      });
+      return [{
+        number: 455,
+        state: "CLOSED",
+        title: "feat: Add login",
+        body: "Branch: [`feat/123-add-login`](https://github.com/MCF-Technologie-GmbH/app/tree/feat/123-add-login)\n\nCloses MCF-Technologie-GmbH/app#123",
+        headRefName: "feat/123-add-login",
       }];
     },
     async updatePullRequest(_owner, _repo, pullNumber, update) {

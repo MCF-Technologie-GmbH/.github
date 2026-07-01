@@ -35,6 +35,29 @@ export const pullMethods = {
     );
   },
 
+  async listIssueClosingPullRequests(owner, repo, issueNumber, { includeClosedPrs = true, first = 20 } = {}) {
+    const data = await this.graphql(
+      `query($owner: String!, $repo: String!, $issueNumber: Int!, $first: Int!, $includeClosedPrs: Boolean!) {
+        repository(owner: $owner, name: $repo) {
+          issue(number: $issueNumber) {
+            closedByPullRequestsReferences(first: $first, includeClosedPrs: $includeClosedPrs) {
+              nodes {
+                number
+                title
+                body
+                state
+                headRefName
+                baseRefName
+              }
+            }
+          }
+        }
+      }`,
+      { owner, repo, issueNumber, first, includeClosedPrs }
+    );
+    return data.repository?.issue?.closedByPullRequestsReferences?.nodes || [];
+  },
+
   async updatePullRequest(owner, repo, pullNumber, { title, body, state } = {}) {
     const update = {};
     if (title !== undefined) update.title = title;

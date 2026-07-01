@@ -181,7 +181,10 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
         error: null,
       },
     };
-    const linkedIssueBody = replaceAutomationState(linkedIssue.body || reloadedIssue.body || issueBody, linkedState);
+    const linkedIssueBody = setManagedBranchBodyLink(
+      replaceAutomationState(linkedIssue.body || reloadedIssue.body || issueBody, linkedState),
+      { owner, repo, branchName }
+    );
     await gh.updateIssueTitleAndBody(
       owner,
       repo,
@@ -1945,10 +1948,15 @@ async function normalizePullRequestForIssue({ gh, owner, repo, pr, issue, issueN
 }
 
 function pullRequestMatchesIssue(pr, issueNumber, branchName) {
-  if (extractIssueNumberFromBranch(pr?.head?.ref) === issueNumber) return true;
+  if (branchName && pullRequestHeadRefName(pr) === branchName) return true;
+  if (extractIssueNumberFromBranch(pullRequestHeadRefName(pr)) === issueNumber) return true;
   if (String(pr?.title || "").includes(`(#${issueNumber})`)) return true;
   if (bodyClosesIssue(pr?.body || "", issueNumber)) return true;
   return false;
+}
+
+function pullRequestHeadRefName(pr) {
+  return pr?.head?.ref || pr?.headRefName || null;
 }
 
 async function notifyClosedPullRequestsBlockedByActiveBranch({ gh, owner, repo, branchName, activePrNumber, ignorePullNumber, closedPullRequests }) {
@@ -1973,13 +1981,12 @@ async function notifyClosedPullRequestsBlockedByActiveBranch({ gh, owner, repo, 
 }
 
 async function unlinkClosedPullRequestsFromIssueForBranch({ gh, owner, repo, issueNumber, branchName }) {
-  if (typeof gh.listPullRequests !== "function") return 0;
-  const closedPullRequests = await gh.listPullRequests(owner, repo, {
-    state: "closed",
-    head: `${owner}:${branchName}`,
-    sort: "updated",
-    direction: "desc",
-    perPage: 10,
+  const closedPullRequests = await listClosedPullRequestsForIssueBranch({
+    gh,
+    owner,
+    repo,
+    issueNumber,
+    branchName,
   });
   let unlinked = 0;
   for (const pr of closedPullRequests || []) {
@@ -1989,6 +1996,37 @@ async function unlinkClosedPullRequestsFromIssueForBranch({ gh, owner, repo, iss
     }
   }
   return unlinked;
+}
+
+async function listClosedPullRequestsForIssueBranch({ gh, owner, repo, issueNumber, branchName }) {
+  const pullRequests = new Map();
+
+  if (typeof gh.listPullRequests === "function") {
+    const closedByHead = await gh.listPullRequests(owner, repo, {
+      state: "closed",
+      head: `${owner}:${branchName}`,
+      sort: "updated",
+      direction: "desc",
+      perPage: 10,
+    });
+    for (const pr of closedByHead || []) {
+      if (pr?.number) pullRequests.set(pr.number, pr);
+    }
+  }
+
+  if (typeof gh.listIssueClosingPullRequests === "function") {
+    const closingPullRequests = await gh.listIssueClosingPullRequests(owner, repo, issueNumber, {
+      includeClosedPrs: true,
+      first: 20,
+    });
+    for (const pr of closingPullRequests || []) {
+      if (!pr?.number || String(pr.state || "").toUpperCase() !== "CLOSED") continue;
+      if (pullRequestHeadRefName(pr) !== branchName && !pullRequestMatchesIssue(pr, issueNumber, branchName)) continue;
+      pullRequests.set(pr.number, pr);
+    }
+  }
+
+  return [...pullRequests.values()];
 }
 
 async function unlinkClosedPullRequestFromIssue({ gh, owner, repo, pr, issueNumber, branchName }) {
@@ -2018,7 +2056,7 @@ function removePullRequestIssueLinks(body, issueNumber, branchName) {
   const cleanedBody = originalBody
     .split(/\r?\n/)
     .filter((line) => {
-      if (bodyClosesIssue(line, issueNumber) || new RegExp(`(^|\\s)#${escaped}\\b`, "i").test(line)) {
+      if (bodyClosesIssue(line, issueNumber) || lineReferencesIssue(line, escaped)) {
         changed = true;
         return false;
       }
@@ -2033,6 +2071,12 @@ function removePullRequestIssueLinks(body, issueNumber, branchName) {
     .trim();
   if (!changed) return originalBody;
   return cleanedBody || "This PR was archived by automation.";
+}
+
+function lineReferencesIssue(line, escapedIssueNumber) {
+  const text = String(line || "");
+  return new RegExp(`(^|\\s)(?:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#${escapedIssueNumber}\\b`, "i").test(text)
+    || new RegExp(`https://github\\.com/[^\\s)]+/[^\\s)]+/issues/${escapedIssueNumber}\\b`, "i").test(text);
 }
 
 function isPullRequestBranchLinkLine(line, branchName) {
