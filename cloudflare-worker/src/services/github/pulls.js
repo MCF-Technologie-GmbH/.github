@@ -77,4 +77,23 @@ export const pullMethods = {
   async reopenPullRequest(owner, repo, pullNumber) {
     return this.updatePullRequest(owner, repo, pullNumber, { state: "open" });
   },
+
+  async archivePullRequest(pullRequestId) {
+    if (!pullRequestId) {
+      throw new Error("Missing pullRequestId.");
+    }
+
+    return this.graphql(
+      `mutation($input: ArchivePullRequestInput!) {
+        archivePullRequest(input: $input) {
+          pullRequest {
+            number
+          }
+        }
+      }`,
+      {
+        input: { pullRequestId },
+      }
+    );
+  },
 };

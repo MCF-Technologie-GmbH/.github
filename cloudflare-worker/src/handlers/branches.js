@@ -134,7 +134,7 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
       exists: false,
       linked: false,
       error: null,
-      pr: state?.branch?.pr ?? null,
+      pr: null,
     },
   };
 
@@ -160,6 +160,14 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
       throw new Error(`Base branch ${BASE_BRANCH} did not return a commit SHA.`);
     }
 
+    await archiveClosedPullRequestsForIssueBranch({
+      gh,
+      owner,
+      repo,
+      issueNumber,
+      branchName,
+    });
+
     await gh.createLinkedBranch({
       issueId: currentIssue.id,
       repositoryId: currentIssue.repository?.id,
@@ -181,19 +189,6 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
         error: null,
       },
     };
-    const reopenedPrResult = await reopenClosedPullRequestForIssue({
-      gh,
-      owner,
-      repo,
-      issueNumber,
-      issueType,
-      issue: linkedIssue,
-      branchName,
-    });
-    if (reopenedPrResult.pr) {
-      linkedState.branch.pr = reopenedPrResult.pr.number;
-    }
-
     const linkedIssueBody = setManagedBranchBodyLink(
       replaceAutomationState(linkedIssue.body || reloadedIssue.body || issueBody, linkedState),
       { owner, repo, branchName }
@@ -233,12 +228,7 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
         "",
         `Base: \`${BASE_BRANCH}\``,
         "",
-        reopenedPrResult.pr
-          ? `Reopened associated draft PR: ${reopenedPrResult.pr.number}`
-          : "A draft PR will be created automatically after the first push with commits.",
-        reopenedPrResult.error
-          ? `I could not reopen the previous PR yet. I will retry after the first push.`
-          : null,
+        "A draft PR will be created automatically after the first push with commits.",
       ].filter((line) => line !== null).join("\n")
     );
 
@@ -477,6 +467,14 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
   const temporaryBranchName = buildTemporaryBranchName(branchName);
 
   try {
+    await archiveClosedPullRequestsForIssueBranch({
+      gh,
+      owner,
+      repo,
+      issueNumber,
+      branchName,
+    });
+
     await gh.createReference(owner, repo, `refs/heads/${temporaryBranchName}`, branchOid);
     await gh.deleteReference(owner, repo, `heads/${branchName}`);
     currentIssue = (await cleanupStaleLinkedBranchRecords({
@@ -568,18 +566,6 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
     },
   };
   const repairedIssue = await gh.getIssue(owner, repo, issueNumber);
-  const reopenedPrResult = await reopenClosedPullRequestForIssue({
-    gh,
-    owner,
-    repo,
-    issueNumber,
-    issueType,
-    issue: repairedIssue,
-    branchName,
-  });
-  if (reopenedPrResult.pr) {
-    repairedState.branch.pr = reopenedPrResult.pr.number;
-  }
 
   await gh.updateIssueTitleAndBody(
     owner,
@@ -596,8 +582,6 @@ export async function handleBranchRepairCommand({ gh, owner, repo, issueNumber }
       "Relinked branch successfully.",
       "",
       `Branch: \`${branchName}\``,
-      reopenedPrResult.pr ? `Reopened associated draft PR: ${reopenedPrResult.pr.number}` : null,
-      reopenedPrResult.error ? "I could not reopen the previous PR yet. I will retry after the first push." : null,
     ].filter((line) => line !== null).join("\n")
   );
 
@@ -866,7 +850,7 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
           exists: true,
           linked: true,
           error: null,
-          pr: state?.branch?.pr ?? null,
+          pr: null,
         },
       };
       const updatedState = {
@@ -878,18 +862,13 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
         },
       };
 
-      const reopenedPrResult = await reopenClosedPullRequestForIssue({
+      await archiveClosedPullRequestsForIssueBranch({
         gh,
         owner,
         repo,
         issueNumber,
-        issueType,
-        issue,
         branchName,
       });
-      if (reopenedPrResult.pr) {
-        updatedState.branch.pr = reopenedPrResult.pr.number;
-      }
 
       const linkedBody = replaceAutomationState(body, updatedState);
       await gh.updateIssueTitleAndBody(
@@ -914,12 +893,7 @@ export async function handleCreateEvent({ gh, owner, repo, payload }) {
           "",
           `Branch: \`${branchName}\``,
           `Base: \`${BASE_BRANCH}\``,
-          reopenedPrResult.pr
-            ? `Reopened associated draft PR: ${reopenedPrResult.pr.number}`
-            : "A draft PR will be created automatically after the first push with commits.",
-          reopenedPrResult.error
-            ? `I could not reopen the previous PR yet. I will retry after the first push.`
-            : null,
+          "A draft PR will be created automatically after the first push with commits.",
           "",
           "Created from GitHub's sidebar and accepted by automation.",
         ].filter(Boolean).join("\n")
@@ -1278,33 +1252,23 @@ export async function handlePushEvent({ gh, owner, repo, payload }) {
   }
 
   let draftPr;
-  let reopenedPr = false;
   try {
-    const reopenedPrResult = await reopenClosedPullRequestForIssue({
+    await archiveClosedPullRequestsForIssueBranch({
+      gh,
+      owner,
+      repo,
+      issueNumber,
+      branchName,
+    });
+    draftPr = await createDraftPullRequestForIssue({
       gh,
       owner,
       repo,
       issueNumber,
       issueType,
-      issue,
+      issueTitle: issue.title,
       branchName,
     });
-    if (reopenedPrResult.pr) {
-      draftPr = reopenedPrResult.pr;
-      reopenedPr = true;
-    } else if (reopenedPrResult.error) {
-      throw reopenedPrResult.error;
-    } else {
-      draftPr = await createDraftPullRequestForIssue({
-        gh,
-        owner,
-        repo,
-        issueNumber,
-        issueType,
-        issueTitle: issue.title,
-        branchName,
-      });
-    }
   } catch (err) {
     const failedState = {
       ...state,
@@ -1328,7 +1292,7 @@ export async function handlePushEvent({ gh, owner, repo, payload }) {
       payload,
       "/branch push",
       [
-        "I could not open the draft PR for this branch push.",
+        "I could not create the draft PR for this branch push.",
         "",
         `Branch: \`${branchName}\``,
         `Base: \`${BASE_BRANCH}\``,
@@ -1344,7 +1308,7 @@ export async function handlePushEvent({ gh, owner, repo, payload }) {
       prCreated: false,
       branch: branchName,
       issue: issueNumber,
-      reason: "draft pull request open failed",
+      reason: "draft pull request creation failed",
     };
   }
 
@@ -1385,7 +1349,7 @@ export async function handlePushEvent({ gh, owner, repo, payload }) {
     payload,
     "/branch push",
     [
-      reopenedPr ? "Reopened draft PR:" : "Created draft PR:",
+      "Created draft PR:",
       "",
       `Pull request number: ${draftPr.number}`,
       "",
@@ -1396,8 +1360,7 @@ export async function handlePushEvent({ gh, owner, repo, payload }) {
 
   return {
     processed: true,
-    prCreated: !reopenedPr,
-    prReopened: reopenedPr,
+    prCreated: true,
     branch: branchName,
     issue: issueNumber,
     pr: draftPr.number,
@@ -1783,9 +1746,9 @@ async function createDraftPullRequestForIssue({ gh, owner, repo, issueNumber, is
   });
 }
 
-async function reopenClosedPullRequestForIssue({ gh, owner, repo, issueNumber, issueType, issue, branchName }) {
-  if (typeof gh.listPullRequests !== "function" || typeof gh.reopenPullRequest !== "function") {
-    return { found: false, pr: null, error: null };
+async function archiveClosedPullRequestsForIssueBranch({ gh, owner, repo, issueNumber, branchName }) {
+  if (typeof gh.listPullRequests !== "function" || typeof gh.archivePullRequest !== "function") {
+    return { archived: 0, skipped: true };
   }
 
   const closedPullRequests = await gh.listPullRequests(owner, repo, {
@@ -1795,32 +1758,20 @@ async function reopenClosedPullRequestForIssue({ gh, owner, repo, issueNumber, i
     direction: "desc",
     perPage: 10,
   });
-  const closedPr = (closedPullRequests || []).find((pr) => pullRequestMatchesIssue(pr, issueNumber, branchName));
-  if (!closedPr?.number) {
-    return { found: false, pr: null, error: null };
-  }
 
-  try {
-    const reopenedPr = {
-      ...closedPr,
-      ...(await gh.reopenPullRequest(owner, repo, closedPr.number)),
-      number: closedPr.number,
-    };
-    await normalizePullRequestForIssue({
-      gh,
-      owner,
-      repo,
-      pr: reopenedPr,
-      issue,
-      issueNumber,
-      issueType,
-      branchName,
-    });
-    return { found: true, pr: { ...reopenedPr, reopened: true }, error: null };
-  } catch (err) {
-    console.error(`Failed to reopen closed PR #${closedPr.number} for ${branchName}: ${err.message}`);
-    return { found: true, pr: null, error: err, closedPr };
+  let archived = 0;
+  for (const pr of closedPullRequests || []) {
+    if (!pullRequestMatchesIssue(pr, issueNumber, branchName)) continue;
+    const pullRequestId = pullRequestGraphqlId(pr);
+    if (!pullRequestId) continue;
+    await gh.archivePullRequest(pullRequestId);
+    archived += 1;
   }
+  return { archived, skipped: false };
+}
+
+function pullRequestGraphqlId(pr) {
+  return pr?.node_id || pr?.id || null;
 }
 
 async function deleteReferenceIfExists(gh, owner, repo, ref) {
@@ -1946,6 +1897,14 @@ export async function handlePullRequestEvent({ gh, owner, repo, payload }) {
       ].filter(Boolean).join("\n")
     );
   }
+
+  await archiveClosedPullRequestsForIssueBranch({
+    gh,
+    owner,
+    repo,
+    issueNumber,
+    branchName,
+  });
 
   const updatedState = {
     ...state,

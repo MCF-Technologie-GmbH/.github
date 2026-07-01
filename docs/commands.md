@@ -79,7 +79,7 @@ Estos comandos no publican una respuesta visible cuando son validos. Actualizan 
 
 | Comando | Caso | Respuesta visible real | Cambio en `automation-state` |
 | --- | --- | --- | --- |
-| `/branch create` | Creacion correcta. | `Created linked branch:` + rama + `Base: dev` + mensaje de Draft PR. Si habia un PR cerrado reutilizable, muestra `Reopened associated draft PR: <prNumber>`; si no, muestra que el Draft PR se creara despues del primer push. | Reserva primero `{ allowed_branch_name, branch: { exists: false, linked: false, error: null, pr } }`. Despues crea la linked branch y busca un PR cerrado por `head=<branchName>` para reabrirlo. Si lo encuentra y GitHub permite reabrirlo, guarda `{ exists: true, linked: true, error: null, pr: <prNumber> }`. Si no hay PR cerrado, guarda `pr: null`. |
+| `/branch create` | Creacion correcta. | `Created linked branch:` + rama + `Base: dev` + mensaje de que el Draft PR se creara despues del primer push. | Reserva primero `{ allowed_branch_name, branch: { exists: false, linked: false, error: null, pr: null } }`. Antes de crear la linked branch, archiva PRs cerrados antiguos por `head=<branchName>` que correspondan a la issue. Despues crea la linked branch y guarda `{ exists: true, linked: true, error: null, pr: null }`. |
 | `/branch create` | Ya existe una linked branch. | `This issue already has a linked branch:` + rama + `Each issue can only manage one branch.` + instrucciones para usar `/branch delete`. | Sincroniza metadata con el estado real antes de responder. |
 | `/branch create` | La expected branch existe, pero GitHub no la reporta como linked. | `The expected branch exists, but GitHub no longer reports it as linked to this issue.` + expected branch + `Run /branch repair...` + `Run /branch delete... This cannot be undone.` | Sincroniza metadata a `{ exists: true, linked: false, error: null }`. |
 | `/branch create` | Ya hay expected branch linkeada. | `This issue already has an authorized branch:` + rama. | No cambia la metadata de rama salvo normalizacion previa del bloque. |
@@ -341,18 +341,18 @@ Los mensajes de conflicto posibles son:
 | Creacion de rama | No es `ref_type: branch`. | No comenta. Devuelve `reason: "create ref_type=<tipo>"`. | Ninguno. |
 | Creacion de rama por el bot | Es rama temporal de reparacion `temp/...-YYYYMMDDHHMMSS`. | No comenta. Devuelve `reason: "temporary repair branch created by automation bot"`. | Ninguno. |
 | Creacion de rama por el bot | Coincide con `allowed_branch_name`. | No comenta. Devuelve `reason: "branch created by automation bot with matching reservation"`. | Ninguno en este handler; `/branch create` actualiza despues. |
-| Creacion manual de rama desde sidebar | Rama linked, basada en `dev`, nombre esperado y sin metadata conflictiva. | `Branch linked and recorded successfully.` + `Branch: ...` + `Base: dev` + mensaje de Draft PR + `Created from GitHub's sidebar and accepted by automation.` | Guarda `{ allowed_branch_name: branchName, branch: { exists: true, linked: true, error: null, pr } }`. Si habia un PR cerrado reutilizable por `head=<branchName>`, lo reabre y guarda `branch.pr`. |
-| Creacion manual de rama desde sidebar | Rama linked, basada en `dev`, nombre esperado y coincide con metadata previa. | `Branch manually linked and metadata repaired successfully.` + `Branch: ...` + `Base: dev` + mensaje de Draft PR + `Created from GitHub's sidebar and accepted by automation.` | Guarda `{ allowed_branch_name: branchName, branch: { exists: true, linked: true, error: null, pr } }`. Si habia un PR cerrado reutilizable por `head=<branchName>`, lo reabre y guarda `branch.pr`. |
+| Creacion manual de rama desde sidebar | Rama linked, basada en `dev`, nombre esperado y sin metadata conflictiva. | `Branch linked and recorded successfully.` + `Branch: ...` + `Base: dev` + mensaje de Draft PR + `Created from GitHub's sidebar and accepted by automation.` | Archiva PRs cerrados antiguos por `head=<branchName>` que correspondan a la issue y guarda `{ allowed_branch_name: branchName, branch: { exists: true, linked: true, error: null, pr: null } }`. |
+| Creacion manual de rama desde sidebar | Rama linked, basada en `dev`, nombre esperado y coincide con metadata previa. | `Branch manually linked and metadata repaired successfully.` + `Branch: ...` + `Base: dev` + mensaje de Draft PR + `Created from GitHub's sidebar and accepted by automation.` | Archiva PRs cerrados antiguos por `head=<branchName>` que correspondan a la issue y guarda `{ allowed_branch_name: branchName, branch: { exists: true, linked: true, error: null, pr: null } }`. |
 | Creacion manual de rama desde sidebar | Hay metadata apuntando a otra rama. | `Deleted manually linked branch <branch>.` + `This issue already has expected branch metadata:` + expected branch + `Run /branch repair before creating or linking a different branch manually.` | Borra la nueva rama. No cambia `automation-state`. |
 | Creacion manual de rama | Rama no aceptada por automation. | `Deleted branch <branch> because it was not accepted by automation.` + `Prefer /branch create for managed issue branches, or use the GitHub sidebar only when the generated branch name matches the issue convention and no branch is already managed.` | Borra la rama. No cambia `automation-state`. |
-| Push a rama gestionada | La rama autorizada ya tiene commits contra `dev` y no hay PR registrado. | Si hay PR cerrado reutilizable: `Reopened draft PR:` + numero de PR + `Branch: ...` + `Base: dev`. Si no hay PR cerrado: `Created draft PR:` + numero de PR + `Branch: ...` + `Base: dev`. | Primero intenta reabrir el PR cerrado mas reciente por `head=<branchName>`. Si existe y reabre correctamente, actualiza `branch.pr` con ese numero. Solo crea un Draft PR nuevo cuando no existe PR cerrado reutilizable. |
+| Push a rama gestionada | La rama autorizada ya tiene commits contra `dev` y no hay PR registrado. | `Created draft PR:` + numero de PR + `Branch: ...` + `Base: dev`. | Primero archiva PRs cerrados antiguos por `head=<branchName>` que correspondan a la issue. Despues crea un Draft PR nuevo y actualiza `branch.pr` con ese numero. |
 | Push a rama gestionada | La rama todavia apunta al mismo commit que `dev`. | No comenta. Devuelve `reason: "no commits between branch and base"`. | No cambia metadata. |
 | Push a rama gestionada | Ya hay PR registrado en metadata. | No comenta. Devuelve `reason: "draft pull request already recorded"`. | No cambia metadata. |
 | Push a rama con numero de issue | La rama no esta autorizada para esa issue. | `I did not create a draft PR for this push because the branch is not registered as the authorized linked branch for the issue.` + expected branch y metadata branch. | No cambia metadata. |
-| Push a rama gestionada | Falla abrir el Draft PR. | `I could not open the draft PR for this branch push.` + `Branch: ...` + `Base: dev` + bloque `text` con el error. | Guarda `branch.error` con el error y conserva `branch.pr`. |
+| Push a rama gestionada | Falla crear el Draft PR. | `I could not create the draft PR for this branch push.` + `Branch: ...` + `Base: dev` + bloque `text` con el error. | Guarda `branch.error` con el error y conserva `branch.pr`. |
 | Apertura de PR | Action distinta de `opened`. | No comenta. Devuelve `reason: "pull_request action=<action>"`. | Ninguno. |
 | Apertura de PR | La rama del PR no parece gestionada por issue. | No comenta. Devuelve `reason: "PR branch is not issue-managed"`. | Ninguno. |
-| Apertura de PR | PR valido. | No comenta. Devuelve `{ processed: true, valid: true, issue, pr }`. | Normaliza title/body y actualiza `branch.pr` con el numero del PR. No intenta deslinkear PRs cerrados viejos. |
+| Apertura de PR | PR valido. | No comenta salvo que tenga que normalizar title/body. Devuelve `{ processed: true, valid: true, issue, pr }`. | Normaliza title/body, archiva PRs cerrados antiguos por `head=<branchName>` que correspondan a la issue y actualiza `branch.pr` con el numero del PR activo. |
 | Apertura de PR | PR invalido. | `This PR is not fully linked to its issue yet:` seguido de una lista de problemas. | No actualiza `branch.pr`. |
 
 ### Plantillas exactas de eventos automaticos
@@ -369,12 +369,6 @@ A draft PR will be created automatically after the first push with commits.
 Created from GitHub's sidebar and accepted by automation.
 ```
 
-Si habia un PR cerrado reutilizable, la linea del Draft PR cambia a:
-
-```md
-Reopened associated draft PR: <prNumber>
-```
-
 Rama manual que repara metadata existente:
 
 ```md
@@ -385,12 +379,6 @@ Base: `dev`
 A draft PR will be created automatically after the first push with commits.
 
 Created from GitHub's sidebar and accepted by automation.
-```
-
-Si habia un PR cerrado reutilizable, la linea del Draft PR cambia a:
-
-```md
-Reopened associated draft PR: <prNumber>
 ```
 
 Push correcto que crea Draft PR:
@@ -404,21 +392,10 @@ Branch: `<branchName>`
 Base: `dev`
 ```
 
-Push correcto que reabre PR cerrado:
-
-```md
-Reopened draft PR:
-
-Pull request number: <prNumber>
-
-Branch: `<branchName>`
-Base: `dev`
-```
-
-Push autorizado pero falla abrir Draft PR:
+Push autorizado pero falla crear Draft PR:
 
 ````md
-I could not open the draft PR for this branch push.
+I could not create the draft PR for this branch push.
 
 Branch: `<branchName>`
 Base: `dev`
