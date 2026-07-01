@@ -27,6 +27,9 @@ test("handleBranchCommand reserves and records a linked branch", async () => {
         body: latestBody,
         repository: { id: "REPO_id" },
         issueType: { name: "Feature" },
+        linkedBranches: {
+          nodes: branchCreated ? [{ ref: { name: "feat/123-add-login" } }] : [],
+        },
       };
     },
     async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
@@ -87,6 +90,9 @@ test("handleBranchCommand cleans closed PR links when creating a new branch", as
         body: latestBody,
         repository: { id: "REPO_id" },
         issueType: { name: "Feature" },
+        linkedBranches: {
+          nodes: branchCreated ? [{ ref: { name: "feat/123-add-login" } }] : [],
+        },
       };
     },
     async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
@@ -325,7 +331,9 @@ test("handleBranchCommand recreates expected branch metadata when the git ref no
         body: latestBody,
         repository: { id: "REPO_id" },
         issueType: { name: "Bug" },
-        linkedBranches: { nodes: [] },
+        linkedBranches: {
+          nodes: branchCreated ? [{ ref: { name: "fix/52-test-bug-issue" } }] : [],
+        },
       };
     },
     async updateIssueTitleAndBody(_owner, _repo, _issueNumber, _title, nextBody) {
@@ -391,7 +399,9 @@ test("handleBranchCommand ignores stale linked branch reservations with null ref
         linkedBranches: {
           nodes: issueReads === 1
             ? [{ id: "LB_1", ref: null }, { id: "LB_2", ref: null }]
-            : [],
+            : branchCreated
+              ? [{ ref: { name: "fix/50-test-bug-issue" } }]
+              : [],
         },
       };
     },

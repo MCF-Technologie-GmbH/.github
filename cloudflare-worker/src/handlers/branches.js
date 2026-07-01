@@ -167,6 +167,11 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
       baseOid,
     });
 
+    const linkedIssue = await waitForLinkedBranch(gh, owner, repo, issueNumber, branchName);
+    if (!isIssueLinkedBranch(linkedIssue, branchName)) {
+      throw new Error("GitHub created the branch ref but did not report it as a linked branch for this issue.");
+    }
+
     const linkedState = {
       ...reservedState,
       branch: {
@@ -176,7 +181,7 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
         error: null,
       },
     };
-    const linkedIssueBody = replaceAutomationState(reloadedIssue.body || issueBody, linkedState);
+    const linkedIssueBody = replaceAutomationState(linkedIssue.body || reloadedIssue.body || issueBody, linkedState);
     await gh.updateIssueTitleAndBody(
       owner,
       repo,
