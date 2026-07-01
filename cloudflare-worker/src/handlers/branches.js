@@ -114,14 +114,6 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
   }
 
   if (state?.branch?.exists === true && !canRecreateRecordedBranch) {
-    await unlinkClosedPullRequestsFromIssueForBranch({
-      gh,
-      owner,
-      repo,
-      issueNumber,
-      branchName: allowedBranchName || branchName,
-    });
-
     await gh.createComment(
       owner,
       repo,
@@ -167,6 +159,16 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
     if (!baseOid) {
       throw new Error(`Base branch ${BASE_BRANCH} did not return a commit SHA.`);
     }
+
+    await unlinkClosedPullRequestsFromIssueForBranch({
+      gh,
+      owner,
+      repo,
+      issueNumber,
+      branchName,
+      forceArchive: true,
+      emptyFallback: "This PR was archived by automation before recreating the managed branch.",
+    });
 
     await gh.createLinkedBranch({
       issueId: currentIssue.id,
@@ -216,14 +218,6 @@ export async function handleBranchCommand({ gh, owner, repo, issueNumber, commen
       undefined,
       replaceAutomationState(linkedIssueBody, createdState)
     );
-
-    await unlinkClosedPullRequestsFromIssueForBranch({
-      gh,
-      owner,
-      repo,
-      issueNumber,
-      branchName,
-    });
 
     await gh.createComment(
       owner,
@@ -2014,7 +2008,15 @@ async function notifyClosedPullRequestsBlockedByActiveBranch({ gh, owner, repo, 
   }
 }
 
-async function unlinkClosedPullRequestsFromIssueForBranch({ gh, owner, repo, issueNumber, branchName }) {
+async function unlinkClosedPullRequestsFromIssueForBranch({
+  gh,
+  owner,
+  repo,
+  issueNumber,
+  branchName,
+  forceArchive = false,
+  emptyFallback,
+}) {
   const closedPullRequestRecords = await listClosedPullRequestsForIssueBranch({
     gh,
     owner,
@@ -2033,7 +2035,8 @@ async function unlinkClosedPullRequestsFromIssueForBranch({ gh, owner, repo, iss
       pr,
       issueNumber,
       branchName,
-      forceArchive: record?.source === "issue-closing-reference",
+      emptyFallback,
+      forceArchive,
     })) {
       unlinked += 1;
     }
@@ -2053,19 +2056,7 @@ async function listClosedPullRequestsForIssueBranch({ gh, owner, repo, issueNumb
       perPage: 10,
     });
     for (const pr of closedByHead || []) {
-      if (pr?.number) pullRequests.set(pr.number, { pr, source: "head" });
-    }
-  }
-
-  if (typeof gh.listIssueClosingPullRequests === "function") {
-    const closingPullRequests = await gh.listIssueClosingPullRequests(owner, repo, issueNumber, {
-      includeClosedPrs: true,
-      first: 20,
-    });
-    for (const pr of closingPullRequests || []) {
-      if (!pr?.number || String(pr.state || "").toUpperCase() !== "CLOSED") continue;
-      if (pullRequestHeadRefName(pr) !== branchName && !pullRequestMatchesIssue(pr, issueNumber, branchName)) continue;
-      pullRequests.set(pr.number, { pr, source: "issue-closing-reference" });
+      if (pr?.number) pullRequests.set(pr.number, { pr });
     }
   }
 

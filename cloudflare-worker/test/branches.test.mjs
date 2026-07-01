@@ -82,6 +82,7 @@ test("handleBranchCommand cleans closed PR links when creating a new branch", as
   let latestBody = body;
   let branchCreated = false;
   const pullUpdates = [];
+  const operations = [];
 
   const gh = {
     async getIssue() {
@@ -107,6 +108,7 @@ test("handleBranchCommand cleans closed PR links when creating a new branch", as
       return { object: { sha: "abc123" } };
     },
     async createLinkedBranch() {
+      operations.push("create-linked-branch");
       branchCreated = true;
       return {};
     },
@@ -127,6 +129,7 @@ test("handleBranchCommand cleans closed PR links when creating a new branch", as
       }];
     },
     async updatePullRequest(_owner, _repo, pullNumber, update) {
+      operations.push("archive-old-pr");
       pullUpdates.push({ pullNumber, update });
     },
     async createComment() {},
@@ -141,19 +144,21 @@ test("handleBranchCommand cleans closed PR links when creating a new branch", as
   });
 
   assert.equal(result.created, true);
+  assert.deepEqual(operations, ["archive-old-pr", "create-linked-branch"]);
   assert.deepEqual(pullUpdates, [{
     pullNumber: 455,
     update: {
-      body: "This PR was archived by automation.",
+      body: "This PR was archived by automation before recreating the managed branch.",
     },
   }]);
 });
 
-test("handleBranchCommand cleans closed PRs reported by issue closing references", async () => {
+test("handleBranchCommand force archives already archived closed PRs before creating the linked branch", async () => {
   const body = ensureAutomationState("<!-- protected:start -->\nBody\n<!-- protected:end -->", "Feature");
   let latestBody = body;
   let branchCreated = false;
   const pullUpdates = [];
+  const operations = [];
 
   const gh = {
     async getIssue() {
@@ -179,27 +184,31 @@ test("handleBranchCommand cleans closed PRs reported by issue closing references
       return { object: { sha: "abc123" } };
     },
     async createLinkedBranch() {
+      operations.push("create-linked-branch");
       branchCreated = true;
       return {};
     },
-    async listPullRequests() {
-      return [];
-    },
-    async listIssueClosingPullRequests(_owner, _repo, issueNumber, query) {
-      assert.equal(issueNumber, 123);
+    async listPullRequests(_owner, _repo, query) {
       assert.deepEqual(query, {
-        includeClosedPrs: true,
-        first: 20,
+        state: "closed",
+        head: "MCF-Technologie-GmbH:feat/123-add-login",
+        sort: "updated",
+        direction: "desc",
+        perPage: 10,
       });
       return [{
         number: 455,
-        state: "CLOSED",
+        state: "closed",
         title: "feat: Add login",
-        body: "This PR was detached from its issue before branch deletion.",
-        headRefName: "feat/123-add-login",
+        body: "This PR was archived by automation.",
+        head: { ref: "feat/123-add-login" },
       }];
     },
+    async listIssueClosingPullRequests() {
+      throw new Error("branch create cleanup must not query issue closing PR references");
+    },
     async updatePullRequest(_owner, _repo, pullNumber, update) {
+      operations.push("archive-old-pr");
       pullUpdates.push({ pullNumber, update });
     },
     async createComment() {},
@@ -214,10 +223,11 @@ test("handleBranchCommand cleans closed PRs reported by issue closing references
   });
 
   assert.equal(result.created, true);
+  assert.deepEqual(operations, ["archive-old-pr", "create-linked-branch"]);
   assert.deepEqual(pullUpdates, [{
     pullNumber: 455,
     update: {
-      body: "This PR was archived by automation.",
+      body: "This PR was archived by automation before recreating the managed branch.",
     },
   }]);
 });
