@@ -1,10 +1,7 @@
 name: Epic
 description: Coordinate a coherent body of work.
+type: Epic
 body:
-  - type: dropdown
-    id: issue-type
-    attributes: { label: Issue Type, options: [Epic] }
-    validations: { required: true }
   - type: textarea
     id: objective
     attributes: { label: Objective }

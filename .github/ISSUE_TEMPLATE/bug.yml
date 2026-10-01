@@ -1,12 +1,7 @@
 name: Bug
 description: Report a behavior defect.
+type: Bug
 body:
-  - type: dropdown
-    id: issue-type
-    attributes:
-      label: Issue Type
-      options: [Bug]
-    validations: { required: true }
   - type: input
     id: affected-release-line
     attributes:

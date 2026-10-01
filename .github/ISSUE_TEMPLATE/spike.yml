@@ -1,10 +1,7 @@
 name: Spike
 description: Timebox research to a decision.
+type: Spike
 body:
-  - type: dropdown
-    id: issue-type
-    attributes: { label: Issue Type, options: [Spike] }
-    validations: { required: true }
   - type: textarea
     id: background
     attributes: { label: Background / Motivation }

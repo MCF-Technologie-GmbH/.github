@@ -1,10 +1,7 @@
 name: Documentation
 description: Improve published documentation.
+type: Documentation
 body:
-  - type: dropdown
-    id: issue-type
-    attributes: { label: Issue Type, options: [Documentation] }
-    validations: { required: true }
   - type: textarea
     id: work-type
     attributes: { label: Type of Documentation Work }

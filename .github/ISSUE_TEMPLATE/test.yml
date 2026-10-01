@@ -1,10 +1,7 @@
 name: Test
 description: Improve automated assurance.
+type: Test
 body:
-  - type: dropdown
-    id: issue-type
-    attributes: { label: Issue Type, options: [Test] }
-    validations: { required: true }
   - type: textarea
     id: context
     attributes: { label: Testing Context / Gap }
