@@ -1,0 +1,24 @@
+name: Refactor
+description: Improve the internal design without changing intent.
+title: ""
+type: Refactor
+body:
+  - type: dropdown
+    id: issue-type
+    attributes: { label: Issue Type, options: [Refactor] }
+    validations: { required: true }
+  - type: textarea
+    id: context
+    attributes: { label: Description / Context }
+    validations: { required: true }
+  - type: textarea
+    id: outcome
+    attributes: { label: Motivation / Expected Outcome }
+    validations: { required: true }
+  - type: textarea
+    id: acceptance-criteria
+    attributes: { label: Acceptance Criteria }
+    validations: { required: true }
+  - type: textarea
+    id: additional-context
+    attributes: { label: Additional Context }

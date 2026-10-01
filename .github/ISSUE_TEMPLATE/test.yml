@@ -1,0 +1,28 @@
+name: Test
+description: Improve automated assurance.
+title: ""
+type: Test
+body:
+  - type: dropdown
+    id: issue-type
+    attributes: { label: Issue Type, options: [Test] }
+    validations: { required: true }
+  - type: textarea
+    id: context
+    attributes: { label: Testing Context / Gap }
+    validations: { required: true }
+  - type: textarea
+    id: outcome
+    attributes: { label: Expected Assurance / Outcome }
+    validations: { required: true }
+  - type: textarea
+    id: approach
+    attributes: { label: Test Approach / Tools }
+    validations: { required: true }
+  - type: textarea
+    id: acceptance-criteria
+    attributes: { label: Acceptance Criteria }
+    validations: { required: true }
+  - type: textarea
+    id: additional-context
+    attributes: { label: Additional Context }

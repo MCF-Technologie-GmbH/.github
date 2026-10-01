@@ -1,0 +1,36 @@
+name: Feature
+description: Propose an outcome-oriented product change.
+title: ""
+type: Feature
+body:
+  - type: dropdown
+    id: issue-type
+    attributes: { label: Issue Type, options: [Feature] }
+    validations: { required: true }
+  - type: textarea
+    id: problem
+    attributes: { label: Problem Statement / Motivation }
+    validations: { required: true }
+  - type: textarea
+    id: outcome
+    attributes: { label: Expected Outcome }
+    validations: { required: true }
+  - type: textarea
+    id: acceptance-criteria
+    attributes: { label: Acceptance Criteria }
+    validations: { required: true }
+  - type: textarea
+    id: proposed-solution
+    attributes: { label: Proposed Solution }
+  - type: textarea
+    id: out-of-scope
+    attributes: { label: Out of Scope }
+  - type: textarea
+    id: alternatives
+    attributes: { label: Alternatives Considered }
+  - type: textarea
+    id: attachments
+    attributes: { label: Attachments }
+  - type: textarea
+    id: additional-context
+    attributes: { label: Additional Context }

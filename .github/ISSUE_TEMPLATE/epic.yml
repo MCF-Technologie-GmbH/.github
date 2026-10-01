@@ -1,0 +1,21 @@
+name: Epic
+description: Coordinate a coherent body of work.
+title: ""
+type: Epic
+body:
+  - type: dropdown
+    id: issue-type
+    attributes: { label: Issue Type, options: [Epic] }
+    validations: { required: true }
+  - type: textarea
+    id: objective
+    attributes: { label: Objective }
+    validations: { required: true }
+  - type: textarea
+    id: context
+    attributes: { label: Context }
+    validations: { required: true }
+  - type: textarea
+    id: success-criteria
+    attributes: { label: Success criteria }
+    validations: { required: true }

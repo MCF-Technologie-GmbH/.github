@@ -1,0 +1,28 @@
+name: Spike
+description: Timebox research to a decision.
+title: ""
+type: Spike
+body:
+  - type: dropdown
+    id: issue-type
+    attributes: { label: Issue Type, options: [Spike] }
+    validations: { required: true }
+  - type: textarea
+    id: background
+    attributes: { label: Background / Motivation }
+    validations: { required: true }
+  - type: textarea
+    id: research-questions
+    attributes: { label: Research Questions }
+    validations: { required: true }
+  - type: textarea
+    id: scope-timebox
+    attributes: { label: Scope & Time Box }
+    validations: { required: true }
+  - type: textarea
+    id: decision
+    attributes: { label: Expected Decision / Output }
+    validations: { required: true }
+  - type: textarea
+    id: additional-context
+    attributes: { label: Additional Context }

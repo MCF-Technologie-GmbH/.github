@@ -1,0 +1,34 @@
+name: Documentation
+description: Improve published documentation.
+title: ""
+type: Documentation
+body:
+  - type: dropdown
+    id: issue-type
+    attributes: { label: Issue Type, options: [Documentation] }
+    validations: { required: true }
+  - type: textarea
+    id: work-type
+    attributes: { label: Type of Documentation Work }
+    validations: { required: true }
+  - type: textarea
+    id: context
+    attributes: { label: Documentation Context / Gap }
+    validations: { required: true }
+  - type: textarea
+    id: outcome
+    attributes: { label: Expected Documentation Outcome }
+    validations: { required: true }
+  - type: textarea
+    id: acceptance-criteria
+    attributes: { label: Acceptance Criteria }
+    validations: { required: true }
+  - type: textarea
+    id: audience
+    attributes: { label: Target Audience }
+  - type: textarea
+    id: existing-documentation
+    attributes: { label: Existing Documentation }
+  - type: textarea
+    id: additional-context
+    attributes: { label: Additional Context }

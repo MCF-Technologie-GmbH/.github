@@ -1,0 +1,54 @@
+name: Bug
+description: Report a behavior defect.
+title: ""
+type: Bug
+body:
+  - type: dropdown
+    id: issue-type
+    attributes:
+      label: Issue Type
+      options: [Bug]
+    validations: { required: true }
+  - type: input
+    id: affected-release-line
+    attributes:
+      label: Affected Release Line
+      description: Identify the affected line, such as main, release/2.4.0, or support/1.6.
+      placeholder: main
+    validations: { required: true }
+  - type: textarea
+    id: current-behavior
+    attributes: { label: Current Behavior }
+    validations: { required: true }
+  - type: textarea
+    id: expected-behavior
+    attributes: { label: Expected Behavior }
+    validations: { required: true }
+  - type: textarea
+    id: acceptance-criteria
+    attributes: { label: Acceptance Criteria }
+    validations: { required: true }
+  - type: input
+    id: frequency
+    attributes: { label: Frequency }
+  - type: textarea
+    id: steps-to-reproduce
+    attributes: { label: Steps to Reproduce }
+  - type: textarea
+    id: environment
+    attributes: { label: Environment }
+  - type: textarea
+    id: impact
+    attributes: { label: Impact }
+  - type: textarea
+    id: logs
+    attributes: { label: Logs / Error Output }
+  - type: textarea
+    id: screenshots
+    attributes: { label: Screenshots / Attachments }
+  - type: textarea
+    id: workaround
+    attributes: { label: Workaround }
+  - type: textarea
+    id: additional-context
+    attributes: { label: Additional Context }

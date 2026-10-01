@@ -1,0 +1,24 @@
+name: Chore
+description: Record maintenance work.
+title: ""
+type: Chore
+body:
+  - type: dropdown
+    id: issue-type
+    attributes: { label: Issue Type, options: [Chore] }
+    validations: { required: true }
+  - type: textarea
+    id: context
+    attributes: { label: Description / Context }
+    validations: { required: true }
+  - type: textarea
+    id: outcome
+    attributes: { label: Expected Outcome }
+    validations: { required: true }
+  - type: textarea
+    id: acceptance-criteria
+    attributes: { label: Acceptance Criteria }
+    validations: { required: true }
+  - type: textarea
+    id: additional-context
+    attributes: { label: Additional Context }
