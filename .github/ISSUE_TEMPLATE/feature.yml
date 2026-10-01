@@ -1,10 +1,7 @@
 name: Feature
 description: Propose an outcome-oriented product change.
+type: Feature
 body:
-  - type: dropdown
-    id: issue-type
-    attributes: { label: Issue Type, options: [Feature] }
-    validations: { required: true }
   - type: textarea
     id: problem
     attributes: { label: Problem Statement / Motivation }
