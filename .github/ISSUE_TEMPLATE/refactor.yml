@@ -1,6 +1,5 @@
 name: Refactor
 description: Improve the internal design without changing intent.
-type: Refactor
 body:
   - type: dropdown
     id: issue-type

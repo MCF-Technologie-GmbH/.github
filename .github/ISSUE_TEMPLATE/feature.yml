@@ -1,6 +1,5 @@
 name: Feature
 description: Propose an outcome-oriented product change.
-type: Feature
 body:
   - type: dropdown
     id: issue-type

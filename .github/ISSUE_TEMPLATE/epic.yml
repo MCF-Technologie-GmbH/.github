@@ -1,6 +1,5 @@
 name: Epic
 description: Coordinate a coherent body of work.
-type: Epic
 body:
   - type: dropdown
     id: issue-type

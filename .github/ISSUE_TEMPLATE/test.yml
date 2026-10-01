@@ -1,6 +1,5 @@
 name: Test
 description: Improve automated assurance.
-type: Test
 body:
   - type: dropdown
     id: issue-type
