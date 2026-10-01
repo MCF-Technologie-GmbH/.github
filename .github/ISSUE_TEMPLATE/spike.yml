@@ -1,7 +1,5 @@
 name: Spike
 description: Timebox research to a decision.
-title: ""
-type: Spike
 body:
   - type: dropdown
     id: issue-type

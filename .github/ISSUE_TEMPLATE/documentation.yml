@@ -1,7 +1,5 @@
 name: Documentation
 description: Improve published documentation.
-title: ""
-type: Documentation
 body:
   - type: dropdown
     id: issue-type

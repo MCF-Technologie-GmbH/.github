@@ -1,7 +1,5 @@
 name: Chore
 description: Record maintenance work.
-title: ""
-type: Chore
 body:
   - type: dropdown
     id: issue-type
